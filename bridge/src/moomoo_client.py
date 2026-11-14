@@ -143,20 +143,21 @@ class MoomooClient:
                             })
 
                         # Match target trading environment
-                        matched = df_acc[df_acc["trd_env"] == self.trd_env] if "trd_env" in df_acc.columns else df_acc
-
                         target_row = None
                         if self._account_id:
-                            acc_match = matched[matched["acc_id"].astype(str) == str(self._account_id)] if not matched.empty else df_acc[df_acc["acc_id"].astype(str) == str(self._account_id)]
-                            if not acc_match.empty:
+                            acc_match = df_acc[df_acc["acc_id"].astype(str) == str(self._account_id)] if not df_acc.empty else None
+                            if acc_match is not None and not acc_match.empty:
                                 target_row = acc_match.iloc[0]
 
                         if target_row is None:
+                            matched = df_acc[df_acc["trd_env"] == self.trd_env] if "trd_env" in df_acc.columns else df_acc
                             target_row = matched.iloc[0] if not matched.empty else df_acc.iloc[0]
 
                         acc_id_val = target_row.get("acc_id", None)
                         if acc_id_val is not None and str(acc_id_val).strip():
                             real_acc_id = str(acc_id_val).strip()
+                            account_env = str(target_row.get("trd_env", self.trd_env)).strip()
+                            env_val = TrdEnv.REAL if account_env == "REAL" else TrdEnv.SIMULATE
 
                             # Query account financial details
                             acc_num = int(real_acc_id) if real_acc_id.isdigit() else 0
@@ -172,6 +173,7 @@ class MoomooClient:
                                     self._cash_balance = float(cash_val.iloc[0])
                                     self._total_equity = float(total_assets_val.iloc[0])
                                     self._account_id = real_acc_id
+                                    self.trd_env = account_env
                                     self._connected = True
                                     self._last_status = "CONNECTED"
                                     self._last_error = None
@@ -287,6 +289,10 @@ class MoomooClient:
         if OpenSecTradeContext is None or TrdEnv is None or TrdMarket is None:
             return False, "Moomoo OpenAPI SDK is not available or initialized"
 
+        matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
+        target_env = matched[0].get("trd_env", self.trd_env) if matched else self.trd_env
+        env_val = TrdEnv.REAL if target_env == "REAL" else TrdEnv.SIMULATE
+
         # Active connection via OpenAPI SDK
         ctx = None
         try:
@@ -299,7 +305,6 @@ class MoomooClient:
                 except Exception:
                     pass
 
-            env_val = TrdEnv.SIMULATE if self.trd_env == "SIMULATE" else TrdEnv.REAL
             ctx = OpenSecTradeContext(
                 filter_trdmarket=TrdMarket.US,
                 host=self.host,
@@ -319,21 +324,22 @@ class MoomooClient:
                     self._cash_balance = float(cash_val.iloc[0])
                     self._total_equity = float(total_assets_val.iloc[0])
                     self._account_id = clean_id
-                    logger.info("MoomooClient dynamically switched to account %s (Equity: $%.2f)", clean_id, self._total_equity)
-                    return True, f"Successfully switched to account {clean_id}"
+                    self.trd_env = target_env
+                    logger.info("MoomooClient dynamically switched to account %s (Env: %s, Equity: $%.2f)", clean_id, self.trd_env, self._total_equity)
+                    return True, f"Successfully switched to account {clean_id} ({self.trd_env})"
 
-            matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
             if matched:
                 self._account_id = clean_id
-                return True, f"Switched to account {clean_id}"
+                self.trd_env = target_env
+                return True, f"Switched to account {clean_id} ({self.trd_env})"
 
             return False, f"Failed querying account financial info for {clean_id}"
         except Exception as e:
             logger.error("Error switching to account %s: %s", clean_id, e)
-            matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
             if matched:
                 self._account_id = clean_id
-                return True, f"Switched to account {clean_id}"
+                self.trd_env = target_env
+                return True, f"Switched to account {clean_id} ({self.trd_env})"
             return False, f"Error switching account: {str(e)}"
         finally:
             if ctx is not None:

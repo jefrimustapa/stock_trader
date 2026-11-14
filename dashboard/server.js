@@ -592,7 +592,9 @@ app.get('/', authenticateDashboard, async (req, res) => {
         { account_id: '1002', sim_acc_type: 'Paper Trading 2 (US Equities)' }
     ]).map(acc => {
         const accId = escapeHtml(acc.account_id);
-        const label = `${accId} (${escapeHtml(acc.sim_acc_type || acc.trd_env || 'Paper')})`;
+        const envLabel = acc.trd_env ? escapeHtml(acc.trd_env) : 'SIMULATE';
+        const typeLabel = acc.sim_acc_type && acc.sim_acc_type !== 'N/A' ? ` - ${escapeHtml(acc.sim_acc_type)}` : '';
+        const label = `${accId} [${envLabel}${typeLabel}]`;
         const isSelected = String(acc.account_id) === String(safeAccountId) ? 'selected' : '';
         return `<option value="${accId}" ${isSelected}>${label}</option>`;
     }).join('');
