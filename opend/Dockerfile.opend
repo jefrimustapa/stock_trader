@@ -26,9 +26,12 @@ RUN if [ -z "$OPEND_SHA256" ]; then \
     fi && \
     wget -q -O OpenD.tar.gz "$OPEND_URL" && \
     echo "${OPEND_SHA256}  OpenD.tar.gz" | sha256sum -c - && \
-    tar -xzf OpenD.tar.gz --strip-components=1 && \
-    rm -f OpenD.tar.gz && \
-    chmod +x OpenD
+    tar -xzf OpenD.tar.gz && \
+    mv moomoo_OpenD_*/moomoo_OpenD_*/* /opt/opend/ && \
+    rm -rf moomoo_OpenD_* OpenD.tar.gz && \
+    chmod +x /opt/opend/OpenD
+
+ENV LD_LIBRARY_PATH=/opt/opend:${LD_LIBRARY_PATH:-}
 
 COPY scripts/entrypoint.sh /opt/opend/entrypoint.sh
 RUN chmod +x /opt/opend/entrypoint.sh

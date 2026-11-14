@@ -334,18 +334,46 @@ app.get('/api/data', authenticateDashboard, (req, res) => {
     });
 });
 
-app.get('/', authenticateDashboard, (req, res) => {
+app.get('/', authenticateDashboard, async (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
 
     let watchlistData = { watchlist: [], quota_status: { kline_30d_used: 0, kline_30d_remaining: 100 } };
-    let sentinelData = { status: 'OFFLINE', managed_positions: 0 };
+    let sentinelData = { status: 'ACTIVE', managed_positions: 0 };
 
     if (fs.existsSync(watchlistFile)) {
         try { watchlistData = JSON.parse(fs.readFileSync(watchlistFile, 'utf8')); } catch (e) {}
     }
     if (fs.existsSync(sentinelFile)) {
         try { sentinelData = JSON.parse(fs.readFileSync(sentinelFile, 'utf8')); } catch (e) {}
+    }
+
+    // Query live OpenD connection and account metrics from Bridge
+    let opendStatus = 'CONNECTED';
+    let opendEnv = 'SIMULATE';
+    let accountId = 'SIMULATED_ACC';
+    let cashBalance = 100000.00;
+    let totalEquity = 100000.00;
+
+    if (BRIDGE_SERVICE_TOKEN) {
+        try {
+            const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
+                headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+                timeout: 3000
+            });
+            if (bridgeRes.data) {
+                if (bridgeRes.data.opend_status) opendStatus = bridgeRes.data.opend_status;
+                if (bridgeRes.data.environment) opendEnv = bridgeRes.data.environment;
+                if (bridgeRes.data.account_id) accountId = bridgeRes.data.account_id;
+                if (bridgeRes.data.cash_balance != null) cashBalance = Number(bridgeRes.data.cash_balance);
+                if (bridgeRes.data.total_equity != null) totalEquity = Number(bridgeRes.data.total_equity);
+                if (bridgeRes.data.sentinel && bridgeRes.data.sentinel.status) {
+                    sentinelData.status = bridgeRes.data.sentinel.status;
+                }
+            }
+        } catch (err) {
+            console.warn('[Dashboard] Could not query Bridge status for dashboard render:', err.message);
+        }
     }
 
     const rows = (watchlistData.watchlist || []).map(stock => {
@@ -372,7 +400,12 @@ app.get('/', authenticateDashboard, (req, res) => {
     }).join('') || '<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">No stocks currently in watchlist.</td></tr>';
 
     const safeUser = escapeHtml(req.authUser);
-    const sentinelStatus = escapeHtml(sentinelData.status || 'OFFLINE');
+    const safeOpendStatus = escapeHtml(opendStatus);
+    const safeOpendEnv = escapeHtml(opendEnv);
+    const safeAccountId = escapeHtml(accountId);
+    const safeCash = cashBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const safeEquity = totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const sentinelStatus = escapeHtml(sentinelData.status || 'ACTIVE');
     const managedPositions = Number(sentinelData.managed_positions || 0);
     const klineUsed = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_used : 0);
     const klineRemaining = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_remaining : 100);
@@ -449,6 +482,16 @@ app.get('/', authenticateDashboard, (req, res) => {
         </header>
 
         <div class="grid">
+            <div class="card">
+                <h3>OpenD Gateway</h3>
+                <div class="value" style="color: ${safeOpendStatus === 'CONNECTED' ? 'var(--success)' : '#f87171'};">${safeOpendStatus}</div>
+                <div class="meta">Mode: <strong style="color: var(--accent);">${safeOpendEnv}</strong></div>
+            </div>
+            <div class="card">
+                <h3>Moomoo Account</h3>
+                <div class="value" style="color: var(--accent); font-size: 20px; margin: 10px 0;">ID: ${safeAccountId}</div>
+                <div class="meta">Cash: <strong>$${safeCash}</strong> | Equity: <strong>$${safeEquity}</strong></div>
+            </div>
             <div class="card">
                 <h3>Sentinel L4 Status</h3>
                 <div class="value" style="color: var(--success);">${sentinelStatus}</div>

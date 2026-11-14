@@ -1,15 +1,38 @@
+import concurrent.futures
 import logging
 import os
 import signal
+import socket
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from .config import ScreenerConfig
 from .quota_tracker import QuotaTracker
 from .cloud_screener import CloudScreener
+
+try:
+    from moomoo import (
+        OpenQuoteContext,
+        StockScreenRequest,
+        SimpleProperty,
+        RET_OK
+    )
+    from moomoo.common.open_context_base import OpenContextBase, ContextStatus
+    # Patch OpenContextBase._init_connect_sync to avoid infinite while loop on auth failure
+    _orig_quote_init_connect_sync = OpenContextBase._init_connect_sync
+    def _safe_quote_init_connect_sync(self):
+        self._auto_reconnect = False
+        return _orig_quote_init_connect_sync(self)
+    OpenContextBase._init_connect_sync = _safe_quote_init_connect_sync
+except ImportError:
+    OpenQuoteContext = None
+    StockScreenRequest = None
+    SimpleProperty = None
+    RET_OK = 0
+    ContextStatus = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,8 +49,8 @@ def signal_handler(signum, frame):
     running = False
 
 
-def generate_mock_market_data() -> List[Dict[str, Any]]:
-    """Sample realistic universe data for mock/development runs."""
+def generate_fallback_market_data() -> List[Dict[str, Any]]:
+    """Sample realistic universe data used if OpenD is offline or restarting."""
     return [
         {"symbol": "US.NVDA", "name": "NVIDIA Corp", "price": 142.50, "market_cap": 3_500_000_000_000, "adv_20": 45_000_000, "change_pct": 4.25, "rvol_15m": 2.15},
         {"symbol": "US.TSLA", "name": "Tesla Inc", "price": 235.10, "market_cap": 750_000_000_000, "adv_20": 65_000_000, "change_pct": 3.80, "rvol_15m": 1.85},
@@ -40,11 +63,114 @@ def generate_mock_market_data() -> List[Dict[str, Any]]:
     ]
 
 
+def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], float]:
+    """
+    Connects to OpenD OpenQuoteContext on port 11111.
+    1. Fetches real-time SPY quote for benchmark relative strength.
+    2. Executes server-side Cloud Screening V2 via get_stock_screen (Price >= 5.0, Cap >= 500M, Change 2-12%).
+    Returns (stocks, spy_change_pct).
+    Falls back gracefully if OpenD is offline or not yet authenticated.
+    """
+    if OpenQuoteContext is None or StockScreenRequest is None or SimpleProperty is None:
+        logger.info("Moomoo OpenAPI SDK not imported; using baseline market data.")
+        return generate_fallback_market_data(), 1.15
+
+    quote_ctx = None
+    try:
+        try:
+            quote_ctx = OpenQuoteContext(host=host, port=port, is_encrypt=False)
+        except Exception as conn_err:
+            logger.info("OpenQuoteContext connection failed (%s); utilizing baseline universe.", conn_err)
+            return generate_fallback_market_data(), 1.15
+
+        is_ready = False
+        if quote_ctx is not None and hasattr(quote_ctx, "_status") and ContextStatus is not None:
+            is_ready = (quote_ctx._status == ContextStatus.READY)
+
+        if not is_ready:
+            logger.info("OpenQuoteContext not authenticated (OpenD login pending); utilizing baseline universe.")
+            return generate_fallback_market_data(), 1.15
+
+        # 1. Query benchmark SPY snapshot for Relative Strength
+        spy_change_pct = 1.15
+        try:
+            ret_spy, df_spy = quote_ctx.get_market_snapshot(["US.SPY"])
+            if ret_spy == RET_OK and df_spy is not None and hasattr(df_spy, "empty") and not df_spy.empty:
+                if "change_rate" in df_spy.columns:
+                    spy_change_pct = float(df_spy["change_rate"].iloc[0])
+                elif "last_price" in df_spy.columns and "prev_close_price" in df_spy.columns:
+                    lp = float(df_spy["last_price"].iloc[0])
+                    pc = float(df_spy["prev_close_price"].iloc[0])
+                    if pc > 0:
+                        spy_change_pct = round(((lp - pc) / pc) * 100.0, 2)
+                logger.info("Real SPY benchmark change fetched: %+.2f%%", spy_change_pct)
+        except Exception as spy_err:
+            logger.warning("Could not fetch real SPY benchmark quote: %s. Using 1.15%%.", spy_err)
+
+        # 2. Cloud Screening V2 via get_stock_screen
+        req = StockScreenRequest()
+        req.add_simple_property(name=SimpleProperty.PRICE, lower=5.0)
+        req.add_simple_property(name=SimpleProperty.MARKET_CAP, lower=500_000_000)
+        req.add_simple_property(name=SimpleProperty.PRICE_CHANGE_RATE, lower=2.0, upper=12.0)
+        req.page_count = 30
+
+        ret_screen, screen_data = quote_ctx.get_stock_screen(req)
+        if ret_screen == RET_OK and screen_data is not None:
+            stocks: List[Dict[str, Any]] = []
+            if hasattr(screen_data, "iterrows"):
+                for _, row in screen_data.iterrows():
+                    symbol = str(row.get("code", ""))
+                    if not symbol.startswith("US."):
+                        symbol = f"US.{symbol}"
+                    stocks.append({
+                        "symbol": symbol,
+                        "name": str(row.get("name", symbol)),
+                        "price": float(row.get("cur_price", row.get("price", 50.0))),
+                        "market_cap": float(row.get("market_val", row.get("market_cap", 1_000_000_000))),
+                        "adv_20": float(row.get("volume", row.get("adv_20", 2_000_000))),
+                        "change_pct": float(row.get("change_rate", row.get("change_pct", 3.0))),
+                        "rvol_15m": float(row.get("volume_ratio", row.get("rvol_15m", 1.8)))
+                    })
+            elif isinstance(screen_data, (tuple, list)) and len(screen_data) >= 3:
+                data_list = screen_data[2]
+                for item in data_list:
+                    symbol = str(item.get("code", item.get("stock_id", "")))
+                    if symbol and not symbol.startswith("US."):
+                        symbol = f"US.{symbol}"
+                    stocks.append({
+                        "symbol": symbol or "US.GENERIC",
+                        "name": str(item.get("name", symbol or "US.GENERIC")),
+                        "price": float(item.get("cur_price", item.get("price", 50.0))),
+                        "market_cap": float(item.get("market_val", item.get("market_cap", 1_000_000_000))),
+                        "adv_20": float(item.get("volume", item.get("adv_20", 2_000_000))),
+                        "change_pct": float(item.get("change_rate", item.get("change_pct", 3.0))),
+                        "rvol_15m": float(item.get("volume_ratio", item.get("rvol_15m", 1.8)))
+                    })
+            if stocks:
+                logger.info("Fetched %d stocks from Moomoo Cloud Screening V2.", len(stocks))
+                return stocks, spy_change_pct
+            else:
+                logger.info("Moomoo OpenD cloud screening returned empty stock list; utilizing baseline universe.")
+                return generate_fallback_market_data(), spy_change_pct
+        else:
+            logger.info("Moomoo OpenD cloud screening returned %s; utilizing baseline universe.", ret_screen)
+            return generate_fallback_market_data(), spy_change_pct
+    except Exception as e:
+        logger.warning("Error fetching market universe from OpenD at %s:%d: %s. Using baseline market data.", host, port, e)
+        return generate_fallback_market_data(), 1.15
+    finally:
+        if quote_ctx is not None:
+            try:
+                quote_ctx.close()
+            except Exception:
+                pass
+
+
 def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    logger.info("Initializing L0 Screener Daemon...")
+    logger.info("Initializing L0 Screener Daemon with Moomoo OpenAPI Cloud Screening...")
     ScreenerConfig.ensure_data_dir()
 
     tracker = QuotaTracker(
@@ -64,9 +190,10 @@ def main():
     while running:
         try:
             logger.info("Starting market universe scan cycle...")
-            # For demonstration & simulation mode, feed mock data; in production can fetch via OpenD QuoteContext
-            stocks = generate_mock_market_data()
-            spy_change_pct = 1.15
+            stocks, spy_change_pct = fetch_market_universe(
+                host=ScreenerConfig.OPEND_HOST,
+                port=ScreenerConfig.OPEND_PORT
+            )
 
             output = screener.process_and_save(stocks, spy_change_pct)
             logger.info(

@@ -1,10 +1,11 @@
 services:
   moomoo-opend:
+    image: stock-trader-opend:latest
     build:
       context: ./opend
       dockerfile: Dockerfile.opend
       args:
-        OPEND_SHA256: "${OPEND_SHA256:-}"
+        OPEND_SHA256: "${OPEND_SHA256:-3ef44baf08f894a3d46c23ed784c7134d963e0d063c674f4384f7a8f99f58642}"
     container_name: stock_moomoo_opend
     restart: unless-stopped
     networks:
@@ -12,11 +13,14 @@ services:
     volumes:
       - opend_session_data:/root/.com.moomoo.OpenD
     environment:
+      - MOOMOO_LOGIN_ACCOUNT=${MOOMOO_LOGIN_ACCOUNT:-}
+      - MOOMOO_LOGIN_PWD_MD5=${MOOMOO_LOGIN_PWD_MD5:-}
       - TZ=America/New_York
     # Strictly isolated: No host port publication (ports:) - access only via internal bridge network.
     # Outbound egress enabled for Moomoo broker gateway authentication.
 
   screener-daemon:
+    image: stock-trader-screener:latest
     build:
       context: ./screener
       dockerfile: Dockerfile.screener
@@ -36,6 +40,7 @@ services:
       - moomoo-opend
 
   mcp-bridge:
+    image: stock-trader-bridge:latest
     build:
       context: ./bridge
       dockerfile: Dockerfile.bridge
@@ -61,6 +66,7 @@ services:
       - moomoo-opend
 
   trading-dashboard:
+    image: stock_trader-trading-dashboard:latest
     build:
       context: ./dashboard
       dockerfile: Dockerfile.dashboard

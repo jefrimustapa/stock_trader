@@ -5,8 +5,16 @@ from fastapi import APIRouter, Depends
 
 from ..config import BridgeConfig
 from ..security import authenticate_request
+from ..moomoo_client import MoomooClient
 
 router = APIRouter(tags=["Health & Monitoring"])
+
+# Shared client instance for health and status reporting
+_moomoo_client = MoomooClient(
+    host=BridgeConfig.OPEND_HOST,
+    port=BridgeConfig.OPEND_PORT,
+    trd_env=BridgeConfig.MOOMOO_TRD_ENV
+)
 
 
 @router.get("/health")
@@ -21,7 +29,13 @@ def get_health():
 
 @router.get("/status")
 def get_status(caller: str = Depends(authenticate_request)):
-    """Status probe reporting circuit breaker and sentinel states."""
+    """
+    Status probe reporting circuit breaker, sentinel states, and live OpenD connection & account info.
+    """
+    # Probe OpenD connection and account info
+    _moomoo_client.connect()
+    account_info = _moomoo_client.get_account_info()
+
     sentinel_info = {}
     if BridgeConfig.SENTINEL_STATUS_PATH.exists():
         try:
@@ -35,6 +49,11 @@ def get_status(caller: str = Depends(authenticate_request)):
         "caller": caller,
         "environment": BridgeConfig.MOOMOO_TRD_ENV,
         "opend_target": f"{BridgeConfig.OPEND_HOST}:{BridgeConfig.OPEND_PORT}",
+        "opend_status": account_info["status"],
+        "account_id": account_info["account_id"],
+        "cash_balance": account_info["cash_balance"],
+        "total_equity": account_info["total_equity"],
+        "account_info": account_info,
         "sentinel": sentinel_info,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

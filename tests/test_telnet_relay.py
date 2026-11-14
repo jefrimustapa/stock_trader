@@ -1,8 +1,8 @@
 import asyncio
 import unittest
 from pathlib import Path
-
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bridge.src.telnet_relay import TelnetRelayClient
@@ -26,6 +26,8 @@ class MockTelnetServer:
             writer.write(b"RET_OK: OTP Accepted\r\n")
         elif "logout" in self.last_received:
             writer.write(b"RET_OK: Session Terminated\r\n")
+        elif "status" in self.last_received:
+            writer.write(b"status: CONNECTED\r\naccount: 12345678\r\n")
         else:
             writer.write(b"ERR_UNKNOWN\r\n")
         await writer.drain()
@@ -44,7 +46,7 @@ class MockTelnetServer:
 
 class TestTelnetRelay(unittest.IsolatedAsyncioTestCase):
     """
-    Tests asynchronous Telnet relay to OpenD port 22222.
+    Tests asynchronous Telnet relay to OpenD port 22222 with deterministic BVA.
     """
 
     async def asyncSetUp(self):
@@ -55,16 +57,51 @@ class TestTelnetRelay(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.mock_server.stop()
 
-    async def test_relay_otp_code(self):
+    async def test_relay_otp_standard_6_digits(self):
         success, response = await self.client.relay_otp_code("654321")
         self.assertTrue(success)
         self.assertIn("RET_OK: OTP Accepted", response)
         self.assertEqual(self.mock_server.last_received, "input_phone_verify_code -code=654321")
 
-    async def test_relay_empty_otp_rejected(self):
+    async def test_bva_otp_empty(self):
         success, response = await self.client.relay_otp_code("")
         self.assertFalse(success)
         self.assertIn("cannot be empty", response)
+
+    async def test_bva_otp_whitespace_only(self):
+        success, response = await self.client.relay_otp_code("   ")
+        self.assertFalse(success)
+        self.assertIn("cannot be empty", response)
+
+    async def test_bva_otp_non_numeric(self):
+        success, response = await self.client.relay_otp_code("12a456")
+        self.assertFalse(success)
+        self.assertIn("only numeric digits", response)
+
+    async def test_bva_otp_too_short_3_digits(self):
+        success, response = await self.client.relay_otp_code("123")
+        self.assertFalse(success)
+        self.assertIn("Must be between 4 and 8 digits", response)
+
+    async def test_bva_otp_boundary_4_digits(self):
+        success, response = await self.client.relay_otp_code("1234")
+        self.assertTrue(success)
+        self.assertIn("RET_OK: OTP Accepted", response)
+
+    async def test_bva_otp_boundary_8_digits(self):
+        success, response = await self.client.relay_otp_code("12345678")
+        self.assertTrue(success)
+        self.assertIn("RET_OK: OTP Accepted", response)
+
+    async def test_bva_otp_too_long_9_digits(self):
+        success, response = await self.client.relay_otp_code("123456789")
+        self.assertFalse(success)
+        self.assertIn("Must be between 4 and 8 digits", response)
+
+    async def test_check_status(self):
+        success, response = await self.client.check_status()
+        self.assertTrue(success)
+        self.assertIn("CONNECTED", response)
 
     async def test_logout_session(self):
         success, response = await self.client.logout_session()
