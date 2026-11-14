@@ -69,6 +69,7 @@ async function runDashboardTests() {
     const testClientId = 'stock-trader-client';
     const testIssuer = 'https://auth.julietmike.net/application/o/stock-trader/';
     const testServiceToken = 'secret-svc-token-abcde';
+    const testForwardSecret = 'test-forward-auth-shared-secret-xyz123';
     const testLogoutUrl = 'https://auth.julietmike.net/flows/-/default/invalidation/';
 
     const serverProc = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
@@ -78,6 +79,7 @@ async function runDashboardTests() {
             AUTHENTIK_CLIENT_ID: testClientId,
             AUTHENTIK_ISSUER_URL: testIssuer,
             AUTHENTIK_LOGOUT_URL: testLogoutUrl,
+            FORWARD_AUTH_SECRET: testForwardSecret,
             BRIDGE_SERVICE_TOKEN: testServiceToken
         }
     });
@@ -119,23 +121,57 @@ async function runDashboardTests() {
         assert.strictEqual(invalidSvcRes.statusCode, 401, `Expected 401 for invalid service token, got ${invalidSvcRes.statusCode}`);
         console.log('✓ PASS: Invalid service token rejected');
 
-        // Test 2m (HOM-146 TDD): Forward Auth via X-authentik-username
-        const forwardAuthRes = await makeRequest(testPort, {
-            'x-authentik-username': 'jefri'
+        // Test 2p (SDLC #8 defect regression - HOM-148): Spoofed X-authentik-username without shared secret MUST return 401
+        const spoofedWithoutSecretRes = await makeRequest(testPort, {
+            'x-authentik-username': 'spoofer'
         });
-        assert.strictEqual(forwardAuthRes.statusCode, 200, `Expected 200 for Authentik Forward Auth header, got ${forwardAuthRes.statusCode}: ${forwardAuthRes.body}`);
+        assert.strictEqual(spoofedWithoutSecretRes.statusCode, 401, `Expected 401 when X-authentik-username is sent without shared secret, got ${spoofedWithoutSecretRes.statusCode}`);
+        console.log('✓ PASS: Spoofed X-authentik-username without secret rejected with 401');
+
+        // Test 2q (HOM-148 BVA): Spoofed X-authentik-username with invalid shared secret (length mismatch) MUST return 401
+        const spoofedWrongSecretRes = await makeRequest(testPort, {
+            'x-authentik-username': 'spoofer',
+            'x-forward-auth-secret': 'wrong-secret'
+        });
+        assert.strictEqual(spoofedWrongSecretRes.statusCode, 401, `Expected 401 for wrong shared secret, got ${spoofedWrongSecretRes.statusCode}`);
+        console.log('✓ PASS: Spoofed X-authentik-username with wrong length shared secret rejected with 401');
+
+        // Test 2q2 (HOM-148 BVA): Spoofed with same length but differing by 1 char MUST return 401 (timingSafeEqual branch)
+        const sameLengthWrongSecret = testForwardSecret.slice(0, -1) + (testForwardSecret.endsWith('0') ? '1' : '0');
+        const spoofedSameLenRes = await makeRequest(testPort, {
+            'x-authentik-username': 'spoofer',
+            'x-forward-auth-secret': sameLengthWrongSecret
+        });
+        assert.strictEqual(spoofedSameLenRes.statusCode, 401, `Expected 401 for same length wrong secret, got ${spoofedSameLenRes.statusCode}`);
+        console.log('✓ PASS: Spoofed X-authentik-username with same-length wrong shared secret rejected with 401');
+
+        // Test 2q3 (HOM-148 BVA): Whitespace-only shared secret header MUST return 401
+        const spoofedWhitespaceSecretRes = await makeRequest(testPort, {
+            'x-authentik-username': 'spoofer',
+            'x-forward-auth-secret': '   '
+        });
+        assert.strictEqual(spoofedWhitespaceSecretRes.statusCode, 401, `Expected 401 for whitespace-only shared secret, got ${spoofedWhitespaceSecretRes.statusCode}`);
+        console.log('✓ PASS: Spoofed X-authentik-username with whitespace-only shared secret rejected with 401');
+
+        // Test 2m (HOM-148): Valid Forward Auth via X-authentik-username WITH valid X-Forward-Auth-Secret
+        const forwardAuthRes = await makeRequest(testPort, {
+            'x-authentik-username': 'jefri',
+            'x-forward-auth-secret': testForwardSecret
+        });
+        assert.strictEqual(forwardAuthRes.statusCode, 200, `Expected 200 for Authentik Forward Auth header with valid secret, got ${forwardAuthRes.statusCode}: ${forwardAuthRes.body}`);
         const forwardAuthBody = JSON.parse(forwardAuthRes.body);
         assert.strictEqual(forwardAuthBody.user, 'jefri', `Expected user 'jefri', got '${forwardAuthBody.user}'`);
-        console.log('✓ PASS: Authentik Forward Auth (X-authentik-username) authenticated with 200 OK');
+        console.log('✓ PASS: Authentik Forward Auth (X-authentik-username + valid secret) authenticated with 200 OK');
 
-        // Test 2n (HOM-146 TDD): Forward Auth via X-authentik-email fallback
+        // Test 2n (HOM-148): Forward Auth via X-authentik-email fallback WITH valid X-Forward-Auth-Secret
         const forwardAuthEmailRes = await makeRequest(testPort, {
-            'x-authentik-email': 'jefri@home-crew.lan'
+            'x-authentik-email': 'jefri@home-crew.lan',
+            'x-forward-auth-secret': testForwardSecret
         });
-        assert.strictEqual(forwardAuthEmailRes.statusCode, 200, `Expected 200 for Authentik Forward Auth email fallback, got ${forwardAuthEmailRes.statusCode}`);
+        assert.strictEqual(forwardAuthEmailRes.statusCode, 200, `Expected 200 for Authentik Forward Auth email fallback with valid secret, got ${forwardAuthEmailRes.statusCode}`);
         const forwardAuthEmailBody = JSON.parse(forwardAuthEmailRes.body);
         assert.strictEqual(forwardAuthEmailBody.user, 'jefri@home-crew.lan');
-        console.log('✓ PASS: Authentik Forward Auth (X-authentik-email fallback) authenticated with 200 OK');
+        console.log('✓ PASS: Authentik Forward Auth (X-authentik-email fallback + valid secret) authenticated with 200 OK');
 
         // Test 2o (HOM-146 BVA): Empty / whitespace-only X-authentik-username rejected with 401
         const emptyUsernameRes = await makeRequest(testPort, {
@@ -297,6 +333,14 @@ async function runDashboardTests() {
             });
             assert.strictEqual(invalidCookieSvcRes.statusCode, 401, `Expected 401 for invalid cookie service token, got ${invalidCookieSvcRes.statusCode}`);
             console.log('✓ PASS: Invalid cookie service token rejected with 401 Unauthorized');
+
+            // Test 2s (HOM-148 BVA): When server has NO FORWARD_AUTH_SECRET configured, forward auth headers must be rejected fail-closed
+            const unconfiguredForwardAuthRes = await makeRequest(testPort2, {
+                'x-authentik-username': 'jefri',
+                'x-forward-auth-secret': 'any-secret'
+            });
+            assert.strictEqual(unconfiguredForwardAuthRes.statusCode, 401, `Expected 401 when FORWARD_AUTH_SECRET is unconfigured on server, got ${unconfiguredForwardAuthRes.statusCode}`);
+            console.log('✓ PASS: Forward auth rejected fail-closed with 401 when FORWARD_AUTH_SECRET is not configured');
 
         } finally {
             serverProc2.kill();

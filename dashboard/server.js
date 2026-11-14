@@ -17,6 +17,7 @@ const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.
 const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
 const AUTHENTIK_LOGIN_URL = (process.env.AUTHENTIK_LOGIN_URL || 'https://auth.julietmike.net/flows/-/default/authentication/').trim();
 const AUTHENTIK_LOGOUT_URL = (process.env.AUTHENTIK_LOGOUT_URL || 'https://auth.julietmike.net/flows/-/default/invalidation/').trim();
+const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
 const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
 
@@ -104,8 +105,19 @@ async function authenticateDashboard(req, res, next) {
     const forwardAuthEmail = (req.headers['x-authentik-email'] || '').trim();
     const forwardAuthName = (req.headers['x-authentik-name'] || '').trim();
     if (forwardAuthUsername || forwardAuthEmail || forwardAuthName) {
-        req.authUser = forwardAuthUsername || forwardAuthEmail || forwardAuthName;
-        return next();
+        // Anti-spoofing verification: Forward Auth headers MUST be accompanied by a valid shared secret
+        const providedSecret = (req.headers['x-forward-auth-secret'] || '').trim();
+        if (FORWARD_AUTH_SECRET && providedSecret) {
+            const a = Buffer.from(providedSecret, 'utf8');
+            const b = Buffer.from(FORWARD_AUTH_SECRET, 'utf8');
+            if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+                req.authUser = forwardAuthUsername || forwardAuthEmail || forwardAuthName;
+                return next();
+            }
+        }
+        return res.status(401).json({
+            error: 'Unauthorized: Invalid or missing Forward Auth shared secret header'
+        });
     }
 
     // 3. Check Authentik JWT Assertion (Header X-authentik-jwt, Authorization Bearer, or Cookie)
