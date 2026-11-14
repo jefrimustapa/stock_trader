@@ -8,12 +8,13 @@ services:
     container_name: stock_moomoo_opend
     restart: unless-stopped
     networks:
-      - stock_internal
+      - stock_network
     volumes:
       - opend_session_data:/root/.com.moomoo.OpenD
     environment:
       - TZ=America/New_York
-    # Strictly isolated: No host port publication (ports:)
+    # Strictly isolated: No host port publication (ports:) - access only via internal bridge network.
+    # Outbound egress enabled for Moomoo broker gateway authentication.
 
   screener-daemon:
     build:
@@ -22,7 +23,7 @@ services:
     container_name: stock_screener_daemon
     restart: unless-stopped
     networks:
-      - stock_internal
+      - stock_network
     volumes:
       - shared_trading_data:/app/shared_data
     environment:
@@ -41,7 +42,7 @@ services:
     container_name: stock_mcp_bridge
     restart: unless-stopped
     networks:
-      - stock_internal
+      - stock_network
     ports:
       # Bound exclusively to host loopback for Paperclip agent communication
       - "127.0.0.1:${BRIDGE_HOST_PORT:-8005}:8000"
@@ -52,8 +53,8 @@ services:
       - MOOMOO_OPEND_PORT=11111
       - MOOMOO_TELNET_PORT=22222
       - MOOMOO_TRD_ENV=${MOOMOO_TRD_ENV:-SIMULATE}
-      - PAPERCLIP_BRIDGE_SECRET=${PAPERCLIP_BRIDGE_SECRET:-default-paperclip-secret-12345}
-      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:-default-service-token-67890}
+      - PAPERCLIP_BRIDGE_SECRET=${PAPERCLIP_BRIDGE_SECRET:?PAPERCLIP_BRIDGE_SECRET is required}
+      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:?BRIDGE_SERVICE_TOKEN is required}
       - SHARED_DATA_DIR=/app/shared_data
       - TZ=America/New_York
     depends_on:
@@ -66,21 +67,21 @@ services:
     container_name: stock_trading_dashboard
     restart: unless-stopped
     networks:
-      - stock_internal
+      - stock_network
       - npm_default
     volumes:
       - shared_trading_data:/app/shared_data
     environment:
       - PORT=3000
       - SHARED_DATA_DIR=/app/shared_data
-      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:-default-service-token-67890}
+      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:?BRIDGE_SERVICE_TOKEN is required}
       - CF_ACCESS_AUD=${CF_ACCESS_AUD:-}
       - TZ=America/New_York
 
 networks:
-  stock_internal:
+  # Standard bridge network enabling egress for OpenD and host loopback port mapping for MCP bridge
+  stock_network:
     driver: bridge
-    internal: true
   npm_default:
     external: true
 

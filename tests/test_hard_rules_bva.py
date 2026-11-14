@@ -174,7 +174,8 @@ class TestHardRulesBVA(unittest.TestCase):
     # --- Rule 8: Kill Switch Latency ---
     def test_r8_kill_switch_execution_latency(self):
         result = self.engine.execute_rule8_kill_switch()
-        self.assertEqual(result["status"], "KILL_SWITCH_EXECUTED")
+        self.assertIn(result["status"], ["KILL_SWITCH_EXECUTED", "KILL_SWITCH_LOCAL_ONLY"])
+        self.assertEqual(result["opend_status"], "MOCK/DISCONNECTED")
         self.assertTrue(result["latency_compliant"])
         self.assertLess(result["elapsed_seconds"], 3.0)
 

@@ -9,9 +9,9 @@ class BridgeConfig:
     TELNET_PORT: int = int(os.getenv("MOOMOO_TELNET_PORT", "22222"))
     MOOMOO_TRD_ENV: str = os.getenv("MOOMOO_TRD_ENV", "SIMULATE")
 
-    # Security Tokens
-    PAPERCLIP_BRIDGE_SECRET: str = os.getenv("PAPERCLIP_BRIDGE_SECRET", "default-paperclip-secret-12345")
-    BRIDGE_SERVICE_TOKEN: str = os.getenv("BRIDGE_SERVICE_TOKEN", "default-service-token-67890")
+    # Security Tokens (Zero Default Secrets: must be explicitly provided in environment)
+    PAPERCLIP_BRIDGE_SECRET: str = os.getenv("PAPERCLIP_BRIDGE_SECRET", "")
+    BRIDGE_SERVICE_TOKEN: str = os.getenv("BRIDGE_SERVICE_TOKEN", "")
 
     # Cloudflare Access Origin JWT settings
     CF_ACCESS_AUD: str = os.getenv("CF_ACCESS_AUD", "")
@@ -29,3 +29,20 @@ class BridgeConfig:
     @classmethod
     def ensure_data_dir(cls) -> None:
         cls.SHARED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def validate_secrets(cls) -> None:
+        """
+        Fail-fast check on startup: raises RuntimeError if mandatory secrets are missing.
+        Ensures zero default / fallback secrets in production environments.
+        """
+        missing = []
+        if not cls.PAPERCLIP_BRIDGE_SECRET or not cls.PAPERCLIP_BRIDGE_SECRET.strip():
+            missing.append("PAPERCLIP_BRIDGE_SECRET")
+        if not cls.BRIDGE_SERVICE_TOKEN or not cls.BRIDGE_SERVICE_TOKEN.strip():
+            missing.append("BRIDGE_SERVICE_TOKEN")
+        if missing:
+            raise RuntimeError(
+                f"Missing required security credentials: {', '.join(missing)}. "
+                "Bridge L4 must fail-fast on startup when secret tokens are not configured."
+            )

@@ -23,9 +23,12 @@ reconciler = PositionReconciler(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle manager: starts background reconciliation and sentinel heartbeat."""
-    logger.info("Initializing Bridge L4 Service...")
+    """Lifecycle manager: validates credentials, starts background reconciliation and sentinel heartbeat."""
+    logger.info("Validating Bridge L4 configuration and secrets...")
+    BridgeConfig.validate_secrets()
     BridgeConfig.ensure_data_dir()
+
+    logger.info("Initializing Bridge L4 background services...")
     reconciler.start()
 
     heartbeat_task = asyncio.create_task(reconciler.run_heartbeat_loop())
@@ -52,11 +55,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Secure CORS configuration: Restrict to explicit origins without permissive wildcard credentials
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://stock-trader.beta.julietmike.net"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

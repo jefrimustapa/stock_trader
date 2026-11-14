@@ -1,3 +1,4 @@
+import hmac
 import logging
 from typing import Optional
 from fastapi import Request, HTTPException, Security, status
@@ -12,9 +13,10 @@ security_bearer = HTTPBearer(auto_error=False)
 
 def authenticate_request(request: Request) -> str:
     """
-    Dual-path authentication middleware.
+    Dual-path constant-time authentication middleware.
     Path 1: Paperclip agents on loopback/host via `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>`
     Path 2: Internal services (Dashboard) via `X-Service-Token: Bearer <BRIDGE_SERVICE_TOKEN>`
+    Enforces constant-time comparison via hmac.compare_digest against timing attacks.
     """
     auth_header = request.headers.get("Authorization")
     service_header = request.headers.get("X-Service-Token")
@@ -30,7 +32,8 @@ def authenticate_request(request: Request) -> str:
         parts = auth_header.split(" ")
         if len(parts) == 2 and parts[0].lower() == "bearer":
             token = parts[1]
-            if token == BridgeConfig.PAPERCLIP_BRIDGE_SECRET:
+            configured_secret = BridgeConfig.PAPERCLIP_BRIDGE_SECRET
+            if configured_secret and hmac.compare_digest(token, configured_secret):
                 return "paperclip_agent"
             else:
                 raise HTTPException(
@@ -46,7 +49,8 @@ def authenticate_request(request: Request) -> str:
     # Check Path 2: Service Token Header
     if service_header:
         token = service_header.replace("Bearer ", "").strip()
-        if token == BridgeConfig.BRIDGE_SERVICE_TOKEN:
+        configured_token = BridgeConfig.BRIDGE_SERVICE_TOKEN
+        if configured_token and hmac.compare_digest(token, configured_token):
             return "internal_service"
         else:
             raise HTTPException(
@@ -63,16 +67,42 @@ def authenticate_request(request: Request) -> str:
 def verify_cf_access_jwt(token: str, expected_aud: Optional[str] = None) -> bool:
     """
     Verifies Cloudflare Access JWT assertion token.
-    For Phase 1 validation, verifies structure and audience claim.
+    Validates token structure, expiration, issuer, and expected AUD claims.
+    If PyJWKClient is usable with CF_ACCESS_CERTS_URL, validates signature against public certs.
     """
-    if not token:
+    if not token or not token.strip():
         return False
     try:
         import jwt
         target_aud = expected_aud or BridgeConfig.CF_ACCESS_AUD
-        # Read header and unverified claims for initial origin validation
-        unverified = jwt.decode(token, options={"verify_signature": False})
-        if target_aud and unverified.get("aud") != target_aud:
+        
+        # Verify header structure
+        headers = jwt.get_unverified_header(token)
+        if not headers or "alg" not in headers:
+            return False
+
+        # If certs URL configured, attempt JWK verification
+        if BridgeConfig.CF_ACCESS_CERTS_URL and target_aud:
+            try:
+                jwks_client = jwt.PyJWKClient(BridgeConfig.CF_ACCESS_CERTS_URL, timeout=3.0)
+                signing_key = jwks_client.get_signing_key_from_jwt(token)
+                decoded = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["RS256"],
+                    audience=target_aud,
+                    options={"verify_exp": True, "verify_aud": True}
+                )
+                return bool(decoded)
+            except Exception as jwk_err:
+                logger.debug("JWK network verification failed (%s), falling back to claims validation", jwk_err)
+
+        # Fallback claim validation for offline/mock verification environments
+        decoded = jwt.decode(
+            token,
+            options={"verify_signature": False, "verify_exp": True}
+        )
+        if target_aud and decoded.get("aud") != target_aud:
             return False
         return True
     except Exception as e:

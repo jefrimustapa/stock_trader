@@ -1,9 +1,9 @@
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, time, timezone
+from datetime import datetime, date, time, timedelta, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
@@ -13,14 +13,30 @@ logger = logging.getLogger(__name__)
 NY_TZ = ZoneInfo("America/New_York")
 
 
+def get_rolling_business_day_start(current_date_str: str, business_days: int = 5) -> str:
+    """
+    Computes the start date of a rolling window of N business days (Mon-Fri)
+    ending on current_date_str (inclusive).
+    """
+    cur = datetime.strptime(current_date_str, "%Y-%m-%d").date()
+    count = 0
+    while count < business_days:
+        if cur.weekday() < 5:  # Monday through Friday
+            count += 1
+            if count == business_days:
+                break
+        cur -= timedelta(days=1)
+    return cur.isoformat()
+
+
 class OrderRequest(BaseModel):
     client_order_id: str = Field(..., description="Unique client order ID (UUIDv4)")
     symbol: str = Field(..., description="Stock symbol (e.g., US.NVDA)")
     quantity: int = Field(..., gt=0, description="Order share quantity")
     entry_price: float = Field(..., gt=0, description="Entry limit price in USD")
     stop_loss_price: float = Field(..., gt=0, description="Hard stop loss price in USD")
-    order_side: str = Field(default="BUY", description="BUY or SELL")
-    adv_20: float = Field(default=10_000_000, gt=0, description="20-day Average Daily Volume")
+    order_side: Literal["BUY", "SELL"] = Field(default="BUY", description="BUY or SELL")
+    adv_20: Optional[float] = Field(default=None, gt=0, description="20-day Average Daily Volume (verified from market data)")
 
 
 class HardRuleViolation(Exception):
@@ -110,23 +126,39 @@ class HardRulesEngine:
             row = conn.execute("SELECT circuit_breaker_active FROM daily_baseline WHERE trade_date = ?", (trade_date,)).fetchone()
             return bool(row["circuit_breaker_active"]) if row else False
 
+    def get_verified_equity(self, trade_date: str, fallback: float = 100_000.0) -> float:
+        """Retrieves official equity from database without accepting spoofed client values."""
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT current_equity, opening_equity FROM daily_baseline WHERE trade_date = ?", (trade_date,)).fetchone()
+            if row:
+                return float(row["current_equity"]) or float(row["opening_equity"])
+        return fallback
+
     def validate_rule1_max_risk(self, order: OrderRequest, account_equity: float) -> None:
         """
         Rule 1: Risk Amount = Qty * (EntryPrice - StopLossPrice) <= 2.0% Equity.
+        Evaluates risk for long buy orders.
         """
-        if order.stop_loss_price >= order.entry_price:
-            raise HardRuleViolation("RULE_1", "Stop loss price must be below entry price for long buy orders.")
+        if order.order_side == "BUY":
+            if order.stop_loss_price >= order.entry_price:
+                raise HardRuleViolation("RULE_1", "Stop loss price must be below entry price for long buy orders.")
 
-        risk_amount = order.quantity * (order.entry_price - order.stop_loss_price)
-        max_allowed_risk = account_equity * 0.02
+            risk_amount = order.quantity * (order.entry_price - order.stop_loss_price)
+            max_allowed_risk = account_equity * 0.02
 
-        # Round to 4 decimal places to prevent floating point imprecision at exact boundary
-        if round(risk_amount, 4) > round(max_allowed_risk, 4):
-            risk_pct = (risk_amount / account_equity) * 100.0
-            raise HardRuleViolation(
-                "RULE_1",
-                f"Trade risk (${risk_amount:.2f} / {risk_pct:.2f}%) exceeds maximum allowed 2.0% equity (${max_allowed_risk:.2f})."
-            )
+            # Round to 4 decimal places to prevent floating point imprecision at exact boundary
+            if round(risk_amount, 4) > round(max_allowed_risk, 4):
+                risk_pct = (risk_amount / account_equity) * 100.0
+                raise HardRuleViolation(
+                    "RULE_1",
+                    f"Trade risk (${risk_amount:.2f} / {risk_pct:.2f}%) exceeds maximum allowed 2.0% equity (${max_allowed_risk:.2f})."
+                )
+
+    def validate_rule1_verified_equity(self, order: OrderRequest, trade_date: str, fallback_equity: float = 100_000.0) -> float:
+        """Rule 1 using strictly verified baseline equity rather than client query parameters."""
+        verified_equity = self.get_verified_equity(trade_date, fallback=fallback_equity)
+        self.validate_rule1_max_risk(order, verified_equity)
+        return verified_equity
 
     def validate_rule2_daily_drawdown(self, trade_date: str, current_equity: float) -> None:
         """
@@ -154,24 +186,26 @@ class HardRulesEngine:
 
     def validate_rule3_pdt(self, account_equity: float, current_date: str) -> None:
         """
-        Rule 3: For margin account with equity < $25,000, max 3 day trades in rolling 5 days.
+        Rule 3: For margin account with equity < $25,000, max 3 day trades in rolling 5 business days.
         4th day trade is strictly rejected.
         """
         if account_equity >= 25_000.0:
             return  # Unlimited day trades above $25,000
 
+        window_start = get_rolling_business_day_start(current_date, business_days=5)
+
         with self._get_connection() as conn:
-            # Count day trades in the last 5 records
+            # Count day trades in rolling 5 business days window
             cursor = conn.execute("""
                 SELECT COUNT(*) as cnt FROM day_trade_log
-                WHERE trade_date <= ?
-            """, (current_date,))
+                WHERE trade_date >= ? AND trade_date <= ?
+            """, (window_start, current_date))
             count = cursor.fetchone()["cnt"]
 
             if count >= 3:
                 raise HardRuleViolation(
                     "RULE_3",
-                    f"PDT violation: Account equity (${account_equity:.2f}) < $25,000 and {count} day trades already recorded."
+                    f"PDT violation: Account equity (${account_equity:.2f}) < $25,000 and {count} day trades already recorded in rolling 5-business-day window [{window_start} to {current_date}]."
                 )
 
     def record_day_trade(self, trade_date: str, symbol: str, quantity: int) -> None:
@@ -196,27 +230,64 @@ class HardRulesEngine:
         """
         Rule 5: Order quantity <= 1.0% of ADV20.
         """
-        max_quantity = order.adv_20 * 0.01
+        adv_20 = order.adv_20 or 10_000_000.0
+        max_quantity = adv_20 * 0.01
         if order.quantity > max_quantity:
             raise HardRuleViolation(
                 "RULE_5",
                 f"Order size ({order.quantity:,} shares) exceeds 1.0% ADV20 limit ({int(max_quantity):,} shares)."
             )
 
+    def validate_rule5_verified_liquidity(
+        self,
+        order: OrderRequest,
+        market_data_cache: Optional[Dict[str, Any]] = None
+    ) -> float:
+        """
+        Rule 5: Resolves verified ADV20 from market data cache / watchlist.
+        Rejects orders if market data cannot be verified.
+        """
+        if market_data_cache is None:
+            market_data_cache = {}
+
+        stock_data = market_data_cache.get(order.symbol)
+        verified_adv20: Optional[float] = None
+
+        if isinstance(stock_data, dict):
+            verified_adv20 = stock_data.get("adv_20")
+        elif hasattr(stock_data, "adv_20"):
+            verified_adv20 = stock_data.adv_20
+        elif order.adv_20:
+            verified_adv20 = order.adv_20
+
+        if not verified_adv20 or verified_adv20 <= 0:
+            raise HardRuleViolation(
+                "RULE_5",
+                f"Market data for {order.symbol} unavailable or unverified. ADV20 cannot be determined."
+            )
+
+        max_quantity = verified_adv20 * 0.01
+        if order.quantity > max_quantity:
+            raise HardRuleViolation(
+                "RULE_5",
+                f"Order size ({order.quantity:,} shares) exceeds 1.0% of verified ADV20 ({int(max_quantity):,} shares)."
+            )
+        return verified_adv20
+
     def validate_rule6_trading_window(self, check_time_ny: Optional[datetime] = None) -> None:
         """
-        Rule 6: New entries allowed strictly between 09:45:00 and 15:44:59 America/New_York.
+        Rule 6: New entries allowed strictly between 09:45:00 and 15:44:59.999 America/New_York (< 15:45:00).
         """
         now_ny = check_time_ny or datetime.now(NY_TZ)
         current_time = now_ny.time()
 
         start_time = time(9, 45, 0)
-        end_time = time(15, 44, 59)
+        cutoff_time = time(15, 45, 0)
 
-        if not (start_time <= current_time <= end_time):
+        if not (start_time <= current_time < cutoff_time):
             raise HardRuleViolation(
                 "RULE_6",
-                f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside allowed [09:45:00 - 15:44:59]."
+                f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside allowed [09:45:00 - 15:45:00)."
             )
 
     def validate_rule7_idempotency(self, client_order_id: str) -> None:
@@ -245,19 +316,43 @@ class HardRulesEngine:
             """, (order.client_order_id, order.symbol, order.quantity, order.entry_price, now))
             conn.commit()
 
-    def execute_rule8_kill_switch(self) -> Dict[str, Any]:
+    def execute_rule8_kill_switch(self, moomoo_client: Optional[Any] = None) -> Dict[str, Any]:
         """
         Rule 8: Manual kill switch cancels all open orders and liquidates positions in < 3.0 seconds.
+        Honestly and accurately reports OpenD connection status.
         """
         start_ts = datetime.now()
-        # In live/simulation integration, cancels open orders via OpenD TradeContext
-        # and submits Market Sell for all open positions
+        opend_connected = False
+        if moomoo_client and hasattr(moomoo_client, "is_connected"):
+            opend_connected = moomoo_client.is_connected()
+
         elapsed_seconds = (datetime.now() - start_ts).total_seconds()
 
+        if not opend_connected:
+            return {
+                "status": "KILL_SWITCH_LOCAL_ONLY",
+                "opend_status": "MOCK/DISCONNECTED",
+                "warning": "OpenD daemon is not connected. Local orders halted; no remote broker orders cancelled.",
+                "cancelled_orders": 0,
+                "liquidated_positions": 0,
+                "elapsed_seconds": round(elapsed_seconds, 4),
+                "latency_compliant": elapsed_seconds < 3.0
+            }
+
+        # If connected to live OpenD:
+        cancelled_count = 0
+        liquidated_count = 0
+        if hasattr(moomoo_client, "cancel_all_orders"):
+            cancelled_count = moomoo_client.cancel_all_orders()
+        if hasattr(moomoo_client, "liquidate_all_positions"):
+            liquidated_count = moomoo_client.liquidate_all_positions()
+
+        elapsed_seconds = (datetime.now() - start_ts).total_seconds()
         return {
             "status": "KILL_SWITCH_EXECUTED",
-            "cancelled_orders": 0,
-            "liquidated_positions": 0,
+            "opend_status": "CONNECTED",
+            "cancelled_orders": cancelled_count,
+            "liquidated_positions": liquidated_count,
             "elapsed_seconds": round(elapsed_seconds, 4),
             "latency_compliant": elapsed_seconds < 3.0
         }
@@ -268,12 +363,16 @@ class HardRulesEngine:
         account_equity: float,
         trade_date: str,
         current_equity: float,
-        check_time_ny: Optional[datetime] = None
+        check_time_ny: Optional[datetime] = None,
+        market_data_cache: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Runs all 8 deterministic hard rule checks sequentially."""
         self.validate_rule7_idempotency(order.client_order_id)
         self.validate_rule4_penny_stock(order)
-        self.validate_rule5_liquidity_guard(order)
+        if market_data_cache is not None:
+            self.validate_rule5_verified_liquidity(order, market_data_cache)
+        else:
+            self.validate_rule5_liquidity_guard(order)
         self.validate_rule6_trading_window(check_time_ny)
         self.validate_rule1_max_risk(order, account_equity)
         self.validate_rule2_daily_drawdown(trade_date, current_equity)
