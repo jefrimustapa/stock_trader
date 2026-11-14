@@ -157,6 +157,15 @@ async function runDashboardTests() {
             assert.strictEqual(body.user, 'trader@home-crew.lan', 'Authenticated user must match JWT email claim');
             console.log('✓ PASS: Valid RS256 JWT verified against JWKS public key with 200 OK');
 
+            // Test 2e-cookie: Valid RS256 JWT in CF_Authorization Cookie
+            const cookieRes = await makeRequest(testPort2, {
+                'cookie': 'theme=dark; CF_Authorization=' + validJwt + '; session=xyz'
+            });
+            assert.strictEqual(cookieRes.statusCode, 200, 'Expected 200 for valid RS256 token in cookie');
+            const cookieBody = JSON.parse(cookieRes.body);
+            assert.strictEqual(cookieBody.user, 'trader@home-crew.lan');
+            console.log('✓ PASS: Valid RS256 JWT verified via CF_Authorization cookie with 200 OK');
+
             // Token with wrong audience
             const wrongAudJwt = jwt.sign(
                 { email: "hacker@evil.com", sub: "evil-sub" },

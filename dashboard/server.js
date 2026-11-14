@@ -91,8 +91,14 @@ async function authenticateDashboard(req, res, next) {
         return res.status(401).json({ error: 'Invalid service token' });
     }
 
-    // 2. Check Cloudflare Access JWT Assertion
-    const cfJwt = req.headers['cf-access-jwt-assertion'];
+    // 2. Check Cloudflare Access JWT Assertion (Header or CF_Authorization Cookie)
+    let cfJwt = req.headers['cf-access-jwt-assertion'];
+    if (!cfJwt && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)CF_Authorization=([^;]+)/);
+        if (match) {
+            cfJwt = match[1];
+        }
+    }
     if (cfJwt) {
         try {
             const completeDecoded = jwt.decode(cfJwt, { complete: true });
