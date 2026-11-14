@@ -28,12 +28,14 @@ class OTPRequest(BaseModel):
 
 class SwitchLoginRequest(BaseModel):
     login_account: str = Field(..., min_length=1, description="Moomoo login account ID")
-    login_pwd_md5: Optional[str] = Field(None, description="MD5 hash of login password (optional)")
+    password: Optional[str] = Field(None, min_length=1, description="Login password")
+    login_pwd_md5: Optional[str] = Field(None, description="MD5 hash of login password (legacy)")
 
 
 class SignInRequest(BaseModel):
     login_account: str = Field(..., min_length=1, description="Moomoo login account ID")
-    login_pwd_md5: str = Field(..., min_length=32, max_length=32, description="MD5 hash of login password (32 hex characters)")
+    password: Optional[str] = Field(None, min_length=1, description="Login password")
+    login_pwd_md5: Optional[str] = Field(None, description="MD5 hash of login password (legacy)")
 
 
 @router.post("/otp")
@@ -45,7 +47,19 @@ async def relay_otp(payload: OTPRequest, caller: str = Depends(authenticate_requ
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed relaying OTP to OpenD: {message}"
         )
-    return {"status": "SUCCESS", "message": message}
+
+    # Re-check and attempt client connection
+    client = get_moomoo_client()
+    import asyncio
+    await asyncio.sleep(1.0)
+    connected = client.connect()
+    curr_status = client.get_connection_status()
+
+    return {
+        "status": "SUCCESS" if connected or curr_status == "CONNECTED" else "WAIT_CONFIRMATION",
+        "message": message,
+        "connection_status": curr_status
+    }
 
 
 @router.post("/sign-out")
@@ -84,49 +98,31 @@ async def sign_out_session(caller: str = Depends(authenticate_request)):
 @router.post("/switch-login")
 async def switch_login(payload: SwitchLoginRequest, caller: str = Depends(authenticate_request)):
     """
-    Switches to a different Moomoo login account (Seksyen 3.5.B Blueprint):
-    1. Signs out existing OpenD session via Telnet.
-    2. Disconnects local trade context.
-    3. Cleans temporary tokens from opend_session_data.
-    4. Updates login configuration file (opend_login.json) and removes .idle_mode.
-    5. Restarts OpenD container to load new account credentials.
+    Switches to a different Moomoo login account (Seksyen 3.5.B Blueprint & HOM-173):
+    Redirects to sign_in_session for unified interactive login.
     """
-    await telnet_client.logout_session()
-
-    client = get_moomoo_client()
-    client.close()
-
-    opend_manager.clean_session_data()
-
-    config_ok, config_msg = opend_manager.update_login_config(
+    signin_req = SignInRequest(
         login_account=payload.login_account,
+        password=payload.password,
         login_pwd_md5=payload.login_pwd_md5
     )
-    if not config_ok:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed updating login configuration: {config_msg}"
-        )
-
-    restart_ok, restart_msg = opend_manager.restart_opend_container()
-
-    return {
-        "status": "SUCCESS",
-        "login_account": payload.login_account,
-        "container_restart": restart_msg,
-        "message": f"Successfully configured login account {payload.login_account} and restarted OpenD gateway."
-    }
+    return await sign_in_session(payload=signin_req, caller=caller)
 
 
 @router.post("/sign-in")
 async def sign_in_session(payload: SignInRequest, caller: str = Depends(authenticate_request)):
     """
-    Signs in to Moomoo account (Seksyen 3.5.B Blueprint & HOM-165):
+    Signs in to Moomoo account (Seksyen 3.5.B Blueprint & HOM-173):
     1. Terminates old session via Telnet (if active).
     2. Disconnects local trade context.
-    3. Cleans stale session tokens.
-    4. Updates opend_login.json with 0600 file permissions and clears .idle_mode.
-    5. Restarts OpenD container to authenticate with provided account & password MD5.
+    3. Cleans stale session tokens and clears .idle_mode.
+    4. Updates opend_login.json with 0600 file permissions (account only, no saved password).
+    5. Restarts OpenD container in clean state.
+    6. Conducts interactive telnet handshake (account, password, remember=Y) to authenticate.
+    7. Evaluates true authentication outcome:
+       - WAIT_OTP: OpenD prompts for 2FA SMS/Email code.
+       - CONNECTED: Logged in and broker connection established.
+       - LOGIN_FAILED: Password/account mismatch (HTTP 400).
     """
     try:
         await telnet_client.logout_session()
@@ -139,8 +135,7 @@ async def sign_in_session(payload: SignInRequest, caller: str = Depends(authenti
     opend_manager.clean_session_data()
 
     config_ok, config_msg = opend_manager.update_login_config(
-        login_account=payload.login_account,
-        login_pwd_md5=payload.login_pwd_md5
+        login_account=payload.login_account
     )
     if not config_ok:
         raise HTTPException(
@@ -148,11 +143,41 @@ async def sign_in_session(payload: SignInRequest, caller: str = Depends(authenti
             detail=f"Failed updating login configuration: {config_msg}"
         )
 
+    # Controlled restart of OpenD container
     restart_ok, restart_msg = opend_manager.restart_opend_container()
+    if not restart_ok:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed restarting OpenD container: {restart_msg}"
+        )
+
+    pwd = payload.password or ""
+    if not pwd:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is required for interactive OpenD login"
+        )
+
+    # Conduct interactive telnet handshake
+    login_status, login_msg = await telnet_client.login_interactive(
+        account=payload.login_account,
+        password=pwd
+    )
+
+    if login_status == "LOGIN_FAILED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Login failed: {login_msg}"
+        )
+    elif login_status == "ERROR":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"OpenD communication error: {login_msg}"
+        )
 
     return {
-        "status": "SUCCESS",
+        "status": login_status,
         "login_account": payload.login_account,
         "container_restart": restart_msg,
-        "message": f"Successfully configured login credentials for account {payload.login_account} and restarted OpenD gateway."
+        "message": login_msg
     }

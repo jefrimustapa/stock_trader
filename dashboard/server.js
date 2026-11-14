@@ -385,19 +385,13 @@ app.post('/api/opend/switch-account', authenticateDashboard, async (req, res) =>
 });
 
 app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
-    const { login_account, password, login_pwd_md5 } = req.body || {};
+    const { login_account, password } = req.body || {};
     if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
         return res.status(400).json({ error: 'Login account ID diperlukan' });
     }
 
-    let finalMd5 = null;
-    if (password && typeof password === 'string' && password.trim()) {
-        // Calculate MD5 hash server-side. Plaintext password is NEVER logged, stored, or output.
-        finalMd5 = crypto.createHash('md5').update(password.trim()).digest('hex');
-    } else if (login_pwd_md5 && typeof login_pwd_md5 === 'string' && login_pwd_md5.trim()) {
-        finalMd5 = login_pwd_md5.trim();
-    } else {
-        return res.status(400).json({ error: 'Kata laluan (atau hash MD5) diperlukan untuk sign-in' });
+    if (!password || typeof password !== 'string' || !password.trim()) {
+        return res.status(400).json({ error: 'Kata laluan diperlukan untuk log masuk' });
     }
 
     if (!BRIDGE_SERVICE_TOKEN) {
@@ -407,10 +401,10 @@ app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/sign-in`, {
             login_account: login_account.trim(),
-            login_pwd_md5: finalMd5
+            password: password.trim()
         }, {
             headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
-            timeout: 15000
+            timeout: 25000
         });
         return res.json(bridgeRes.data);
     } catch (err) {
@@ -420,15 +414,12 @@ app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
 });
 
 app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
-    const { login_account, password, login_pwd_md5 } = req.body || {};
+    const { login_account, password } = req.body || {};
     if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
         return res.status(400).json({ error: 'Login account ID diperlukan' });
     }
-    let finalMd5 = null;
-    if (password && typeof password === 'string' && password.trim()) {
-        finalMd5 = crypto.createHash('md5').update(password.trim()).digest('hex');
-    } else if (login_pwd_md5 && typeof login_pwd_md5 === 'string' && login_pwd_md5.trim()) {
-        finalMd5 = login_pwd_md5.trim();
+    if (!password || typeof password !== 'string' || !password.trim()) {
+        return res.status(400).json({ error: 'Kata laluan diperlukan untuk tukar akaun' });
     }
     if (!BRIDGE_SERVICE_TOKEN) {
         return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
@@ -436,10 +427,10 @@ app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/switch-login`, {
             login_account: login_account.trim(),
-            login_pwd_md5: finalMd5
+            password: password.trim()
         }, {
             headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
-            timeout: 15000
+            timeout: 25000
         });
         return res.json(bridgeRes.data);
     } catch (err) {
@@ -877,7 +868,7 @@ app.get('/', authenticateDashboard, async (req, res) => {
                 resDiv.style.color = "var(--danger)";
                 return;
             }
-            resDiv.innerText = "Menjana hash MD5 selamat & me-restart gateway OpenD...";
+            resDiv.innerText = "Menghubungi OpenD Telnet gateway & memulakan proses log masuk...";
             resDiv.style.color = "var(--accent)";
             try {
                 const resp = await fetch('/api/opend/sign-in', {
@@ -887,12 +878,27 @@ app.get('/', authenticateDashboard, async (req, res) => {
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    resDiv.innerText = "Kredensial berjaya dikonfigurasi & OpenD direstart: " + (data.message || 'OK');
-                    resDiv.style.color = "var(--success)";
                     if (document.getElementById('loginPwdInput')) document.getElementById('loginPwdInput').value = '';
-                    setTimeout(() => window.location.reload(), 2500);
+                    if (data.status === 'WAIT_OTP') {
+                        resDiv.innerText = "Kredensial disahkan! Kod SMS/OTP 2FA diperlukan. Sila masukkan kod OTP dalam borang di bawah.";
+                        resDiv.style.color = "#f59e0b";
+                        const otpCard = document.getElementById('otpCard');
+                        if (otpCard) {
+                            otpCard.scrollIntoView({ behavior: 'smooth' });
+                            const otpInput = document.getElementById('otpInput');
+                            if (otpInput) otpInput.focus();
+                        }
+                    } else if (data.status === 'CONNECTED') {
+                        resDiv.innerText = "Log masuk berjaya! Status OpenD kini CONNECTED.";
+                        resDiv.style.color = "var(--success)";
+                        setTimeout(() => window.location.reload(), 2000);
+                    } else {
+                        resDiv.innerText = data.message || "Status OpenD dikemas kini: " + (data.status || 'OK');
+                        resDiv.style.color = "var(--accent)";
+                        setTimeout(() => window.location.reload(), 2500);
+                    }
                 } else {
-                    resDiv.innerText = "Gagal: " + (data.error || 'Ralat');
+                    resDiv.innerText = "Log masuk gagal: " + (data.error || data.detail || 'Kata laluan atau akaun tidak sepadan.');
                     resDiv.style.color = "var(--danger)";
                 }
             } catch (err) {
