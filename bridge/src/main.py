@@ -1,0 +1,70 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import BridgeConfig
+from .reconciliation import PositionReconciler
+from .routes import health, trade, telnet
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] [BridgeL4] %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+reconciler = PositionReconciler(
+    status_file=BridgeConfig.SENTINEL_STATUS_PATH,
+    check_interval=60,
+    heartbeat_interval=5
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager: starts background reconciliation and sentinel heartbeat."""
+    logger.info("Initializing Bridge L4 Service...")
+    BridgeConfig.ensure_data_dir()
+    reconciler.start()
+
+    heartbeat_task = asyncio.create_task(reconciler.run_heartbeat_loop())
+    reconcile_task = asyncio.create_task(reconciler.run_reconciliation_loop())
+
+    logger.info("Bridge L4 Service ready on port 8000.")
+    yield
+
+    logger.info("Shutting down Bridge L4 Service...")
+    reconciler.stop()
+    heartbeat_task.cancel()
+    reconcile_task.cancel()
+    try:
+        await asyncio.gather(heartbeat_task, reconcile_task, return_exceptions=True)
+    except Exception:
+        pass
+    logger.info("Bridge L4 Service shutdown complete.")
+
+
+app = FastAPI(
+    title="US Stock Analyst & Trader - REST Bridge L4",
+    version="1.0.0",
+    description="Deterministic REST Bridge enforcing 8 Hard Rules and relaying commands to OpenD",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(health.router)
+app.include_router(trade.router)
+app.include_router(telnet.router)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=False)

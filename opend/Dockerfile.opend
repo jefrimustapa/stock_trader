@@ -1,0 +1,40 @@
+# Dockerfile for Moomoo OpenD Linux CLI Gateway
+# Strictly isolated inside stock_internal network
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    wget \
+    curl \
+    tar \
+    netcat-openbsd \
+    telnet \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/opend
+
+# OpenD release archive and mandatory SHA256 integrity check
+ARG OPEND_URL="https://softwaredownload.futustatic.com/moomoo_OpenD_10.12.7208_Ubuntu18.04.tar.gz"
+ARG OPEND_SHA256=""
+
+RUN if [ -z "$OPEND_SHA256" ]; then \
+        echo "ERROR: OPEND_SHA256 build argument must be provided for security integrity verification." >&2; \
+        exit 1; \
+    fi && \
+    wget -q -O OpenD.tar.gz "$OPEND_URL" && \
+    echo "${OPEND_SHA256}  OpenD.tar.gz" | sha256sum -c - && \
+    tar -xzf OpenD.tar.gz --strip-components=1 && \
+    rm -f OpenD.tar.gz && \
+    chmod +x OpenD
+
+COPY scripts/entrypoint.sh /opt/opend/entrypoint.sh
+RUN chmod +x /opt/opend/entrypoint.sh
+
+# OpenD API and Telnet ports (internal container network only)
+EXPOSE 11111 22222
+
+ENTRYPOINT ["/opt/opend/entrypoint.sh"]
+CMD ["./OpenD", "-api_ip=0.0.0.0", "-api_port=11111", "-telnet_ip=0.0.0.0", "-telnet_port=22222"]

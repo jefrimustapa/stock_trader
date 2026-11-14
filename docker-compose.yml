@@ -1,0 +1,89 @@
+services:
+  moomoo-opend:
+    build:
+      context: ./opend
+      dockerfile: Dockerfile.opend
+      args:
+        OPEND_SHA256: "${OPEND_SHA256:-}"
+    container_name: stock_moomoo_opend
+    restart: unless-stopped
+    networks:
+      - stock_internal
+    volumes:
+      - opend_session_data:/root/.com.moomoo.OpenD
+    environment:
+      - TZ=America/New_York
+    # Strictly isolated: No host port publication (ports:)
+
+  screener-daemon:
+    build:
+      context: ./screener
+      dockerfile: Dockerfile.screener
+    container_name: stock_screener_daemon
+    restart: unless-stopped
+    networks:
+      - stock_internal
+    volumes:
+      - shared_trading_data:/app/shared_data
+    environment:
+      - MOOMOO_OPEND_HOST=moomoo-opend
+      - MOOMOO_OPEND_PORT=11111
+      - SHARED_DATA_DIR=/app/shared_data
+      - SCAN_INTERVAL_SECONDS=300
+      - TZ=America/New_York
+    depends_on:
+      - moomoo-opend
+
+  mcp-bridge:
+    build:
+      context: ./bridge
+      dockerfile: Dockerfile.bridge
+    container_name: stock_mcp_bridge
+    restart: unless-stopped
+    networks:
+      - stock_internal
+    ports:
+      # Bound exclusively to host loopback for Paperclip agent communication
+      - "127.0.0.1:${BRIDGE_HOST_PORT:-8005}:8000"
+    volumes:
+      - shared_trading_data:/app/shared_data
+    environment:
+      - MOOMOO_OPEND_HOST=moomoo-opend
+      - MOOMOO_OPEND_PORT=11111
+      - MOOMOO_TELNET_PORT=22222
+      - MOOMOO_TRD_ENV=${MOOMOO_TRD_ENV:-SIMULATE}
+      - PAPERCLIP_BRIDGE_SECRET=${PAPERCLIP_BRIDGE_SECRET:-default-paperclip-secret-12345}
+      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:-default-service-token-67890}
+      - SHARED_DATA_DIR=/app/shared_data
+      - TZ=America/New_York
+    depends_on:
+      - moomoo-opend
+
+  trading-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dashboard
+    container_name: stock_trading_dashboard
+    restart: unless-stopped
+    networks:
+      - stock_internal
+      - npm_default
+    volumes:
+      - shared_trading_data:/app/shared_data
+    environment:
+      - PORT=3000
+      - SHARED_DATA_DIR=/app/shared_data
+      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:-default-service-token-67890}
+      - CF_ACCESS_AUD=${CF_ACCESS_AUD:-}
+      - TZ=America/New_York
+
+networks:
+  stock_internal:
+    driver: bridge
+    internal: true
+  npm_default:
+    external: true
+
+volumes:
+  opend_session_data:
+  shared_trading_data:

@@ -1,0 +1,52 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Persistent database files & shared state
+shared_data/*.sqlite
+shared_data/*.sqlite-journal
+shared_data/*.db
+shared_data/*.json
+!shared_data/.gitkeep
+
+# Session data & secrets
+.env
+opend_session_data/
+*.log
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# OS & IDE
+.DS_Store
+.idea/
+.vscode/

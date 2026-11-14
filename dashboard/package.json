@@ -1,0 +1,14 @@
+{
+  "name": "stock-trader-dashboard",
+  "version": "1.0.0",
+  "description": "Web Dashboard for US Stock Analyst & Trader with Cloudflare Access JWT validation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "axios": "^1.6.8"
+  }
+}
