@@ -119,6 +119,31 @@ async function runDashboardTests() {
         assert.strictEqual(invalidSvcRes.statusCode, 401, `Expected 401 for invalid service token, got ${invalidSvcRes.statusCode}`);
         console.log('✓ PASS: Invalid service token rejected');
 
+        // Test 2m (HOM-146 TDD): Forward Auth via X-authentik-username
+        const forwardAuthRes = await makeRequest(testPort, {
+            'x-authentik-username': 'jefri'
+        });
+        assert.strictEqual(forwardAuthRes.statusCode, 200, `Expected 200 for Authentik Forward Auth header, got ${forwardAuthRes.statusCode}: ${forwardAuthRes.body}`);
+        const forwardAuthBody = JSON.parse(forwardAuthRes.body);
+        assert.strictEqual(forwardAuthBody.user, 'jefri', `Expected user 'jefri', got '${forwardAuthBody.user}'`);
+        console.log('✓ PASS: Authentik Forward Auth (X-authentik-username) authenticated with 200 OK');
+
+        // Test 2n (HOM-146 TDD): Forward Auth via X-authentik-email fallback
+        const forwardAuthEmailRes = await makeRequest(testPort, {
+            'x-authentik-email': 'jefri@home-crew.lan'
+        });
+        assert.strictEqual(forwardAuthEmailRes.statusCode, 200, `Expected 200 for Authentik Forward Auth email fallback, got ${forwardAuthEmailRes.statusCode}`);
+        const forwardAuthEmailBody = JSON.parse(forwardAuthEmailRes.body);
+        assert.strictEqual(forwardAuthEmailBody.user, 'jefri@home-crew.lan');
+        console.log('✓ PASS: Authentik Forward Auth (X-authentik-email fallback) authenticated with 200 OK');
+
+        // Test 2o (HOM-146 BVA): Empty / whitespace-only X-authentik-username rejected with 401
+        const emptyUsernameRes = await makeRequest(testPort, {
+            'x-authentik-username': '   '
+        });
+        assert.strictEqual(emptyUsernameRes.statusCode, 401, `Expected 401 for whitespace-only username, got ${emptyUsernameRes.statusCode}`);
+        console.log('✓ PASS: Whitespace-only X-authentik-username rejected with 401');
+
         // Test 2e: Real RS256 JWT verification with test public key in NODE_ENV === 'test'
         const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
             modulusLength: 2048,
