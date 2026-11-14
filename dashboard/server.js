@@ -240,18 +240,18 @@ async function authenticateDashboard(req, res, next) {
 
 // One-Click Logout route: Clears application & outpost session cookies and redirects to single-app logout endpoint
 app.get('/logout', (req, res) => {
-    // 1. Explicitly clear known session and auth cookies
+    // 1. Explicitly clear known stock-trader session and auth cookies
     const knownCookies = [
         'authentik_jwt',
         'authentik_session',
-        'x_service_token',
-        'CF_Authorization'
+        'x_service_token'
     ];
     for (const cookieName of knownCookies) {
         res.clearCookie(cookieName, { path: '/' });
     }
 
-    // 2. Dynamically clear all incoming cookies (including outpost cookies such as authentik_proxy_*)
+    // 2. Dynamically clear incoming outpost cookies (strictly matching authentik_proxy_*)
+    // Do not clear parent domain or other application cookies (e.g. Paperclip session cookies or CF_Authorization)
     const rawCookieHeader = req.headers.cookie;
     if (rawCookieHeader) {
         const parts = rawCookieHeader.split(';');
@@ -259,14 +259,15 @@ app.get('/logout', (req, res) => {
             const trimmed = part.trim();
             const eqIdx = trimmed.indexOf('=');
             const name = (eqIdx === -1 ? trimmed : trimmed.substring(0, eqIdx)).trim();
-            if (name) {
+            if (name && name.startsWith('authentik_proxy_')) {
                 res.clearCookie(name, { path: '/' });
             }
         }
     }
 
-    // 3. Purge site data for stock-trader domain
-    res.setHeader('Clear-Site-Data', '"cache", "cookies", "storage"');
+    // 3. Purge site data for stock-trader domain without clearing registrable domain cookies
+    // Note (HOM-154): "cookies" directive must NOT be included as it purges all cookies for .julietmike.net
+    res.setHeader('Clear-Site-Data', '"cache", "storage"');
 
     // 4. Redirect to isolated single-application logout URL
     res.redirect(302, AUTHENTIK_LOGOUT_URL);

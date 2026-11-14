@@ -278,8 +278,9 @@ async function runDashboardTests() {
             console.log('✓ PASS: RS256 JWT with mismatched issuer rejected with 401');
 
             // Test 2f: GET /logout endpoint must isolate logout to stock-trader app (no global SSO invalidation)
+            // SDLC #8 (HOM-154): Clear-Site-Data must NOT contain "cookies", and only stock-trader cookies are cleared
             const logoutRes = await makeRequest(testPort2, {
-                cookie: 'authentik_proxy_session=mock-proxy-cookie; authentik_jwt=mock-jwt; ; loneCookie; =malformed'
+                cookie: 'authentik_proxy_session=mock-proxy-cookie; authentik_jwt=mock-jwt; paperclip_session=safe-paperclip-token; CF_Authorization=safe-cf-token; other_user_cookie=keep-me; ; =malformed'
             }, '/logout');
             assert.strictEqual(logoutRes.statusCode, 302, `Expected 302 for /logout, got ${logoutRes.statusCode}`);
             assert.ok(logoutRes.headers.location, 'Location header must be present');
@@ -287,13 +288,29 @@ async function runDashboardTests() {
                 `Security violation: /logout must NOT redirect to global invalidation flow: ${logoutRes.headers.location}`);
             assert.strictEqual(logoutRes.headers.location, testLogoutUrl, `Expected redirect to ${testLogoutUrl}, got ${logoutRes.headers.location}`);
             assert.ok(logoutRes.headers['clear-site-data'], 'Clear-Site-Data header must be set');
+            assert.ok(!logoutRes.headers['clear-site-data'].includes('cookies'),
+                `Security violation (HOM-154): Clear-Site-Data must NOT include "cookies", got: ${logoutRes.headers['clear-site-data']}`);
+            assert.strictEqual(logoutRes.headers['clear-site-data'], '"cache", "storage"',
+                `Expected Clear-Site-Data to be '"cache", "storage"', got ${logoutRes.headers['clear-site-data']}`);
             const setCookies = logoutRes.headers['set-cookie'] || [];
             assert.ok(setCookies.some(c => c.startsWith('authentik_jwt=')), 'Must clear authentik_jwt cookie');
             assert.ok(setCookies.some(c => c.startsWith('authentik_session=')), 'Must clear authentik_session cookie');
             assert.ok(setCookies.some(c => c.startsWith('x_service_token=')), 'Must clear x_service_token cookie');
             assert.ok(setCookies.some(c => c.startsWith('authentik_proxy_session=')), 'Must dynamically clear authentik_proxy_session cookie');
-            assert.ok(setCookies.some(c => c.startsWith('loneCookie=')), 'Must dynamically clear cookie without value');
-            console.log('✓ PASS: /logout endpoint isolates logout to stock-trader app and clears all cookies without global SSO invalidation');
+            assert.ok(!setCookies.some(c => c.startsWith('paperclip_session=')), 'Must NOT clear paperclip_session cookie');
+            assert.ok(!setCookies.some(c => c.startsWith('CF_Authorization=')), 'Must NOT clear CF_Authorization cookie');
+            assert.ok(!setCookies.some(c => c.startsWith('other_user_cookie=')), 'Must NOT clear other_user_cookie');
+            console.log('✓ PASS: /logout endpoint isolates logout to stock-trader app, omits "cookies" from Clear-Site-Data, and preserves Paperclip/CF cookies');
+
+            // Test 2f-BVA: Boundary Value Analysis for /logout cookie parsing & preservation
+            const bvaEmptyCookieRes = await makeRequest(testPort2, {}, '/logout');
+            assert.strictEqual(bvaEmptyCookieRes.statusCode, 302);
+            assert.strictEqual(bvaEmptyCookieRes.headers['clear-site-data'], '"cache", "storage"');
+            const bvaCookies = bvaEmptyCookieRes.headers['set-cookie'] || [];
+            assert.ok(bvaCookies.some(c => c.startsWith('authentik_jwt=')), 'Must still clear authentik_jwt');
+            assert.ok(bvaCookies.some(c => c.startsWith('authentik_session=')), 'Must still clear authentik_session');
+            assert.ok(bvaCookies.some(c => c.startsWith('x_service_token=')), 'Must still clear x_service_token');
+            console.log('✓ PASS: BVA - /logout handles request with no cookie header safely');
 
             // Test 2f-2: Fail-safe check when legacy global invalidation URL was configured in AUTHENTIK_LOGOUT_URL
             const legacyLogoutRes = await makeRequest(testPort, {}, '/logout');
