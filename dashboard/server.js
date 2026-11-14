@@ -12,27 +12,27 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const SHARED_DATA_DIR = process.env.SHARED_DATA_DIR || '/app/shared_data';
-const CF_ACCESS_AUD = (process.env.CF_ACCESS_AUD || '').trim();
+const AUTHENTIK_CLIENT_ID = (process.env.AUTHENTIK_CLIENT_ID || '').trim();
+const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.julietmike.net/application/o/stock-trader/').trim();
+const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
+const AUTHENTIK_LOGOUT_URL = (process.env.AUTHENTIK_LOGOUT_URL || 'https://auth.julietmike.net/flows/-/default/invalidation/').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
-const CF_ACCESS_TEAM_DOMAIN = (process.env.CF_ACCESS_TEAM_DOMAIN || 'julietmike.cloudflareaccess.com').trim();
-const CF_ACCESS_CERTS_URL = (process.env.CF_ACCESS_CERTS_URL || `https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`).trim();
-const EXPECTED_ISSUER = `https://${CF_ACCESS_TEAM_DOMAIN}`;
 
-// Fail-fast startup validation: CF_ACCESS_AUD is mandatory
-if (!CF_ACCESS_AUD) {
-    console.error('[Dashboard Error] FATAL: Missing CF_ACCESS_AUD environment variable. Cloudflare Access AUD must be configured.');
+// Fail-fast startup validation: AUTHENTIK_CLIENT_ID is mandatory
+if (!AUTHENTIK_CLIENT_ID) {
+    console.error('[Dashboard Error] FATAL: Missing AUTHENTIK_CLIENT_ID environment variable. Authentik Client ID must be configured.');
     process.exit(1);
 }
 
-// In-memory cache for Cloudflare Access JWKS
+// In-memory cache for Authentik JWKS
 let jwksKeyCache = {};
 let jwksLastFetched = 0;
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 async function getSigningKey(kid) {
     // Strictly restrict test public key bypass to NODE_ENV === 'test'
-    if (process.env.NODE_ENV === 'test' && process.env.CF_ACCESS_TEST_PUBLIC_KEY) {
-        return process.env.CF_ACCESS_TEST_PUBLIC_KEY;
+    if (process.env.NODE_ENV === 'test' && process.env.AUTHENTIK_TEST_PUBLIC_KEY) {
+        return process.env.AUTHENTIK_TEST_PUBLIC_KEY;
     }
 
     if (jwksKeyCache[kid] && (Date.now() - jwksLastFetched < JWKS_CACHE_TTL_MS)) {
@@ -40,7 +40,7 @@ async function getSigningKey(kid) {
     }
 
     try {
-        const response = await axios.get(CF_ACCESS_CERTS_URL, { timeout: 4000 });
+        const response = await axios.get(AUTHENTIK_JWKS_URL, { timeout: 4000 });
         if (response.data && Array.isArray(response.data.keys)) {
             const newCache = {};
             for (const jwk of response.data.keys) {
@@ -57,7 +57,7 @@ async function getSigningKey(kid) {
             jwksLastFetched = Date.now();
         }
     } catch (fetchErr) {
-        console.error('[Dashboard] Error fetching Cloudflare Access JWKS:', fetchErr.message);
+        console.error('[Dashboard] Error fetching Authentik JWKS:', fetchErr.message);
     }
 
     return jwksKeyCache[kid] || null;
@@ -76,12 +76,12 @@ function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
-// Origin Authentication Middleware: Cloudflare Access Assertion & Service Token
+// Origin Authentication Middleware: Authentik JWT Assertion & Service Token
 async function authenticateDashboard(req, res, next) {
     // 1. Check internal service token using timing-safe comparison (Header or Cookie)
     let serviceTokenHeader = req.headers['x-service-token'];
     if (!serviceTokenHeader && req.headers.cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)(?:CF_Authorization|x_service_token)=([^;]+)/);
+        const match = req.headers.cookie.match(/(?:^|;\s*)(?:authentik_service_token|x_service_token|CF_Authorization)=([^;]+)/);
         if (match && match[1] === BRIDGE_SERVICE_TOKEN) {
             serviceTokenHeader = match[1];
         }
@@ -97,46 +97,50 @@ async function authenticateDashboard(req, res, next) {
         return res.status(401).json({ error: 'Invalid service token' });
     }
 
-    // 2. Check Cloudflare Access JWT Assertion (Header or CF_Authorization Cookie)
-    let cfJwt = req.headers['cf-access-jwt-assertion'];
-    if (!cfJwt && req.headers.cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)CF_Authorization=([^;]+)/);
+    // 2. Check Authentik JWT Assertion (Header X-authentik-jwt, Authorization Bearer, or Cookie)
+    let authJwt = req.headers['x-authentik-jwt'];
+    if (!authJwt && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        authJwt = req.headers.authorization.slice(7).trim();
+    }
+    if (!authJwt && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)(?:authentik_jwt|authentik_session|x_authentik_jwt|CF_Authorization)=([^;]+)/);
         if (match) {
-            cfJwt = match[1];
+            authJwt = match[1];
         }
     }
-    if (cfJwt) {
+
+    if (authJwt) {
         try {
-            const completeDecoded = jwt.decode(cfJwt, { complete: true });
+            const completeDecoded = jwt.decode(authJwt, { complete: true });
             if (!completeDecoded || !completeDecoded.header) {
-                return res.status(401).json({ error: 'Malformed Cloudflare Access assertion token' });
+                return res.status(401).json({ error: 'Malformed Authentik assertion token' });
             }
 
             const { alg, kid } = completeDecoded.header;
             if (alg !== 'RS256' || !kid) {
                 return res.status(401).json({
-                    error: 'Invalid token header: Only RS256 signed Cloudflare Access assertions with valid kid are accepted.'
+                    error: 'Invalid token header: Only RS256 signed Authentik assertions with valid kid are accepted.'
                 });
             }
 
             const publicKeyPem = await getSigningKey(kid);
             if (!publicKeyPem) {
                 return res.status(401).json({
-                    error: `Signing key (kid: ${kid}) could not be resolved from Cloudflare Access JWKS.`
+                    error: `Signing key (kid: ${kid}) could not be resolved from Authentik JWKS.`
                 });
             }
 
-            const verifiedPayload = jwt.verify(cfJwt, publicKeyPem, {
+            const verifiedPayload = jwt.verify(authJwt, publicKeyPem, {
                 algorithms: ['RS256'],
-                audience: CF_ACCESS_AUD,
-                issuer: EXPECTED_ISSUER
+                audience: AUTHENTIK_CLIENT_ID,
+                issuer: AUTHENTIK_ISSUER_URL
             });
 
-            req.authUser = verifiedPayload.email || verifiedPayload.sub || 'Cloudflare User';
+            req.authUser = verifiedPayload.email || verifiedPayload.preferred_username || verifiedPayload.sub || 'Authentik User';
             return next();
         } catch (err) {
             return res.status(401).json({
-                error: `Cloudflare Access JWT verification failed: ${err.message}`
+                error: `Authentik JWT verification failed: ${err.message}`
             });
         }
     }
@@ -158,24 +162,25 @@ async function authenticateDashboard(req, res, next) {
         .input-group { margin: 20px 0; }
         label { display: block; font-size: 13px; margin-bottom: 6px; color: #cbd5e1; }
         input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 14px; }
-        button { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; }
-        button:hover { background: #0369a1; }
+        button, a.btn-login { display: block; text-align: center; box-sizing: border-box; text-decoration: none; width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; margin-bottom: 12px; }
+        button:hover, a.btn-login:hover { background: #0369a1; }
         .note { margin-top: 16px; font-size: 12px; color: #64748b; border-top: 1px solid #334155; padding-top: 12px; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>STOCK-TRADER Access</h2>
-        <p>This operations dashboard is protected by security controls. Enter your <strong>Service Token</strong> or ensure you are logged into <strong>Cloudflare Zero Trust</strong>.</p>
+        <p>This operations dashboard is protected by <strong>Authentik SSO (auth.julietmike.net)</strong>. Please log in or enter your <strong>Service Token</strong>.</p>
+        <a href="${escapeHtml(AUTHENTIK_ISSUER_URL)}" class="btn-login">Log Masuk Authentik SSO</a>
         <form onsubmit="handleToken(event)">
             <div class="input-group">
-                <label for="token">Service Token / Token Pengesahan:</label>
+                <label for="token">Internal Service Token / JWT:</label>
                 <input type="password" id="token" placeholder="Masukkan token pengesahan..." required />
             </div>
-            <button type="submit">Log Masuk Dashboard</button>
+            <button type="submit">Log Masuk dengan Token</button>
         </form>
         <div class="note">
-            Kredensial Sandbox/Ujian: Gunakan token yang dikonfigurasikan atau akses melalui terowong Cloudflare Access.
+            SSO Endpoint: ${escapeHtml(AUTHENTIK_ISSUER_URL)}
         </div>
     </div>
     <script>
@@ -184,7 +189,7 @@ async function authenticateDashboard(req, res, next) {
             const val = document.getElementById('token').value.trim();
             if (!val) return;
             // Set cookie and reload
-            document.cookie = "CF_Authorization=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
+            document.cookie = "authentik_jwt=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
             window.location.reload();
         }
     </script>
@@ -194,9 +199,19 @@ async function authenticateDashboard(req, res, next) {
 
     // Strict fail-closed for API/direct requests:
     return res.status(401).json({
-        error: 'Authentication required. Cloudflare Access JWT assertion or X-Service-Token header missing or invalid.'
+        error: 'Authentication required. Authentik JWT assertion or X-Service-Token header missing or invalid.'
     });
 }
+
+// One-Click Logout route: Clears local cookies and redirects to Authentik invalidation flow
+app.get('/logout', (req, res) => {
+    res.clearCookie('authentik_jwt', { path: '/' });
+    res.clearCookie('authentik_session', { path: '/' });
+    res.clearCookie('x_service_token', { path: '/' });
+    res.clearCookie('CF_Authorization', { path: '/' });
+    res.setHeader('Clear-Site-Data', '"cache", "cookies", "storage"');
+    res.redirect(302, AUTHENTIK_LOGOUT_URL);
+});
 
 app.get('/health', (req, res) => {
     res.json({
@@ -312,6 +327,22 @@ app.get('/', authenticateDashboard, (req, res) => {
         .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
         .badge-active { background-color: rgba(74, 222, 128, 0.15); color: var(--success); border: 1px solid var(--success); }
         .badge-ready { background-color: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+        .badge-user { background-color: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+        .btn-logout {
+            background-color: #dc2626;
+            color: #ffffff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            transition: background-color 0.15s ease;
+        }
+        .btn-logout:hover {
+            background-color: #b91c1c;
+        }
         table { width: 100%; border-collapse: collapse; background-color: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
         th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background-color: rgba(0, 0, 0, 0.2); color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -323,10 +354,12 @@ app.get('/', authenticateDashboard, (req, res) => {
         <header>
             <div>
                 <h1>STOCK-TRADER L0 / L4 Operations</h1>
-                <div class="meta">Phase 1 Infrastructure & Hard Rules Monitor | Authenticated: ${safeUser}</div>
+                <div class="meta">Phase 1 Infrastructure & Hard Rules Monitor | Log Masuk: ${safeUser}</div>
             </div>
-            <div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="badge badge-user">Authentik: ${safeUser}</span>
                 <span class="badge badge-active">Live Dashboard</span>
+                <a href="/logout" class="btn-logout" title="Log Keluar daripada Dashboard dan Authentik">Log Keluar (Logout)</a>
             </div>
         </header>
 
