@@ -30,8 +30,8 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.assertEqual(info["status"], "DISCONNECTED")
         self.assertEqual(info["env"], "SIMULATE")
         self.assertEqual(info["account_id"], "N/A")
-        self.assertEqual(info["cash_balance"], 0.0)
-        self.assertEqual(info["total_equity"], 0.0)
+        self.assertIsNone(info["cash_balance"])
+        self.assertIsNone(info["total_equity"])
 
     def test_submit_order_when_disconnected_generates_mock(self):
         self.client.connect()
@@ -76,6 +76,39 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.client._connected = False
         self.client._last_status = "WAIT_LOGIN"
         self.assertEqual(self.client.get_connection_status(), "WAIT_LOGIN")
+
+    def test_defect_login_failure_fails_closed_no_silent_mock(self):
+        """
+        Pengendalian Kecacatan Terlepas (SDLC #8):
+        Kod lama meluluskan sambungan secara senyap (connected=True, SIMULATED_ACC, $100,000)
+        apabila OpenD socket terbuka tetapi login belum berlaku atau gagal.
+        Ujian ini membuktikan kod lama GAGAL kerana ia menghasilkan CONNECTED dan SIMULATED_ACC.
+        """
+        from unittest.mock import patch, MagicMock
+
+        # Simulasikan soket berjaya berhubung (OpenD port hidup)
+        with patch("socket.create_connection") as mock_sock:
+            mock_sock.return_value.__enter__.return_value = MagicMock()
+
+            # Simulasikan OpenSecTradeContext gagal log masuk (seperti ralat OpenD sebenar: Login failed, Account credentials incomplete)
+            with patch("bridge.src.moomoo_client.OpenSecTradeContext") as mock_ctx_cls:
+                mock_ctx_cls.side_effect = Exception("Login failed, Account credentials incomplete")
+
+                test_client = MoomooClient(host="127.0.0.1", port=11111, trd_env="SIMULATE")
+                res = test_client.connect()
+
+                # Pada kod baharu yang fail-closed: sambungan mesti gagal kerana tiada sesi OpenD sah
+                self.assertFalse(res, "connect() mesti pulang False apabila OpenD tidak/belum login")
+                self.assertFalse(test_client.is_connected(), "is_connected() mesti False")
+                self.assertNotEqual(test_client.get_connection_status(), "CONNECTED")
+                self.assertIn(test_client.get_connection_status(), ["WAIT_LOGIN", "DISCONNECTED"])
+
+                info = test_client.get_account_info()
+                self.assertEqual(info["account_id"], "N/A", "Account ID mesti N/A, bukan SIMULATED_ACC")
+                self.assertIsNone(info["cash_balance"], "Baki tunai mesti null/None, bukan 100000.0")
+                self.assertIsNone(info["total_equity"], "Baki ekuiti mesti null/None, bukan 100000.0")
+
+
 
 
 if __name__ == "__main__":

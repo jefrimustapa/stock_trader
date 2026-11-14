@@ -291,7 +291,7 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
         try {
             const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
                 headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
-                timeout: 3000
+                timeout: 5000
             });
             bridgeStatus = bridgeRes.data;
         } catch (err) {
@@ -305,6 +305,28 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
         bridge: bridgeStatus,
         timestamp: new Date().toISOString()
     });
+});
+
+app.post('/api/telnet/otp', authenticateDashboard, async (req, res) => {
+    const { otp_code } = req.body || {};
+    if (!otp_code || typeof otp_code !== 'string') {
+        return res.status(400).json({ error: 'Kod OTP diperlukan' });
+    }
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/otp`, {
+            otp_code: otp_code.trim()
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
 });
 
 app.get('/api/data', authenticateDashboard, (req, res) => {
@@ -339,7 +361,7 @@ app.get('/', authenticateDashboard, async (req, res) => {
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
 
     let watchlistData = { watchlist: [], quota_status: { kline_30d_used: 0, kline_30d_remaining: 100 } };
-    let sentinelData = { status: 'ACTIVE', managed_positions: 0 };
+    let sentinelData = { status: 'OFFLINE', managed_positions: 0 };
 
     if (fs.existsSync(watchlistFile)) {
         try { watchlistData = JSON.parse(fs.readFileSync(watchlistFile, 'utf8')); } catch (e) {}
@@ -349,17 +371,18 @@ app.get('/', authenticateDashboard, async (req, res) => {
     }
 
     // Query live OpenD connection and account metrics from Bridge
-    let opendStatus = 'CONNECTED';
-    let opendEnv = 'SIMULATE';
-    let accountId = 'SIMULATED_ACC';
-    let cashBalance = 100000.00;
-    let totalEquity = 100000.00;
+    // Fail-closed defaults: UNKNOWN/N/A and Sentinel OFFLINE
+    let opendStatus = 'UNKNOWN';
+    let opendEnv = 'N/A';
+    let accountId = 'N/A';
+    let cashBalance = null;
+    let totalEquity = null;
 
     if (BRIDGE_SERVICE_TOKEN) {
         try {
             const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
                 headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
-                timeout: 3000
+                timeout: 5000
             });
             if (bridgeRes.data) {
                 if (bridgeRes.data.opend_status) opendStatus = bridgeRes.data.opend_status;
@@ -372,9 +395,47 @@ app.get('/', authenticateDashboard, async (req, res) => {
                 }
             }
         } catch (err) {
-            console.warn('[Dashboard] Could not query Bridge status for dashboard render:', err.message);
+            console.warn('[Dashboard] Could not query Bridge status for dashboard render (marking UNREACHABLE):', err.message);
+            opendStatus = 'UNREACHABLE';
         }
+    } else {
+        opendStatus = 'UNKNOWN';
     }
+
+    const safeUser = escapeHtml(req.authUser);
+    const safeOpendStatus = escapeHtml(opendStatus);
+    const safeOpendEnv = escapeHtml(opendEnv);
+    const safeAccountId = escapeHtml(accountId);
+    const safeCash = cashBalance != null ? '$' + cashBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const safeEquity = totalEquity != null ? '$' + totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const sentinelStatus = escapeHtml(sentinelData.status || 'OFFLINE');
+    const managedPositions = Number(sentinelData.managed_positions || 0);
+    const klineUsed = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_used : 0);
+    const klineRemaining = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_remaining : 100);
+
+    // Color definitions
+    let opendColor = '#f87171';
+    if (safeOpendStatus === 'CONNECTED') {
+        opendColor = 'var(--success)';
+    } else if (safeOpendStatus === 'UNREACHABLE') {
+        opendColor = 'var(--danger)';
+    } else if (safeOpendStatus === 'WAIT_LOGIN') {
+        opendColor = '#f59e0b';
+    }
+
+    let sentinelColor = '#94a3b8';
+    if (sentinelStatus === 'ACTIVE') {
+        sentinelColor = 'var(--success)';
+    } else if (sentinelStatus === 'CIRCUIT_BREAKER_TRIGGERED' || sentinelStatus === 'EMERGENCY_STOP') {
+        sentinelColor = 'var(--danger)';
+    }
+
+    const isOpendUnavailable = (watchlistData.source === 'OPEND_UNAVAILABLE') || (safeOpendStatus !== 'CONNECTED');
+    const warningMessage = watchlistData.warning || (
+        safeOpendStatus === 'WAIT_LOGIN' ? 'OpenD daemon sedang menunggu log masuk broker yang sah daripada pemohon. Watchlist ditutup (fail-closed).' :
+        safeOpendStatus === 'UNREACHABLE' ? 'Sambungan ke MCP Bridge gagal (UNREACHABLE). Semak kontena Bridge.' :
+        safeOpendStatus === 'DISCONNECTED' ? 'OpenD daemon tidak bersambung (DISCONNECTED).' : null
+    );
 
     const rows = (watchlistData.watchlist || []).map(stock => {
         const symbol = escapeHtml(stock.symbol || 'N/A');
@@ -397,18 +458,7 @@ app.get('/', authenticateDashboard, async (req, res) => {
             <td>${rvol15m}x</td>
             <td><span class="badge badge-ready">${status}</span></td>
         </tr>`;
-    }).join('') || '<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">No stocks currently in watchlist.</td></tr>';
-
-    const safeUser = escapeHtml(req.authUser);
-    const safeOpendStatus = escapeHtml(opendStatus);
-    const safeOpendEnv = escapeHtml(opendEnv);
-    const safeAccountId = escapeHtml(accountId);
-    const safeCash = cashBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const safeEquity = totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const sentinelStatus = escapeHtml(sentinelData.status || 'ACTIVE');
-    const managedPositions = Number(sentinelData.managed_positions || 0);
-    const klineUsed = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_used : 0);
-    const klineRemaining = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_remaining : 100);
+    }).join('') || `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">${isOpendUnavailable ? 'Tiada data kaunter (OpenD belum sah / fail-closed aktif)' : 'No stocks currently in watchlist.'}</td></tr>`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -484,17 +534,17 @@ app.get('/', authenticateDashboard, async (req, res) => {
         <div class="grid">
             <div class="card">
                 <h3>OpenD Gateway</h3>
-                <div class="value" style="color: ${safeOpendStatus === 'CONNECTED' ? 'var(--success)' : '#f87171'};">${safeOpendStatus}</div>
+                <div class="value" style="color: ${opendColor};">${safeOpendStatus}</div>
                 <div class="meta">Mode: <strong style="color: var(--accent);">${safeOpendEnv}</strong></div>
             </div>
             <div class="card">
                 <h3>Moomoo Account</h3>
                 <div class="value" style="color: var(--accent); font-size: 20px; margin: 10px 0;">ID: ${safeAccountId}</div>
-                <div class="meta">Cash: <strong>$${safeCash}</strong> | Equity: <strong>$${safeEquity}</strong></div>
+                <div class="meta">Cash: <strong>${safeCash}</strong> | Equity: <strong>${safeEquity}</strong></div>
             </div>
             <div class="card">
                 <h3>Sentinel L4 Status</h3>
-                <div class="value" style="color: var(--success);">${sentinelStatus}</div>
+                <div class="value" style="color: ${sentinelColor};">${sentinelStatus}</div>
                 <div class="meta">${managedPositions} managed positions</div>
             </div>
             <div class="card">
@@ -507,6 +557,24 @@ app.get('/', authenticateDashboard, async (req, res) => {
                 <div class="value" style="color: var(--text-main);">8 Hard Rules</div>
                 <div class="meta">Deterministic BVA Checked</div>
             </div>
+        </div>
+
+        ${warningMessage ? `
+        <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 24px; background: rgba(239, 68, 68, 0.1);">
+            <h3 style="color: #f87171; margin-bottom: 6px;">Amaran Integriti OpenD (Fail-Closed)</h3>
+            <div style="color: #fca5a5; font-size: 14px; line-height: 1.5;">${escapeHtml(warningMessage)}</div>
+        </div>` : ''}
+
+        <div class="card" style="margin-bottom: 24px;">
+            <h3>Moomoo OpenD 2FA OTP Relay (Port 22222)</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 6px 0 12px 0;">
+                Kredensial broker diurus terus ke OpenD tanpa rekod peribadi. Masukkan kod pengesahan SMS/Emel (4-8 digit) di sini untuk disambung ke OpenD Telnet CLI secara selamat.
+            </p>
+            <form onsubmit="handleOtpSubmit(event)" style="display: flex; gap: 10px; max-width: 440px;">
+                <input type="text" id="otpInput" placeholder="Masukkan 4-8 digit kod OTP..." maxlength="8" style="flex: 1; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 14px;" required />
+                <button type="submit" style="padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Hantar OTP</button>
+            </form>
+            <div id="otpResult" style="margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
         </div>
 
         <h2 style="font-size: 18px; margin-bottom: 12px;">Active Watchlist (Stage 1 & 2 Screens)</h2>
@@ -528,6 +596,37 @@ app.get('/', authenticateDashboard, async (req, res) => {
             </tbody>
         </table>
     </div>
+
+    <script>
+        async function handleOtpSubmit(e) {
+            e.preventDefault();
+            const otp = document.getElementById('otpInput').value.trim();
+            const resDiv = document.getElementById('otpResult');
+            if (!otp) return;
+            resDiv.innerText = "Menghantar OTP ke OpenD...";
+            resDiv.style.color = "var(--accent)";
+            try {
+                const resp = await fetch('/api/telnet/otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp_code: otp })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    resDiv.innerText = "OTP berjaya dihantar ke OpenD: " + (data.message || 'OK');
+                    resDiv.style.color = "var(--success)";
+                    document.getElementById('otpInput').value = '';
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    resDiv.innerText = "Gagal: " + (data.error || data.detail || 'Ralat');
+                    resDiv.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                resDiv.innerText = "Ralat komunikasi: " + err.message;
+                resDiv.style.color = "var(--danger)";
+            }
+        }
+    </script>
 </body>
 </html>`;
 

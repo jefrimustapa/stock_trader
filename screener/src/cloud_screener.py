@@ -94,15 +94,23 @@ class CloudScreener:
         self,
         raw_stocks: List[Dict[str, Any]],
         spy_change_pct: float,
-        timestamp: Optional[datetime] = None
+        timestamp: Optional[datetime] = None,
+        source: str = "REAL",
+        warning: Optional[str] = None
     ) -> WatchlistOutput:
         """Runs the full pipeline, updates SQLite quota, and writes watchlist.json."""
         ts = timestamp or datetime.now(timezone.utc)
-        total_cloud = len(raw_stocks)
 
-        stage1 = self.filter_stage1(raw_stocks)
-        stage2 = self.filter_stage2(stage1, spy_change_pct)
-        watchlist_stocks = self.filter_stage3(stage2)
+        if source == "OPEND_UNAVAILABLE":
+            stage1 = []
+            stage2 = []
+            watchlist_stocks = []
+            total_cloud = 0
+        else:
+            total_cloud = len(raw_stocks)
+            stage1 = self.filter_stage1(raw_stocks)
+            stage2 = self.filter_stage2(stage1, spy_change_pct)
+            watchlist_stocks = self.filter_stage3(stage2)
 
         quota_summary = self.quota_tracker.get_quota_summary(ts)
         quota_status = QuotaStatus(**quota_summary)
@@ -113,7 +121,9 @@ class CloudScreener:
             stage1_passed=len(stage1),
             stage2_passed=len(stage2),
             watchlist=watchlist_stocks,
-            quota_status=quota_status
+            quota_status=quota_status,
+            source=source,
+            warning=warning
         )
 
         self.output_file.parent.mkdir(parents=True, exist_ok=True)

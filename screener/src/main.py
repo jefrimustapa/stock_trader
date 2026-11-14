@@ -7,7 +7,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 from .config import ScreenerConfig
 from .quota_tracker import QuotaTracker
@@ -20,13 +20,21 @@ try:
         SimpleProperty,
         RET_OK
     )
-    from moomoo.common.open_context_base import OpenContextBase, ContextStatus
+    from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
     # Patch OpenContextBase._init_connect_sync to avoid infinite while loop on auth failure
     _orig_quote_init_connect_sync = OpenContextBase._init_connect_sync
     def _safe_quote_init_connect_sync(self):
         self._auto_reconnect = False
         return _orig_quote_init_connect_sync(self)
     OpenContextBase._init_connect_sync = _safe_quote_init_connect_sync
+
+    def _fast_quote_req_wait(self):
+        if self.is_sync:
+            ret = self.event.wait(timeout=2.0)
+            if not ret:
+                self.err = PacketErr.Timeout
+                self.msg = 'Abnormal event timeout'
+    ReqInfo.wait = _fast_quote_req_wait
 except ImportError:
     OpenQuoteContext = None
     StockScreenRequest = None
@@ -49,50 +57,37 @@ def signal_handler(signum, frame):
     running = False
 
 
-def generate_fallback_market_data() -> List[Dict[str, Any]]:
-    """Sample realistic universe data used if OpenD is offline or restarting."""
-    return [
-        {"symbol": "US.NVDA", "name": "NVIDIA Corp", "price": 142.50, "market_cap": 3_500_000_000_000, "adv_20": 45_000_000, "change_pct": 4.25, "rvol_15m": 2.15},
-        {"symbol": "US.TSLA", "name": "Tesla Inc", "price": 235.10, "market_cap": 750_000_000_000, "adv_20": 65_000_000, "change_pct": 3.80, "rvol_15m": 1.85},
-        {"symbol": "US.AMD", "name": "Advanced Micro Devices", "price": 155.20, "market_cap": 250_000_000_000, "adv_20": 35_000_000, "change_pct": 2.90, "rvol_15m": 1.60},
-        {"symbol": "US.AAPL", "name": "Apple Inc", "price": 225.00, "market_cap": 3_400_000_000_000, "adv_20": 48_000_000, "change_pct": 0.85, "rvol_15m": 1.10},  # Low change
-        {"symbol": "US.PENNY", "name": "Penny Stock Inc", "price": 3.50, "market_cap": 600_000_000, "adv_20": 5_000_000, "change_pct": 6.50, "rvol_15m": 3.00},  # Price < 5.0
-        {"symbol": "US.LOWCAP", "name": "MicroCap Co", "price": 12.00, "market_cap": 150_000_000, "adv_20": 2_000_000, "change_pct": 5.00, "rvol_15m": 2.00},  # Cap < 500M
-        {"symbol": "US.ILLIQ", "name": "Illiquid Corp", "price": 25.00, "market_cap": 800_000_000, "adv_20": 400_000, "change_pct": 4.50, "rvol_15m": 2.00},  # ADV < 1M
-        {"symbol": "US.PLTR", "name": "Palantir Tech", "price": 58.40, "market_cap": 130_000_000_000, "adv_20": 55_000_000, "change_pct": 5.10, "rvol_15m": 2.40},
-    ]
-
-
-def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], float]:
+def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], float, str, Optional[str]]:
     """
     Connects to OpenD OpenQuoteContext on port 11111.
     1. Fetches real-time SPY quote for benchmark relative strength.
-    2. Executes server-side Cloud Screening V2 via get_stock_screen (Price >= 5.0, Cap >= 500M, Change 2-12%).
-    Returns (stocks, spy_change_pct).
-    Falls back gracefully if OpenD is offline or not yet authenticated.
+    2. Executes server-side Cloud Screening V2 via get_stock_screen.
+    Returns (stocks, spy_change_pct, source, warning).
+    Strict fail-closed: If OpenD is offline, unauthenticated, or fails, returns empty list with OPEND_UNAVAILABLE.
+    Never uses silent mock fallbacks or fake default row values.
     """
     if OpenQuoteContext is None or StockScreenRequest is None or SimpleProperty is None:
-        logger.info("Moomoo OpenAPI SDK not imported; using baseline market data.")
-        return generate_fallback_market_data(), 1.15
+        logger.warning("Moomoo OpenAPI SDK not imported; OpenD unavailable.")
+        return [], 0.0, "OPEND_UNAVAILABLE", "Moomoo OpenAPI SDK tidak dipasang."
 
     quote_ctx = None
     try:
         try:
             quote_ctx = OpenQuoteContext(host=host, port=port, is_encrypt=False)
         except Exception as conn_err:
-            logger.info("OpenQuoteContext connection failed (%s); utilizing baseline universe.", conn_err)
-            return generate_fallback_market_data(), 1.15
+            logger.info("OpenQuoteContext connection failed (%s); marking OPEND_UNAVAILABLE.", conn_err)
+            return [], 0.0, "OPEND_UNAVAILABLE", f"Sambungan OpenQuoteContext gagal ({conn_err})."
 
         is_ready = False
         if quote_ctx is not None and hasattr(quote_ctx, "_status") and ContextStatus is not None:
             is_ready = (quote_ctx._status == ContextStatus.READY)
 
         if not is_ready:
-            logger.info("OpenQuoteContext not authenticated (OpenD login pending); utilizing baseline universe.")
-            return generate_fallback_market_data(), 1.15
+            logger.info("OpenQuoteContext not authenticated (OpenD login pending); marking OPEND_UNAVAILABLE.")
+            return [], 0.0, "OPEND_UNAVAILABLE", "OpenD gateway belum log masuk (menunggu kredensial broker)."
 
         # 1. Query benchmark SPY snapshot for Relative Strength
-        spy_change_pct = 1.15
+        spy_change_pct = 0.0
         try:
             ret_spy, df_spy = quote_ctx.get_market_snapshot(["US.SPY"])
             if ret_spy == RET_OK and df_spy is not None and hasattr(df_spy, "empty") and not df_spy.empty:
@@ -105,7 +100,7 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
                         spy_change_pct = round(((lp - pc) / pc) * 100.0, 2)
                 logger.info("Real SPY benchmark change fetched: %+.2f%%", spy_change_pct)
         except Exception as spy_err:
-            logger.warning("Could not fetch real SPY benchmark quote: %s. Using 1.15%%.", spy_err)
+            logger.warning("Could not fetch real SPY benchmark quote: %s. Using 0.0%%.", spy_err)
 
         # 2. Cloud Screening V2 via get_stock_screen
         req = StockScreenRequest()
@@ -119,45 +114,84 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
             stocks: List[Dict[str, Any]] = []
             if hasattr(screen_data, "iterrows"):
                 for _, row in screen_data.iterrows():
-                    symbol = str(row.get("code", ""))
+                    code = row.get("code")
+                    if not code:
+                        continue
+                    symbol = str(code).strip()
                     if not symbol.startswith("US."):
                         symbol = f"US.{symbol}"
+
+                    cur_price = row.get("cur_price") if "cur_price" in row else row.get("price")
+                    market_val = row.get("market_val") if "market_val" in row else row.get("market_cap")
+                    adv_val = row.get("volume") if "volume" in row else row.get("adv_20")
+                    chg_val = row.get("change_rate") if "change_rate" in row else row.get("change_pct")
+                    rvol_val = row.get("volume_ratio") if "volume_ratio" in row else row.get("rvol_15m")
+
+                    # Buang lalai medan rekaan: langkau baris tidak lengkap
+                    if cur_price is None or market_val is None or adv_val is None or chg_val is None or rvol_val is None:
+                        continue
+                    try:
+                        price_f = float(cur_price)
+                        market_cap_f = float(market_val)
+                        adv_f = float(adv_val)
+                        chg_f = float(chg_val)
+                        rvol_f = float(rvol_val)
+                    except (ValueError, TypeError):
+                        continue
+
                     stocks.append({
                         "symbol": symbol,
                         "name": str(row.get("name", symbol)),
-                        "price": float(row.get("cur_price", row.get("price", 50.0))),
-                        "market_cap": float(row.get("market_val", row.get("market_cap", 1_000_000_000))),
-                        "adv_20": float(row.get("volume", row.get("adv_20", 2_000_000))),
-                        "change_pct": float(row.get("change_rate", row.get("change_pct", 3.0))),
-                        "rvol_15m": float(row.get("volume_ratio", row.get("rvol_15m", 1.8)))
+                        "price": price_f,
+                        "market_cap": market_cap_f,
+                        "adv_20": adv_f,
+                        "change_pct": chg_f,
+                        "rvol_15m": rvol_f
                     })
             elif isinstance(screen_data, (tuple, list)) and len(screen_data) >= 3:
                 data_list = screen_data[2]
                 for item in data_list:
-                    symbol = str(item.get("code", item.get("stock_id", "")))
-                    if symbol and not symbol.startswith("US."):
+                    code = item.get("code") or item.get("stock_id")
+                    if not code:
+                        continue
+                    symbol = str(code).strip()
+                    if not symbol.startswith("US."):
                         symbol = f"US.{symbol}"
+
+                    cur_price = item.get("cur_price") if "cur_price" in item else item.get("price")
+                    market_val = item.get("market_val") if "market_val" in item else item.get("market_cap")
+                    adv_val = item.get("volume") if "volume" in item else item.get("adv_20")
+                    chg_val = item.get("change_rate") if "change_rate" in item else item.get("change_pct")
+                    rvol_val = item.get("volume_ratio") if "volume_ratio" in item else item.get("rvol_15m")
+
+                    if cur_price is None or market_val is None or adv_val is None or chg_val is None or rvol_val is None:
+                        continue
+                    try:
+                        price_f = float(cur_price)
+                        market_cap_f = float(market_val)
+                        adv_f = float(adv_val)
+                        chg_f = float(chg_val)
+                        rvol_f = float(rvol_val)
+                    except (ValueError, TypeError):
+                        continue
+
                     stocks.append({
-                        "symbol": symbol or "US.GENERIC",
-                        "name": str(item.get("name", symbol or "US.GENERIC")),
-                        "price": float(item.get("cur_price", item.get("price", 50.0))),
-                        "market_cap": float(item.get("market_val", item.get("market_cap", 1_000_000_000))),
-                        "adv_20": float(item.get("volume", item.get("adv_20", 2_000_000))),
-                        "change_pct": float(item.get("change_rate", item.get("change_pct", 3.0))),
-                        "rvol_15m": float(item.get("volume_ratio", item.get("rvol_15m", 1.8)))
+                        "symbol": symbol,
+                        "name": str(item.get("name", symbol)),
+                        "price": price_f,
+                        "market_cap": market_cap_f,
+                        "adv_20": adv_f,
+                        "change_pct": chg_f,
+                        "rvol_15m": rvol_f
                     })
-            if stocks:
-                logger.info("Fetched %d stocks from Moomoo Cloud Screening V2.", len(stocks))
-                return stocks, spy_change_pct
-            else:
-                logger.info("Moomoo OpenD cloud screening returned empty stock list; utilizing baseline universe.")
-                return generate_fallback_market_data(), spy_change_pct
+            logger.info("Fetched %d verified stocks from Moomoo Cloud Screening V2.", len(stocks))
+            return stocks, spy_change_pct, "REAL", None
         else:
-            logger.info("Moomoo OpenD cloud screening returned %s; utilizing baseline universe.", ret_screen)
-            return generate_fallback_market_data(), spy_change_pct
+            logger.warning("Moomoo OpenD cloud screening returned ret_code=%s; marking OPEND_UNAVAILABLE.", ret_screen)
+            return [], spy_change_pct, "OPEND_UNAVAILABLE", f"OpenD Cloud Screening memulangkan ralat ({ret_screen})."
     except Exception as e:
-        logger.warning("Error fetching market universe from OpenD at %s:%d: %s. Using baseline market data.", host, port, e)
-        return generate_fallback_market_data(), 1.15
+        logger.warning("Error fetching market universe from OpenD at %s:%d: %s.", host, port, e)
+        return [], 0.0, "OPEND_UNAVAILABLE", f"Ralat komunikasi OpenD: {e}"
     finally:
         if quote_ctx is not None:
             try:
@@ -190,14 +224,20 @@ def main():
     while running:
         try:
             logger.info("Starting market universe scan cycle...")
-            stocks, spy_change_pct = fetch_market_universe(
+            stocks, spy_change_pct, source, warning = fetch_market_universe(
                 host=ScreenerConfig.OPEND_HOST,
                 port=ScreenerConfig.OPEND_PORT
             )
 
-            output = screener.process_and_save(stocks, spy_change_pct)
+            output = screener.process_and_save(
+                raw_stocks=stocks,
+                spy_change_pct=spy_change_pct,
+                source=source,
+                warning=warning
+            )
             logger.info(
-                "Scan cycle complete. Screened=%d, Stage1=%d, Stage2=%d, Final Watchlist=%d. Watchlist saved to %s",
+                "Scan cycle complete. Source=%s, Screened=%d, Stage1=%d, Stage2=%d, Final Watchlist=%d. Watchlist saved to %s",
+                output.source,
                 output.total_screened_cloud,
                 output.stage1_passed,
                 output.stage2_passed,

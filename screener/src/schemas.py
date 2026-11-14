@@ -31,3 +31,5 @@ class WatchlistOutput(BaseModel):
     stage2_passed: int = Field(..., ge=0, description="Count of stocks passing Stage 2 relative strength")
     watchlist: List[WatchlistStock] = Field(default_factory=list, description="Final vetted candidates")
     quota_status: QuotaStatus = Field(..., description="Moomoo OpenAPI quota consumption status")
+    source: str = Field(default="REAL", description="Data source indicator: REAL or OPEND_UNAVAILABLE")
+    warning: Optional[str] = Field(default=None, description="Warning message when OpenD is unavailable or unauthenticated")

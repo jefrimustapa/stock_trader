@@ -7,13 +7,21 @@ logger = logging.getLogger(__name__)
 
 try:
     from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK
-    from moomoo.common.open_context_base import OpenContextBase, ContextStatus
+    from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
     # Patch OpenContextBase._init_connect_sync to avoid infinite while loop on auth failure
     _orig_init_connect_sync = OpenContextBase._init_connect_sync
     def _safe_init_connect_sync(self):
         self._auto_reconnect = False
         return _orig_init_connect_sync(self)
     OpenContextBase._init_connect_sync = _safe_init_connect_sync
+
+    def _fast_req_info_wait(self):
+        if self.is_sync:
+            ret = self.event.wait(timeout=2.0)
+            if not ret:
+                self.err = PacketErr.Timeout
+                self.msg = 'Abnormal event timeout'
+    ReqInfo.wait = _fast_req_info_wait
 except ImportError:
     OpenSecTradeContext = None
     TrdEnv = None
@@ -25,24 +33,28 @@ except ImportError:
 class MoomooClient:
     """
     Gateway client wrapping Moomoo OpenAPI SDK / OpenD daemon.
-    Strictly enforces SIMULATE environment lock unless explicitly configured.
-    Honestly checks socket connectivity to OpenD daemon and queries verified account balance.
+    Strictly enforces fail-closed semantics:
+    - Status is CONNECTED ONLY when OpenD is reachable AND trade context is authenticated
+      AND get_acc_list and accinfo_query return RET_OK with real account data.
+    - Otherwise status is WAIT_LOGIN (if socket reachable but unauthenticated) or DISCONNECTED.
+    - Never uses silent simulated/fallback balances or mock accounts.
     """
 
     def __init__(self, host: str, port: int, trd_env: str = "SIMULATE"):
         self.host = host
         self.port = port
         self.trd_env = trd_env.upper() if trd_env else "SIMULATE"
-        self._connected = False
+        self._connected: bool = False
         self._account_id: Optional[str] = None
-        self._cash_balance: float = 0.0
-        self._total_equity: float = 0.0
+        self._cash_balance: Optional[float] = None
+        self._total_equity: Optional[float] = None
         self._last_status: str = "DISCONNECTED"
 
     def connect(self) -> bool:
         """
         Attempts honest socket probe and OpenAPI session verification to OpenD daemon.
-        Sets _connected to True and loads account info ONLY when OpenD is reachable and active.
+        Sets _connected to True and loads account info ONLY when OpenD is authenticated and active.
+        Fail-closed: Returns False on any auth or communication issue.
         """
         try:
             with socket.create_connection((self.host, self.port), timeout=1.0):
@@ -50,6 +62,9 @@ class MoomooClient:
         except (socket.timeout, ConnectionRefusedError, OSError) as e:
             self._connected = False
             self._last_status = "DISCONNECTED"
+            self._account_id = None
+            self._cash_balance = None
+            self._total_equity = None
             logger.info("OpenD daemon not reachable at %s:%d (%s). OpenD status: DISCONNECTED.", self.host, self.port, e)
             return False
 
@@ -77,57 +92,49 @@ class MoomooClient:
                     ret_code, df_acc = ctx.get_acc_list()
                     if ret_code == RET_OK and df_acc is not None and not df_acc.empty:
                         # Match target trading environment
-                        matched = df_acc[df_acc["trd_env"] == self.trd_env]
+                        matched = df_acc[df_acc["trd_env"] == self.trd_env] if "trd_env" in df_acc.columns else df_acc
                         target_row = matched.iloc[0] if not matched.empty else df_acc.iloc[0]
-                        self._account_id = str(target_row.get("acc_id", "SIMULATED_ACC"))
+                        acc_id_val = target_row.get("acc_id", None)
+                        if acc_id_val is not None and str(acc_id_val).strip():
+                            real_acc_id = str(acc_id_val).strip()
 
-                        # Query account financial details
-                        acc_num = int(self._account_id) if str(self._account_id).isdigit() else 0
-                        ret_info, df_info = ctx.accinfo_query(
-                            trd_env=env_val,
-                            acc_id=acc_num,
-                            currency="USD"
-                        )
-                        if ret_info == RET_OK and df_info is not None and not df_info.empty:
-                            self._cash_balance = float(df_info.get("cash", [100000.0]).iloc[0])
-                            self._total_equity = float(df_info.get("total_assets", [100000.0]).iloc[0])
-                        else:
-                            self._cash_balance = 100000.0
-                            self._total_equity = 100000.0
+                            # Query account financial details
+                            acc_num = int(real_acc_id) if real_acc_id.isdigit() else 0
+                            ret_info, df_info = ctx.accinfo_query(
+                                trd_env=env_val,
+                                acc_id=acc_num,
+                                currency="USD"
+                            )
+                            if ret_info == RET_OK and df_info is not None and not df_info.empty:
+                                cash_val = df_info.get("cash", None)
+                                total_assets_val = df_info.get("total_assets", None)
+                                if cash_val is not None and total_assets_val is not None:
+                                    self._cash_balance = float(cash_val.iloc[0])
+                                    self._total_equity = float(total_assets_val.iloc[0])
+                                    self._account_id = real_acc_id
+                                    self._connected = True
+                                    self._last_status = "CONNECTED"
+                                    logger.info(
+                                        "MoomooClient connected to OpenD at %s:%d (Env: %s, Acc: %s, Equity: $%.2f)",
+                                        self.host, self.port, self.trd_env, self._account_id, self._total_equity
+                                    )
+                                    return True
 
-                        self._connected = True
-                        self._last_status = "CONNECTED"
-                        logger.info(
-                            "MoomooClient connected to OpenD at %s:%d (Env: %s, Acc: %s, Equity: $%.2f)",
-                            self.host, self.port, self.trd_env, self._account_id, self._total_equity
-                        )
-                        return True
-
-                # If trade context was not authenticated or returned no accounts:
-                if self.trd_env == "SIMULATE":
-                    self._account_id = "SIMULATED_ACC"
-                    self._cash_balance = 100000.0
-                    self._total_equity = 100000.0
-                    self._connected = True
-                    self._last_status = "CONNECTED"
-                    logger.info("OpenD socket verified at %s:%d (SIMULATE mode active, Acc: %s, Equity: $%.2f)", self.host, self.port, self._account_id, self._total_equity)
-                    return True
-                else:
-                    self._connected = False
-                    self._last_status = "WAIT_LOGIN"
-                    logger.warning("OpenD reachable at %s:%d but broker authentication is pending.", self.host, self.port)
-                    return False
+                # If trade context was not ready or accinfo_query did not succeed:
+                self._connected = False
+                self._last_status = "WAIT_LOGIN"
+                self._account_id = None
+                self._cash_balance = None
+                self._total_equity = None
+                logger.warning("OpenD reachable at %s:%d but broker authentication is pending (status: WAIT_LOGIN).", self.host, self.port)
+                return False
             except Exception as e:
                 logger.warning("OpenD trade context connection error at %s:%d: %s", self.host, self.port, e)
-                if self.trd_env == "SIMULATE":
-                    self._account_id = "SIMULATED_ACC"
-                    self._cash_balance = 100000.0
-                    self._total_equity = 100000.0
-                    self._connected = True
-                    self._last_status = "CONNECTED"
-                    return True
                 self._connected = False
-                self._last_status = "DISCONNECTED"
+                self._last_status = "WAIT_LOGIN"
+                self._account_id = None
+                self._cash_balance = None
+                self._total_equity = None
                 return False
             finally:
                 if ctx is not None:
@@ -136,14 +143,13 @@ class MoomooClient:
                     except Exception:
                         pass
         else:
-            # Fallback if moomoo SDK is mocked in test environments
-            self._connected = True
-            self._last_status = "CONNECTED"
-            self._account_id = self._account_id or "SIMULATED_ACC"
-            if self._total_equity == 0.0:
-                self._total_equity = 100000.0
-                self._cash_balance = 100000.0
-            return True
+            # SDK is not available
+            self._connected = False
+            self._last_status = "DISCONNECTED"
+            self._account_id = None
+            self._cash_balance = None
+            self._total_equity = None
+            return False
 
     def is_connected(self) -> bool:
         return self._connected
@@ -160,14 +166,14 @@ class MoomooClient:
         return {
             "status": self.get_connection_status(),
             "env": self.trd_env,
-            "account_id": self._account_id if self._connected else "N/A",
-            "cash_balance": round(self._cash_balance, 2) if self._connected else 0.0,
-            "total_equity": round(self._total_equity, 2) if self._connected else 0.0
+            "account_id": self._account_id if self._connected and self._account_id else "N/A",
+            "cash_balance": round(self._cash_balance, 2) if self._connected and self._cash_balance is not None else None,
+            "total_equity": round(self._total_equity, 2) if self._connected and self._total_equity is not None else None
         }
 
     def get_account_equity(self) -> Optional[float]:
-        """Queries verified account equity from OpenD. Returns None if disconnected."""
-        if not self._connected:
+        """Queries verified account equity from OpenD. Returns None if disconnected or unverified."""
+        if not self._connected or self._total_equity is None:
             return None
         return self._total_equity
 
@@ -212,3 +218,6 @@ class MoomooClient:
     def close(self) -> None:
         self._connected = False
         self._last_status = "DISCONNECTED"
+        self._account_id = None
+        self._cash_balance = None
+        self._total_equity = None
