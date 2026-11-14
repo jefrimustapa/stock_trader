@@ -222,6 +222,57 @@ async function runDashboardTests() {
             assert.ok(logoutRes.headers['clear-site-data'], 'Clear-Site-Data header must be set');
             console.log('✓ PASS: /logout endpoint redirects 302 to Authentik invalidation URL with cookie clearing');
 
+            // Test 2h (SDLC #8 defect regression): 401 on invalid/expired JWT must NOT leak err.message
+            const expiredJwt = jwt.sign(
+                { email: "trader@home-crew.lan", preferred_username: "trader", sub: "trader-sub-1" },
+                privateKey,
+                {
+                    algorithm: 'RS256',
+                    keyid: 'test-kid-authentik',
+                    audience: testClientId,
+                    issuer: testIssuer,
+                    expiresIn: '-10s' // already expired
+                }
+            );
+            const expiredRes = await makeRequest(testPort2, {
+                'x-authentik-jwt': expiredJwt
+            });
+            assert.strictEqual(expiredRes.statusCode, 401, `Expected 401 for expired JWT, got ${expiredRes.statusCode}`);
+            const expiredBody = JSON.parse(expiredRes.body);
+            assert.strictEqual(expiredBody.error, 'Authentik JWT verification failed', `Expected sanitized error without raw err.message, got: ${expiredBody.error}`);
+            assert.ok(!expiredRes.body.includes('jwt expired'), 'Response body must not leak raw jwt expired message');
+            console.log('✓ PASS: Expired/invalid JWT returns sanitized 401 without leaking raw error message');
+
+            // Test 2i (SDLC #8 defect regression): CF_Authorization cookie must be strictly rejected
+            const cfAuthRes = await makeRequest(testPort2, {
+                'Cookie': `CF_Authorization=${testServiceToken}`
+            });
+            assert.strictEqual(cfAuthRes.statusCode, 401, `Expected 401 when using deprecated CF_Authorization cookie, got ${cfAuthRes.statusCode}`);
+            console.log('✓ PASS: Deprecated CF_Authorization cookie rejected fail-closed');
+
+            // Test 2j (SDLC #8 defect regression): GET /api/status endpoint must exist and return 200
+            const statusRes = await makeRequest(testPort2, {
+                'x-service-token': testServiceToken
+            }, '/api/status');
+            assert.strictEqual(statusRes.statusCode, 200, `Expected 200 for /api/status, got ${statusRes.statusCode}`);
+            const statusBody = JSON.parse(statusRes.body);
+            assert.strictEqual(statusBody.service, 'trading-dashboard', 'Expected trading-dashboard service name in status');
+            console.log('✓ PASS: /api/status returns 200 with service status payload');
+
+            // Test 2k (Timing-safe service token in cookie): Valid cookie returns 200
+            const validCookieSvcRes = await makeRequest(testPort2, {
+                'Cookie': `x_service_token=${testServiceToken}`
+            });
+            assert.strictEqual(validCookieSvcRes.statusCode, 200, `Expected 200 for valid cookie service token, got ${validCookieSvcRes.statusCode}`);
+            console.log('✓ PASS: Timing-safe cookie service token (x_service_token) authenticated with 200 OK');
+
+            // Test 2l (Timing-safe service token in cookie): Invalid cookie returns 401
+            const invalidCookieSvcRes = await makeRequest(testPort2, {
+                'Cookie': `x_service_token=wrong-service-token`
+            });
+            assert.strictEqual(invalidCookieSvcRes.statusCode, 401, `Expected 401 for invalid cookie service token, got ${invalidCookieSvcRes.statusCode}`);
+            console.log('✓ PASS: Invalid cookie service token rejected with 401 Unauthorized');
+
         } finally {
             serverProc2.kill();
         }

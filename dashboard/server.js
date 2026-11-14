@@ -15,8 +15,10 @@ const SHARED_DATA_DIR = process.env.SHARED_DATA_DIR || '/app/shared_data';
 const AUTHENTIK_CLIENT_ID = (process.env.AUTHENTIK_CLIENT_ID || '').trim();
 const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.julietmike.net/application/o/stock-trader/').trim();
 const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
+const AUTHENTIK_LOGIN_URL = (process.env.AUTHENTIK_LOGIN_URL || 'https://auth.julietmike.net/flows/-/default/authentication/').trim();
 const AUTHENTIK_LOGOUT_URL = (process.env.AUTHENTIK_LOGOUT_URL || 'https://auth.julietmike.net/flows/-/default/invalidation/').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
+const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
 
 // Fail-fast startup validation: AUTHENTIK_CLIENT_ID is mandatory
 if (!AUTHENTIK_CLIENT_ID) {
@@ -79,15 +81,15 @@ function escapeHtml(unsafe) {
 // Origin Authentication Middleware: Authentik JWT Assertion & Service Token
 async function authenticateDashboard(req, res, next) {
     // 1. Check internal service token using timing-safe comparison (Header or Cookie)
-    let serviceTokenHeader = req.headers['x-service-token'];
-    if (!serviceTokenHeader && req.headers.cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)(?:authentik_service_token|x_service_token|CF_Authorization)=([^;]+)/);
-        if (match && match[1] === BRIDGE_SERVICE_TOKEN) {
-            serviceTokenHeader = match[1];
+    let serviceToken = req.headers['x-service-token'];
+    if (!serviceToken && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)(?:authentik_service_token|x_service_token)=([^;]+)/);
+        if (match) {
+            serviceToken = decodeURIComponent(match[1]);
         }
     }
-    if (serviceTokenHeader && BRIDGE_SERVICE_TOKEN) {
-        const token = serviceTokenHeader.replace(/^Bearer\s+/i, '').trim();
+    if (serviceToken && BRIDGE_SERVICE_TOKEN) {
+        const token = serviceToken.replace(/^Bearer\s+/i, '').trim();
         const a = Buffer.from(token, 'utf8');
         const b = Buffer.from(BRIDGE_SERVICE_TOKEN, 'utf8');
         if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
@@ -103,7 +105,7 @@ async function authenticateDashboard(req, res, next) {
         authJwt = req.headers.authorization.slice(7).trim();
     }
     if (!authJwt && req.headers.cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)(?:authentik_jwt|authentik_session|x_authentik_jwt|CF_Authorization)=([^;]+)/);
+        const match = req.headers.cookie.match(/(?:^|;\s*)(?:authentik_jwt|authentik_session|x_authentik_jwt)=([^;]+)/);
         if (match) {
             authJwt = match[1];
         }
@@ -139,8 +141,9 @@ async function authenticateDashboard(req, res, next) {
             req.authUser = verifiedPayload.email || verifiedPayload.preferred_username || verifiedPayload.sub || 'Authentik User';
             return next();
         } catch (err) {
+            console.warn('[Dashboard] Authentik JWT verification failed:', err.message);
             return res.status(401).json({
-                error: `Authentik JWT verification failed: ${err.message}`
+                error: 'Authentik JWT verification failed'
             });
         }
     }
@@ -171,7 +174,7 @@ async function authenticateDashboard(req, res, next) {
     <div class="card">
         <h2>STOCK-TRADER Access</h2>
         <p>This operations dashboard is protected by <strong>Authentik SSO (auth.julietmike.net)</strong>. Please log in or enter your <strong>Service Token</strong>.</p>
-        <a href="${escapeHtml(AUTHENTIK_ISSUER_URL)}" class="btn-login">Log Masuk Authentik SSO</a>
+        <a href="${escapeHtml(AUTHENTIK_LOGIN_URL)}" class="btn-login" target="_blank" rel="noopener noreferrer">Log Masuk Authentik SSO</a>
         <form onsubmit="handleToken(event)">
             <div class="input-group">
                 <label for="token">Internal Service Token / JWT:</label>
@@ -180,7 +183,7 @@ async function authenticateDashboard(req, res, next) {
             <button type="submit">Log Masuk dengan Token</button>
         </form>
         <div class="note">
-            SSO Endpoint: ${escapeHtml(AUTHENTIK_ISSUER_URL)}
+            SSO Endpoint: ${escapeHtml(AUTHENTIK_LOGIN_URL)}
         </div>
     </div>
     <script>
@@ -188,8 +191,11 @@ async function authenticateDashboard(req, res, next) {
             e.preventDefault();
             const val = document.getElementById('token').value.trim();
             if (!val) return;
-            // Set cookie and reload
-            document.cookie = "authentik_jwt=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
+            if (val.includes('.')) {
+                document.cookie = "authentik_jwt=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
+            } else {
+                document.cookie = "x_service_token=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
+            }
             window.location.reload();
         }
     </script>
@@ -208,7 +214,6 @@ app.get('/logout', (req, res) => {
     res.clearCookie('authentik_jwt', { path: '/' });
     res.clearCookie('authentik_session', { path: '/' });
     res.clearCookie('x_service_token', { path: '/' });
-    res.clearCookie('CF_Authorization', { path: '/' });
     res.setHeader('Clear-Site-Data', '"cache", "cookies", "storage"');
     res.redirect(302, AUTHENTIK_LOGOUT_URL);
 });
@@ -218,6 +223,28 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         service: 'trading-dashboard',
         uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/api/status', authenticateDashboard, async (req, res) => {
+    let bridgeStatus = null;
+    if (BRIDGE_SERVICE_TOKEN) {
+        try {
+            const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
+                headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+                timeout: 3000
+            });
+            bridgeStatus = bridgeRes.data;
+        } catch (err) {
+            bridgeStatus = { error: err.message, status: 'unavailable' };
+        }
+    }
+    res.json({
+        status: 'healthy',
+        service: 'trading-dashboard',
+        user: req.authUser,
+        bridge: bridgeStatus,
         timestamp: new Date().toISOString()
     });
 });

@@ -75,6 +75,7 @@ services:
       - PORT=3000
       - SHARED_DATA_DIR=/app/shared_data
       - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:?BRIDGE_SERVICE_TOKEN is required}
+      - BRIDGE_URL=${BRIDGE_URL:-http://mcp-bridge:8000}
       - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID:?AUTHENTIK_CLIENT_ID is required}
       - AUTHENTIK_ISSUER_URL=${AUTHENTIK_ISSUER_URL:-https://auth.julietmike.net/application/o/stock-trader/}
       - AUTHENTIK_JWKS_URL=${AUTHENTIK_JWKS_URL:-https://auth.julietmike.net/application/o/stock-trader/jwks/}
