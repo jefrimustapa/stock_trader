@@ -1,7 +1,9 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -10,8 +12,55 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const SHARED_DATA_DIR = process.env.SHARED_DATA_DIR || '/app/shared_data';
-const CF_ACCESS_AUD = process.env.CF_ACCESS_AUD || '';
-const BRIDGE_SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN || '';
+const CF_ACCESS_AUD = (process.env.CF_ACCESS_AUD || '').trim();
+const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
+const CF_ACCESS_TEAM_DOMAIN = (process.env.CF_ACCESS_TEAM_DOMAIN || 'julietmike.cloudflareaccess.com').trim();
+const CF_ACCESS_CERTS_URL = (process.env.CF_ACCESS_CERTS_URL || `https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`).trim();
+const EXPECTED_ISSUER = `https://${CF_ACCESS_TEAM_DOMAIN}`;
+
+// Fail-fast startup validation: CF_ACCESS_AUD is mandatory
+if (!CF_ACCESS_AUD) {
+    console.error('[Dashboard Error] FATAL: Missing CF_ACCESS_AUD environment variable. Cloudflare Access AUD must be configured.');
+    process.exit(1);
+}
+
+// In-memory cache for Cloudflare Access JWKS
+let jwksKeyCache = {};
+let jwksLastFetched = 0;
+const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function getSigningKey(kid) {
+    if (process.env.CF_ACCESS_TEST_PUBLIC_KEY) {
+        return process.env.CF_ACCESS_TEST_PUBLIC_KEY;
+    }
+
+    if (jwksKeyCache[kid] && (Date.now() - jwksLastFetched < JWKS_CACHE_TTL_MS)) {
+        return jwksKeyCache[kid];
+    }
+
+    try {
+        const response = await axios.get(CF_ACCESS_CERTS_URL, { timeout: 4000 });
+        if (response.data && Array.isArray(response.data.keys)) {
+            const newCache = {};
+            for (const jwk of response.data.keys) {
+                if (jwk.kid && jwk.kty === 'RSA') {
+                    try {
+                        const publicKey = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+                        newCache[jwk.kid] = publicKey.export({ format: 'pem', type: 'spki' });
+                    } catch (jwkErr) {
+                        console.warn('[Dashboard] Could not parse JWK for kid:', jwk.kid, jwkErr.message);
+                    }
+                }
+            }
+            jwksKeyCache = newCache;
+            jwksLastFetched = Date.now();
+        }
+    } catch (fetchErr) {
+        console.error('[Dashboard] Error fetching Cloudflare Access JWKS:', fetchErr.message);
+    }
+
+    return jwksKeyCache[kid] || null;
+}
 
 /**
  * Robust HTML escaping for XSS prevention.
@@ -27,42 +76,62 @@ function escapeHtml(unsafe) {
 }
 
 // Origin Authentication Middleware: Cloudflare Access Assertion & Service Token
-function authenticateDashboard(req, res, next) {
-    // Check internal service token
-    const serviceToken = req.headers['x-service-token'];
-    if (serviceToken && BRIDGE_SERVICE_TOKEN && serviceToken.replace('Bearer ', '').trim() === BRIDGE_SERVICE_TOKEN) {
-        req.authUser = 'internal-service';
-        return next();
+async function authenticateDashboard(req, res, next) {
+    // 1. Check internal service token using timing-safe comparison
+    const serviceTokenHeader = req.headers['x-service-token'];
+    if (serviceTokenHeader && BRIDGE_SERVICE_TOKEN) {
+        const token = serviceTokenHeader.replace(/^Bearer\s+/i, '').trim();
+        const a = Buffer.from(token, 'utf8');
+        const b = Buffer.from(BRIDGE_SERVICE_TOKEN, 'utf8');
+        if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+            req.authUser = 'internal-service';
+            return next();
+        }
+        return res.status(401).json({ error: 'Invalid service token' });
     }
 
-    // Check Cloudflare Access JWT Assertion
+    // 2. Check Cloudflare Access JWT Assertion
     const cfJwt = req.headers['cf-access-jwt-assertion'];
     if (cfJwt) {
         try {
-            // Verify structure and audience if configured
-            const decoded = jwt.decode(cfJwt);
-            if (decoded) {
-                if (CF_ACCESS_AUD && decoded.aud !== CF_ACCESS_AUD) {
-                    return res.status(403).json({ error: 'Cloudflare Access JWT audience mismatch' });
-                }
-                req.authUser = decoded.email || decoded.sub || 'Cloudflare User';
-                return next();
+            const completeDecoded = jwt.decode(cfJwt, { complete: true });
+            if (!completeDecoded || !completeDecoded.header) {
+                return res.status(401).json({ error: 'Malformed Cloudflare Access assertion token' });
             }
-        } catch (e) {
-            return res.status(401).json({ error: 'Invalid Cloudflare Access assertion token' });
+
+            const { alg, kid } = completeDecoded.header;
+            if (alg !== 'RS256' || !kid) {
+                return res.status(401).json({
+                    error: 'Invalid token header: Only RS256 signed Cloudflare Access assertions with valid kid are accepted.'
+                });
+            }
+
+            const publicKeyPem = await getSigningKey(kid);
+            if (!publicKeyPem) {
+                return res.status(401).json({
+                    error: `Signing key (kid: ${kid}) could not be resolved from Cloudflare Access JWKS.`
+                });
+            }
+
+            const verifiedPayload = jwt.verify(cfJwt, publicKeyPem, {
+                algorithms: ['RS256'],
+                audience: CF_ACCESS_AUD,
+                issuer: EXPECTED_ISSUER
+            });
+
+            req.authUser = verifiedPayload.email || verifiedPayload.sub || 'Cloudflare User';
+            return next();
+        } catch (err) {
+            return res.status(401).json({
+                error: `Cloudflare Access JWT verification failed: ${err.message}`
+            });
         }
     }
 
-    // If CF_ACCESS_AUD is enforced and neither CF JWT nor Service Token is present:
-    if (CF_ACCESS_AUD && CF_ACCESS_AUD.trim() !== '') {
-        return res.status(401).json({
-            error: 'Authentication required. Cloudflare Access JWT assertion or X-Service-Token header missing.'
-        });
-    }
-
-    // Sandbox / local mode fallback when CF_ACCESS_AUD is not configured
-    req.authUser = 'Local Sandbox User';
-    next();
+    // 3. Strict fail-closed: No sandbox fallback without authentication
+    return res.status(401).json({
+        error: 'Authentication required. Cloudflare Access JWT assertion or X-Service-Token header missing or invalid.'
+    });
 }
 
 app.get('/health', (req, res) => {

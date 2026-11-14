@@ -4,7 +4,8 @@
   "description": "Web Dashboard for US Stock Analyst & Trader with Cloudflare Access JWT validation",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test_dashboard_auth.js"
   },
   "dependencies": {
     "express": "^4.19.2",

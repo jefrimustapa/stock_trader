@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json .
 RUN npm install --omit=dev
 
-COPY server.js .
+COPY server.js test_dashboard_auth.js ./
 
 EXPOSE 3000
 

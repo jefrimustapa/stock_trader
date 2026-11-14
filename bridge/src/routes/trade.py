@@ -63,8 +63,20 @@ def submit_trade(
     now_ny = datetime.now(NY_TZ)
     trade_date = now_ny.strftime("%Y-%m-%d")
 
-    # Fetch verified account equity from OpenD or verified local baseline
-    account_equity = moomoo_client.get_account_equity() or engine.get_verified_equity(trade_date, fallback=100_000.0)
+    # Fetch verified account equity strictly from OpenD broker or verified local baseline (Fail-Closed)
+    broker_equity = moomoo_client.get_account_equity()
+    baseline_equity = engine.get_verified_equity(trade_date, fallback=None)
+    account_equity = broker_equity or baseline_equity
+
+    if account_equity is None or account_equity <= 0:
+        logger.error("Fail-closed: Unable to verify account equity from OpenD broker or official daily baseline.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "rule_code": "EQUITY_UNVERIFIED",
+                "error": "Account equity cannot be verified from broker or official daily baseline (Fail-Closed mode). Order rejected."
+            }
+        )
     current_equity = account_equity
 
     # Load market data cache for Rule 5 ADV20 verification
@@ -77,7 +89,7 @@ def submit_trade(
             trade_date=trade_date,
             current_equity=current_equity,
             check_time_ny=now_ny,
-            market_data_cache=market_cache if market_cache else None
+            market_data_cache=market_cache
         )
     except HardRuleViolation as e:
         raise HTTPException(
@@ -88,8 +100,8 @@ def submit_trade(
     # Register as processed for idempotency
     engine.register_order_processed(order)
 
-    # Record day trade in real execution path for Rule 3 PDT enforcement
-    engine.record_day_trade(trade_date, order.symbol, order.quantity)
+    # Record day trade strictly when completing an intraday round-trip position closure
+    engine.register_order_and_record_day_trade_if_roundtrip(trade_date, order)
 
     # Dispatch to OpenD gateway
     gateway_resp = moomoo_client.submit_order(order.model_dump())

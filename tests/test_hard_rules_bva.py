@@ -158,8 +158,7 @@ class TestHardRulesBVA(unittest.TestCase):
             symbol="US.NVDA",
             quantity=10,
             entry_price=100.0,
-            stop_loss_price=95.0,
-            adv_20=10_000_000
+            stop_loss_price=95.0
         )
         # First attempt should validate fine
         self.engine.validate_rule7_idempotency(order.client_order_id)

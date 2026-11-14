@@ -37,8 +37,7 @@ class BVAValidator:
             symbol="US.TEST",
             quantity=quantity,
             entry_price=entry_price,
-            stop_loss_price=stop_loss_price,
-            adv_20=10_000_000
+            stop_loss_price=stop_loss_price
         )
         try:
             self.engine.validate_rule1_max_risk(order, equity)
@@ -61,8 +60,7 @@ class BVAValidator:
             symbol="US.TEST",
             quantity=10,
             entry_price=price,
-            stop_loss_price=price * 0.9,
-            adv_20=10_000_000
+            stop_loss_price=price * 0.9
         )
         try:
             self.engine.validate_rule4_penny_stock(order)
@@ -76,11 +74,10 @@ class BVAValidator:
             symbol="US.TEST",
             quantity=quantity,
             entry_price=50.0,
-            stop_loss_price=45.0,
-            adv_20=adv20
+            stop_loss_price=45.0
         )
         try:
-            self.engine.validate_rule5_liquidity_guard(order)
+            self.engine.validate_rule5_liquidity_guard(order, adv_20=adv20)
             return True, "PASSED"
         except HardRuleViolation as e:
             return False, str(e)
