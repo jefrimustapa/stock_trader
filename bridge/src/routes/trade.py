@@ -98,15 +98,26 @@ def submit_trade(
             detail={"rule_code": e.rule_code, "error": e.message}
         )
 
+    # Dispatch to OpenD gateway
+    gateway_resp = client.submit_order(order.model_dump())
+    opend_status = client.get_connection_status()
+
+    if gateway_resp.get("status") == "REJECTED" or not client.is_connected():
+        logger.error("OpenD order dispatch rejected (fail-closed): %s", gateway_resp.get("error", "Gateway disconnected"))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "rule_code": "OPEND_DISCONNECTED",
+                "error": gateway_resp.get("error", f"OpenD gateway is not connected or authenticated ({opend_status}). Order rejected."),
+                "opend_status": opend_status
+            }
+        )
+
     # Register as processed for idempotency
     engine.register_order_processed(order)
 
     # Record day trade strictly when completing an intraday round-trip position closure
     engine.register_order_and_record_day_trade_if_roundtrip(trade_date, order)
-
-    # Dispatch to OpenD gateway
-    gateway_resp = client.submit_order(order.model_dump())
-    opend_status = client.get_connection_status()
 
     return TradeSubmitResponse(
         status=gateway_resp.get("status", "ACCEPTED"),

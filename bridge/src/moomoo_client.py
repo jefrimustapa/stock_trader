@@ -228,65 +228,60 @@ class MoomooClient:
 
         clean_id = new_account_id.strip()
 
-        # If simulated accounts exist (e.g. during testing or disconnected with registered accounts)
+        # Fail-closed: Cannot switch account if OpenD is not connected or authenticated
         if not self._connected:
-            if self._available_accounts:
-                matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
-                if matched:
-                    self._account_id = clean_id
-                    return True, f"Switched to account {clean_id}"
-            return False, "OpenD is not connected or authenticated"
+            return False, f"OpenD is not connected or authenticated ({self.get_connection_status()})"
+
+        if OpenSecTradeContext is None or TrdEnv is None or TrdMarket is None:
+            return False, "Moomoo OpenAPI SDK is not available or initialized"
 
         # Active connection via OpenAPI SDK
-        if OpenSecTradeContext is not None and TrdEnv is not None and TrdMarket is not None:
-            ctx = None
-            try:
-                env_val = TrdEnv.SIMULATE if self.trd_env == "SIMULATE" else TrdEnv.REAL
-                ctx = OpenSecTradeContext(
-                    filter_trdmarket=TrdMarket.US,
-                    host=self.host,
-                    port=self.port,
-                    is_encrypt=False
-                )
-                acc_num = int(clean_id) if clean_id.isdigit() else 0
-                ret_info, df_info = ctx.accinfo_query(
-                    trd_env=env_val,
-                    acc_id=acc_num,
-                    currency="USD"
-                )
-                if ret_info == RET_OK and df_info is not None and not df_info.empty:
-                    cash_val = df_info.get("cash", None)
-                    total_assets_val = df_info.get("total_assets", None)
-                    if cash_val is not None and total_assets_val is not None:
-                        self._cash_balance = float(cash_val.iloc[0])
-                        self._total_equity = float(total_assets_val.iloc[0])
-                        self._account_id = clean_id
-                        logger.info("MoomooClient dynamically switched to account %s (Equity: $%.2f)", clean_id, self._total_equity)
-                        return True, f"Successfully switched to account {clean_id}"
-
-                matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
-                if matched:
+        ctx = None
+        try:
+            env_val = TrdEnv.SIMULATE if self.trd_env == "SIMULATE" else TrdEnv.REAL
+            ctx = OpenSecTradeContext(
+                filter_trdmarket=TrdMarket.US,
+                host=self.host,
+                port=self.port,
+                is_encrypt=False
+            )
+            acc_num = int(clean_id) if clean_id.isdigit() else 0
+            ret_info, df_info = ctx.accinfo_query(
+                trd_env=env_val,
+                acc_id=acc_num,
+                currency="USD"
+            )
+            if ret_info == RET_OK and df_info is not None and not df_info.empty:
+                cash_val = df_info.get("cash", None)
+                total_assets_val = df_info.get("total_assets", None)
+                if cash_val is not None and total_assets_val is not None:
+                    self._cash_balance = float(cash_val.iloc[0])
+                    self._total_equity = float(total_assets_val.iloc[0])
                     self._account_id = clean_id
-                    return True, f"Switched to account {clean_id}"
+                    logger.info("MoomooClient dynamically switched to account %s (Equity: $%.2f)", clean_id, self._total_equity)
+                    return True, f"Successfully switched to account {clean_id}"
 
-                return False, f"Failed querying account financial info for {clean_id}"
-            except Exception as e:
-                logger.error("Error switching to account %s: %s", clean_id, e)
-                matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
-                if matched:
-                    self._account_id = clean_id
-                    return True, f"Switched to account {clean_id}"
-                return False, f"Error switching account: {str(e)}"
-            finally:
-                if ctx is not None:
-                    try:
-                        ctx.close()
-                    except Exception:
-                        pass
+            matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
+            if matched:
+                self._account_id = clean_id
+                return True, f"Switched to account {clean_id}"
 
-        # Fallback for mock/test environments
-        self._account_id = clean_id
-        return True, f"Switched to account {clean_id}"
+            return False, f"Failed querying account financial info for {clean_id}"
+        except Exception as e:
+            logger.error("Error switching to account %s: %s", clean_id, e)
+            matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
+            if matched:
+                self._account_id = clean_id
+                return True, f"Switched to account {clean_id}"
+            return False, f"Error switching account: {str(e)}"
+        finally:
+            if ctx is not None:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
+
+        return False, f"Failed switching to account {clean_id}"
 
     def get_account_info(self) -> Dict[str, Any]:
         """Returns structured account data for Bridge status and Dashboard display."""
@@ -321,10 +316,11 @@ class MoomooClient:
         """Submits vetted order to OpenD."""
         if not self._connected:
             return {
-                "order_id": f"MOCK-ORD-{order_dict.get('client_order_id', 'mock')[:8]}",
-                "status": "ACCEPTED_LOCAL_MOCK",
+                "order_id": None,
+                "status": "REJECTED",
                 "opend_status": self.get_connection_status(),
-                "env": self.trd_env
+                "env": self.trd_env,
+                "error": f"OpenD gateway is not connected or authenticated ({self.get_connection_status()}). Cannot submit order."
             }
         return {
             "order_id": f"ORD-{order_dict.get('client_order_id', 'live')[:8]}",

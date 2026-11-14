@@ -58,6 +58,8 @@ class TestOpenDSessionBVA(unittest.TestCase):
 
     def test_switch_account_success_without_restart(self):
         """Switching acc_id updates active account and equity dynamically without restarting container."""
+        from unittest.mock import patch, MagicMock
+
         self.client._connected = True
         self.client._account_id = "1001"
         self.client._cash_balance = 50000.0
@@ -67,10 +69,15 @@ class TestOpenDSessionBVA(unittest.TestCase):
             {"account_id": "1002", "trd_env": "SIMULATE", "sim_acc_type": "Stock", "card_num": "C1002"}
         ]
 
-        success, msg = self.client.switch_account("1002")
-        self.assertTrue(success)
-        self.assertEqual(self.client._account_id, "1002")
-        self.assertIn("1002", msg)
+        mock_ctx = MagicMock()
+        mock_ctx.accinfo_query.return_value = (0, None)
+        with patch("bridge.src.moomoo_client.OpenSecTradeContext", return_value=mock_ctx), \
+             patch("bridge.src.moomoo_client.TrdEnv", MagicMock()), \
+             patch("bridge.src.moomoo_client.TrdMarket", MagicMock()):
+            success, msg = self.client.switch_account("1002")
+            self.assertTrue(success)
+            self.assertEqual(self.client._account_id, "1002")
+            self.assertIn("1002", msg)
 
     def test_defect_sign_out_cleans_token_data_and_sets_idle(self):
         """

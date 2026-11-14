@@ -33,12 +33,21 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.assertIsNone(info["cash_balance"])
         self.assertIsNone(info["total_equity"])
 
-    def test_submit_order_when_disconnected_generates_mock(self):
+    def test_submit_order_when_disconnected_fails_closed_rejected(self):
         self.client.connect()
         res = self.client.submit_order({"client_order_id": "test-order-12345"})
-        self.assertEqual(res["status"], "ACCEPTED_LOCAL_MOCK")
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIsNone(res["order_id"])
         self.assertEqual(res["opend_status"], "DISCONNECTED")
         self.assertEqual(res["env"], "SIMULATE")
+        self.assertIn("error", res)
+
+    def test_switch_account_when_disconnected_fails_closed(self):
+        self.client.connect()
+        self.assertFalse(self.client.is_connected())
+        success, msg = self.client.switch_account("123456")
+        self.assertFalse(success)
+        self.assertIn("not connected", msg)
 
     def test_bva_connected_simulated_state(self):
         # Test simulated active connection state
