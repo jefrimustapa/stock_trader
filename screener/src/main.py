@@ -14,10 +14,25 @@ from .quota_tracker import QuotaTracker
 from .cloud_screener import CloudScreener
 
 try:
+    # Protobuf 4+/5+/7+ UPB compatibility patch for moomoo-api
+    try:
+        import google._upb._message as upb
+        if hasattr(upb, "FieldDescriptor") and not hasattr(upb.FieldDescriptor, "label"):
+            upb.FieldDescriptor.label = property(
+                lambda self: upb.FieldDescriptor.LABEL_REPEATED if getattr(self, "is_repeated", False) else upb.FieldDescriptor.LABEL_OPTIONAL
+            )
+    except (ImportError, AttributeError):
+        pass
+
     from moomoo import (
         OpenQuoteContext,
         StockScreenRequest,
         SimpleProperty,
+        BasicProperty,
+        CumulativeProperty,
+        SimpleField,
+        ScrMarket,
+        SysConfig,
         RET_OK
     )
     from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
@@ -39,6 +54,11 @@ except ImportError:
     OpenQuoteContext = None
     StockScreenRequest = None
     SimpleProperty = None
+    BasicProperty = None
+    CumulativeProperty = None
+    SimpleField = None
+    ScrMarket = None
+    SysConfig = None
     RET_OK = 0
     ContextStatus = None
 
@@ -72,8 +92,19 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
 
     quote_ctx = None
     try:
+        rsa_key_path = str(ScreenerConfig.RSA_KEY_PATH)
+        is_encrypt = False
+        if os.path.exists(rsa_key_path) and SysConfig is not None:
+            try:
+                SysConfig.enable_proto_encrypt(True)
+                SysConfig.set_init_rsa_file(rsa_key_path)
+                is_encrypt = True
+                logger.info("Configured RSA protocol encryption for OpenQuoteContext from %s", rsa_key_path)
+            except Exception as rsa_err:
+                logger.warning("Could not set RSA key for OpenQuoteContext: %s", rsa_err)
+
         try:
-            quote_ctx = OpenQuoteContext(host=host, port=port, is_encrypt=False)
+            quote_ctx = OpenQuoteContext(host=host, port=port, is_encrypt=is_encrypt)
         except Exception as conn_err:
             logger.info("OpenQuoteContext connection failed (%s); marking OPEND_UNAVAILABLE.", conn_err)
             return [], 0.0, "OPEND_UNAVAILABLE", f"Sambungan OpenQuoteContext gagal ({conn_err})."
@@ -104,10 +135,25 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
 
         # 2. Cloud Screening V2 via get_stock_screen
         req = StockScreenRequest()
+        if SimpleField is not None and ScrMarket is not None:
+            req.add_simple_field(SimpleField.MARKET, [ScrMarket.US])
+
+        if BasicProperty is not None:
+            req.add_retrieve_basic(BasicProperty.CODE)
+            req.add_retrieve_basic(BasicProperty.NAME)
+        if SimpleProperty is not None:
+            req.add_retrieve_simple(SimpleProperty.PRICE)
+            req.add_retrieve_simple(SimpleProperty.MARKET_CAP)
+            req.add_retrieve_simple(SimpleProperty.PRICE_CHANGE_RATE)
+            req.add_retrieve_simple(SimpleProperty.VOLUME_RATIO)
+        if CumulativeProperty is not None:
+            req.add_retrieve_cumulative(CumulativeProperty.AVG_VOLUME, days=20)
+
         req.add_simple_property(name=SimpleProperty.PRICE, lower=5.0)
         req.add_simple_property(name=SimpleProperty.MARKET_CAP, lower=500_000_000)
-        req.add_simple_property(name=SimpleProperty.PRICE_CHANGE_RATE, lower=2.0, upper=12.0)
-        req.page_count = 30
+        # Decimal ratio in Moomoo OpenAPI (0.02 = +2%, 0.12 = +12%)
+        req.add_simple_property(name=SimpleProperty.PRICE_CHANGE_RATE, lower=0.02, upper=0.12)
+        req.page_count = 50
 
         ret_screen, screen_data = quote_ctx.get_stock_screen(req)
         if ret_screen == RET_OK and screen_data is not None:
@@ -151,20 +197,36 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
             elif isinstance(screen_data, (tuple, list)) and len(screen_data) >= 3:
                 data_list = screen_data[2]
                 for item in data_list:
-                    code = item.get("code") or item.get("stock_id")
-                    if not code:
-                        continue
-                    symbol = str(code).strip()
-                    if not symbol.startswith("US."):
-                        symbol = f"US.{symbol}"
+                    code = item.get("code")
+                    name = item.get("name")
+                    cur_price = item.get("cur_price") or item.get("price")
+                    market_val = item.get("market_val") or item.get("market_cap")
+                    adv_val = item.get("volume") or item.get("adv_20")
+                    chg_val = item.get("change_rate") or item.get("change_pct")
+                    rvol_val = item.get("volume_ratio") or item.get("rvol_15m")
 
-                    cur_price = item.get("cur_price") if "cur_price" in item else item.get("price")
-                    market_val = item.get("market_val") if "market_val" in item else item.get("market_cap")
-                    adv_val = item.get("volume") if "volume" in item else item.get("adv_20")
-                    chg_val = item.get("change_rate") if "change_rate" in item else item.get("change_pct")
-                    rvol_val = item.get("volume_ratio") if "volume_ratio" in item else item.get("rvol_15m")
+                    for res in item.get("results", []):
+                        prop = res.get("property", {})
+                        p_name = prop.get("name")
+                        val = res.get("dval") if res.get("dval") is not None else (
+                            res.get("ival") if res.get("ival") is not None else res.get("sval")
+                        )
+                        if p_name == 1101:  # BasicProperty.CODE
+                            code = val
+                        elif p_name == 1102:  # BasicProperty.NAME
+                            name = val
+                        elif p_name == 2201:  # SimpleProperty.PRICE
+                            cur_price = val
+                        elif p_name == 2301:  # SimpleProperty.MARKET_CAP
+                            market_val = val
+                        elif p_name == 2206:  # SimpleProperty.PRICE_CHANGE_RATE (decimal ratio -> %)
+                            chg_val = float(val) * 100.0 if val is not None else None
+                        elif p_name == 2217:  # SimpleProperty.VOLUME_RATIO
+                            rvol_val = val
+                        elif p_name == 3104:  # CumulativeProperty.AVG_VOLUME
+                            adv_val = val
 
-                    if cur_price is None or market_val is None or adv_val is None or chg_val is None or rvol_val is None:
+                    if not code or cur_price is None or market_val is None or adv_val is None or chg_val is None or rvol_val is None:
                         continue
                     try:
                         price_f = float(cur_price)
@@ -175,20 +237,24 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
                     except (ValueError, TypeError):
                         continue
 
+                    symbol = str(code).strip()
+                    if not symbol.startswith("US."):
+                        symbol = f"US.{symbol}"
+
                     stocks.append({
                         "symbol": symbol,
-                        "name": str(item.get("name", symbol)),
+                        "name": str(name or symbol),
                         "price": price_f,
                         "market_cap": market_cap_f,
                         "adv_20": adv_f,
-                        "change_pct": chg_f,
-                        "rvol_15m": rvol_f
+                        "change_pct": round(chg_f, 2),
+                        "rvol_15m": round(rvol_f, 2)
                     })
             logger.info("Fetched %d verified stocks from Moomoo Cloud Screening V2.", len(stocks))
             return stocks, spy_change_pct, "REAL", None
         else:
             logger.warning("Moomoo OpenD cloud screening returned ret_code=%s; marking OPEND_UNAVAILABLE.", ret_screen)
-            return [], spy_change_pct, "OPEND_UNAVAILABLE", f"OpenD Cloud Screening memulangkan ralat ({ret_screen})."
+            return [], spy_change_pct, "OPEND_UNAVAILABLE", f"OpenD Cloud Screening memulangkan ralat ({ret_screen}: {screen_data})."
     except Exception as e:
         logger.warning("Error fetching market universe from OpenD at %s:%d: %s.", host, port, e)
         return [], 0.0, "OPEND_UNAVAILABLE", f"Ralat komunikasi OpenD: {e}"

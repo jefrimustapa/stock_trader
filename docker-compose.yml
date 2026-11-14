@@ -30,10 +30,12 @@ services:
       - stock_network
     volumes:
       - shared_trading_data:/app/shared_data
+      - opend_session_data:/opend_session_data:ro
     environment:
       - MOOMOO_OPEND_HOST=moomoo-opend
       - MOOMOO_OPEND_PORT=11111
       - SHARED_DATA_DIR=/app/shared_data
+      - OPEND_SESSION_DATA_DIR=/opend_session_data
       - SCAN_INTERVAL_SECONDS=300
       - TZ=America/New_York
     depends_on:

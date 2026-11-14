@@ -6,6 +6,8 @@ class ScreenerConfig:
     """Configuration settings for L0 Screener Daemon."""
     OPEND_HOST: str = os.getenv("MOOMOO_OPEND_HOST", "moomoo-opend")
     OPEND_PORT: int = int(os.getenv("MOOMOO_OPEND_PORT", "11111"))
+    OPEND_SESSION_DATA_DIR: Path = Path(os.getenv("OPEND_SESSION_DATA_DIR", "/opend_session_data"))
+    RSA_KEY_PATH: Path = OPEND_SESSION_DATA_DIR / "rsa_key.pem"
     SHARED_DATA_DIR: Path = Path(os.getenv("SHARED_DATA_DIR", "/app/shared_data"))
     WATCHLIST_PATH: Path = SHARED_DATA_DIR / "watchlist.json"
     QUOTA_DB_PATH: Path = SHARED_DATA_DIR / "quota_tracker.sqlite"
