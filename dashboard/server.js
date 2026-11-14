@@ -30,7 +30,8 @@ let jwksLastFetched = 0;
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 async function getSigningKey(kid) {
-    if (process.env.CF_ACCESS_TEST_PUBLIC_KEY) {
+    // Strictly restrict test public key bypass to NODE_ENV === 'test'
+    if (process.env.NODE_ENV === 'test' && process.env.CF_ACCESS_TEST_PUBLIC_KEY) {
         return process.env.CF_ACCESS_TEST_PUBLIC_KEY;
     }
 

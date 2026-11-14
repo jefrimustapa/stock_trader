@@ -9,7 +9,7 @@ console.log('[Test Suite] Dashboard Authentication & Fail-Fast Regressions (HOM-
 // Test 1: Fail-fast when CF_ACCESS_AUD is missing
 function testFailFastWhenCfAudMissing() {
     return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [path.join('/app', 'server.js')], {
+        const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
             env: {
                 ...process.env,
                 PORT: '3999',
@@ -120,11 +120,12 @@ async function runDashboardTests() {
             privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
         });
 
-        // Launch server with test public key enabled
+        // Launch server with test public key enabled in test mode (NODE_ENV === 'test')
         const testPort2 = 3997;
-        const serverProc2 = spawn(process.execPath, [path.join('/app', 'server.js')], {
+        const serverProc2 = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
             env: {
                 ...process.env,
+                NODE_ENV: 'test',
                 PORT: String(testPort2),
                 CF_ACCESS_AUD: testAud,
                 CF_ACCESS_TEAM_DOMAIN: 'julietmike.cloudflareaccess.com',
@@ -175,6 +176,43 @@ async function runDashboardTests() {
             console.log('✓ PASS: RS256 JWT with mismatched audience rejected with 401');
         } finally {
             serverProc2.kill();
+        }
+
+        // Test 2f: In NODE_ENV === 'production', CF_ACCESS_TEST_PUBLIC_KEY must be ignored
+        const testPort3 = 3996;
+        const serverProc3 = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+            env: {
+                ...process.env,
+                NODE_ENV: 'production',
+                PORT: String(testPort3),
+                CF_ACCESS_AUD: testAud,
+                CF_ACCESS_TEAM_DOMAIN: 'julietmike.cloudflareaccess.com',
+                CF_ACCESS_CERTS_URL: 'https://invalid-jwks-endpoint.local/certs',
+                CF_ACCESS_TEST_PUBLIC_KEY: publicKey,
+                BRIDGE_SERVICE_TOKEN: testServiceToken
+            }
+        });
+        await new Promise(r => setTimeout(r, 1000));
+
+        try {
+            const validJwt = jwt.sign(
+                { email: "trader@home-crew.lan", sub: "trader-sub-1" },
+                privateKey,
+                {
+                    algorithm: 'RS256',
+                    keyid: 'test-kid-1',
+                    audience: testAud,
+                    issuer: 'https://julietmike.cloudflareaccess.com',
+                    expiresIn: '1h'
+                }
+            );
+            const prodRes = await makeRequest(testPort3, {
+                'cf-access-jwt-assertion': validJwt
+            });
+            assert.strictEqual(prodRes.statusCode, 401, `Expected 401 in production when JWKS endpoint is unreachable even if CF_ACCESS_TEST_PUBLIC_KEY is provided`);
+            console.log('✓ PASS: In production NODE_ENV, CF_ACCESS_TEST_PUBLIC_KEY is ignored (401 rejected)');
+        } finally {
+            serverProc3.kill();
         }
 
     } finally {

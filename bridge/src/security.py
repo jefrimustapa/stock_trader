@@ -67,44 +67,37 @@ def authenticate_request(request: Request) -> str:
 def verify_cf_access_jwt(token: str, expected_aud: Optional[str] = None) -> bool:
     """
     Verifies Cloudflare Access JWT assertion token.
-    Validates token structure, expiration, issuer, and expected AUD claims.
-    If PyJWKClient is usable with CF_ACCESS_CERTS_URL, validates signature against public certs.
+    Enforces fail-closed cryptographic verification against Cloudflare Access JWKS.
+    Tokens without valid cryptographic signature or failed JWKS fetch are rejected immediately.
     """
     if not token or not token.strip():
         return False
     try:
         import jwt
         target_aud = expected_aud or BridgeConfig.CF_ACCESS_AUD
-        
-        # Verify header structure
-        headers = jwt.get_unverified_header(token)
-        if not headers or "alg" not in headers:
+        certs_url = BridgeConfig.CF_ACCESS_CERTS_URL
+
+        if not target_aud or not certs_url:
+            logger.warning("CF JWT verification failed: CF_ACCESS_AUD or CF_ACCESS_CERTS_URL not configured")
             return False
 
-        # If certs URL configured, attempt JWK verification
-        if BridgeConfig.CF_ACCESS_CERTS_URL and target_aud:
-            try:
-                jwks_client = jwt.PyJWKClient(BridgeConfig.CF_ACCESS_CERTS_URL, timeout=3.0)
-                signing_key = jwks_client.get_signing_key_from_jwt(token)
-                decoded = jwt.decode(
-                    token,
-                    signing_key.key,
-                    algorithms=["RS256"],
-                    audience=target_aud,
-                    options={"verify_exp": True, "verify_aud": True}
-                )
-                return bool(decoded)
-            except Exception as jwk_err:
-                logger.debug("JWK network verification failed (%s), falling back to claims validation", jwk_err)
+        # Verify header structure: require RS256 and kid
+        headers = jwt.get_unverified_header(token)
+        if not headers or headers.get("alg") != "RS256" or "kid" not in headers:
+            logger.warning("CF JWT verification rejected: invalid header or non-RS256 algorithm")
+            return False
 
-        # Fallback claim validation for offline/mock verification environments
+        # Fail-closed JWKS cryptographic validation
+        jwks_client = jwt.PyJWKClient(certs_url, timeout=3.0)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
         decoded = jwt.decode(
             token,
-            options={"verify_signature": False, "verify_exp": True}
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=target_aud,
+            options={"verify_exp": True, "verify_aud": True}
         )
-        if target_aud and decoded.get("aud") != target_aud:
-            return False
-        return True
+        return bool(decoded)
     except Exception as e:
-        logger.warning("CF JWT verification failed: %s", e)
+        logger.warning("CF JWT verification failed (fail-closed): %s", e)
         return False
