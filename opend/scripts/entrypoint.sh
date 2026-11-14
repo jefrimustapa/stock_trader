@@ -14,6 +14,23 @@ LOGIN_CONFIG="$OPEND_DATA_DIR/opend_login.json"
 
 EXTRA_ARGS=()
 
+# Configure API protocol encryption with 1024-bit PKCS#1 RSA private key
+RSA_KEY_FILE="${OPEND_RSA_KEY_FILE:-$OPEND_DATA_DIR/rsa_key.pem}"
+if [ ! -f "$RSA_KEY_FILE" ]; then
+    echo "Notice: Generating new 1024-bit RSA private key for protocol encryption..."
+    openssl genrsa -out "$RSA_KEY_FILE" 1024
+    chmod 0600 "$RSA_KEY_FILE"
+fi
+
+if [ -f "$RSA_KEY_FILE" ]; then
+    chmod 0600 "$RSA_KEY_FILE"
+    EXTRA_ARGS+=("-rsa_private_key=${RSA_KEY_FILE}")
+    echo "API protocol encryption enabled with RSA key."
+    if [ -f "/opt/opend/OpenD.xml" ]; then
+        sed -i "s|.*<rsa_private_key>.*|<rsa_private_key>${RSA_KEY_FILE}</rsa_private_key>|" /opt/opend/OpenD.xml 2>/dev/null || true
+    fi
+fi
+
 if [ -f "$IDLE_FLAG" ]; then
     echo "Notice: OpenD starting in DISCONNECTED IDLE state (.idle_mode active)."
     echo "Gateway is waiting for user login; auto-login disabled."

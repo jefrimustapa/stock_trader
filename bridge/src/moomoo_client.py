@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 try:
-    from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK
+    from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK, SysConfig
     from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
     # Patch OpenContextBase._init_connect_sync to avoid infinite while loop on auth failure
     _orig_init_connect_sync = OpenContextBase._init_connect_sync
@@ -28,6 +28,7 @@ except ImportError:
     TrdMarket = None
     RET_OK = 0
     ContextStatus = None
+    SysConfig = None
 
 
 class MoomooClient:
@@ -40,15 +41,24 @@ class MoomooClient:
     - Never uses silent simulated/fallback balances or mock accounts.
     """
 
-    def __init__(self, host: str, port: int, trd_env: str = "SIMULATE"):
+    def __init__(self, host: str, port: int, trd_env: str = "SIMULATE", is_encrypt: Optional[bool] = None):
         self.host = host
         self.port = port
         self.trd_env = trd_env.upper() if trd_env else "SIMULATE"
+        if is_encrypt is not None:
+            self.is_encrypt = is_encrypt
+        else:
+            try:
+                from .config import BridgeConfig
+                self.is_encrypt = BridgeConfig.ENABLE_PROTO_ENCRYPT
+            except Exception:
+                self.is_encrypt = True
         self._connected: bool = False
         self._account_id: Optional[str] = None
         self._cash_balance: Optional[float] = None
         self._total_equity: Optional[float] = None
         self._last_status: str = "DISCONNECTED"
+        self._last_error: Optional[str] = None
         self._available_accounts: List[Dict[str, Any]] = []
         self._opend_manager: Any = None
 
@@ -86,17 +96,34 @@ class MoomooClient:
         if OpenSecTradeContext is not None and TrdEnv is not None and TrdMarket is not None:
             ctx = None
             try:
+                # Configure protocol encryption if enabled and SysConfig is available
+                if self.is_encrypt and SysConfig is not None:
+                    try:
+                        from .config import BridgeConfig
+                        rsa_path = str(BridgeConfig.ensure_rsa_key())
+                        SysConfig.enable_proto_encrypt(True)
+                        SysConfig.set_init_rsa_file(rsa_path)
+                    except Exception as rsa_err:
+                        logger.warning("Could not initialize RSA private key for protocol encryption: %s", rsa_err)
+
                 env_val = TrdEnv.SIMULATE if self.trd_env == "SIMULATE" else TrdEnv.REAL
                 try:
                     ctx = OpenSecTradeContext(
                         filter_trdmarket=TrdMarket.US,
                         host=self.host,
                         port=self.port,
-                        is_encrypt=False
+                        is_encrypt=self.is_encrypt
                     )
                 except Exception as conn_err:
                     logger.info("OpenSecTradeContext initialization error: %s", conn_err)
                     ctx = None
+                    self._connected = False
+                    self._last_status = "CONNECT_ERROR"
+                    self._last_error = str(conn_err)
+                    self._account_id = None
+                    self._cash_balance = None
+                    self._total_equity = None
+                    return False
 
                 is_ready = False
                 if ctx is not None and hasattr(ctx, "_status") and ContextStatus is not None:
@@ -147,15 +174,35 @@ class MoomooClient:
                                     self._account_id = real_acc_id
                                     self._connected = True
                                     self._last_status = "CONNECTED"
+                                    self._last_error = None
                                     logger.info(
                                         "MoomooClient connected to OpenD at %s:%d (Env: %s, Acc: %s, Equity: $%.2f)",
                                         self.host, self.port, self.trd_env, self._account_id, self._total_equity
                                     )
                                     return True
+                            else:
+                                self._connected = False
+                                self._last_status = "CONNECT_ERROR"
+                                self._last_error = str(df_info) if ret_info != RET_OK else "Failed to retrieve account financial details"
+                                self._account_id = None
+                                self._cash_balance = None
+                                self._total_equity = None
+                                logger.error("OpenD accinfo_query failed (ret=%s): %s", ret_info, self._last_error)
+                                return False
+                    else:
+                        self._connected = False
+                        self._last_status = "CONNECT_ERROR"
+                        self._last_error = str(df_acc) if ret_code != RET_OK else "No trading accounts returned from get_acc_list"
+                        self._account_id = None
+                        self._cash_balance = None
+                        self._total_equity = None
+                        logger.error("OpenD get_acc_list failed (ret=%s): %s", ret_code, self._last_error)
+                        return False
 
-                # If trade context was not ready or accinfo_query did not succeed:
+                # If trade context was not ready:
                 self._connected = False
                 self._last_status = "WAIT_LOGIN"
+                self._last_error = None
                 self._account_id = None
                 self._cash_balance = None
                 self._total_equity = None
@@ -164,7 +211,8 @@ class MoomooClient:
             except Exception as e:
                 logger.warning("OpenD trade context connection error at %s:%d: %s", self.host, self.port, e)
                 self._connected = False
-                self._last_status = "WAIT_LOGIN"
+                self._last_status = "CONNECT_ERROR"
+                self._last_error = str(e)
                 self._account_id = None
                 self._cash_balance = None
                 self._total_equity = None
@@ -179,6 +227,7 @@ class MoomooClient:
             # SDK is not available
             self._connected = False
             self._last_status = "DISCONNECTED"
+            self._last_error = None
             self._account_id = None
             self._cash_balance = None
             self._total_equity = None
@@ -196,7 +245,7 @@ class MoomooClient:
             return "IDLE"
 
         # Check if socket reachable
-        socket_reachable = (self._last_status in ["WAIT_LOGIN", "WAIT_OTP"])
+        socket_reachable = (self._last_status in ["WAIT_LOGIN", "WAIT_OTP", "CONNECT_ERROR"])
         if not socket_reachable:
             try:
                 with socket.create_connection((self.host, self.port), timeout=0.5):
@@ -209,6 +258,9 @@ class MoomooClient:
 
         if manager is not None and hasattr(manager, "is_waiting_otp") and manager.is_waiting_otp():
             return "WAIT_OTP"
+
+        if self._last_status == "CONNECT_ERROR":
+            return "CONNECT_ERROR"
 
         return "WAIT_LOGIN"
 
@@ -238,12 +290,21 @@ class MoomooClient:
         # Active connection via OpenAPI SDK
         ctx = None
         try:
+            if self.is_encrypt and SysConfig is not None:
+                try:
+                    from .config import BridgeConfig
+                    rsa_path = str(BridgeConfig.ensure_rsa_key())
+                    SysConfig.enable_proto_encrypt(True)
+                    SysConfig.set_init_rsa_file(rsa_path)
+                except Exception:
+                    pass
+
             env_val = TrdEnv.SIMULATE if self.trd_env == "SIMULATE" else TrdEnv.REAL
             ctx = OpenSecTradeContext(
                 filter_trdmarket=TrdMarket.US,
                 host=self.host,
                 port=self.port,
-                is_encrypt=False
+                is_encrypt=self.is_encrypt
             )
             acc_num = int(clean_id) if clean_id.isdigit() else 0
             ret_info, df_info = ctx.accinfo_query(
@@ -285,7 +346,7 @@ class MoomooClient:
 
     def get_account_info(self) -> Dict[str, Any]:
         """Returns structured account data for Bridge status and Dashboard display."""
-        return {
+        info = {
             "status": self.get_connection_status(),
             "env": self.trd_env,
             "account_id": self._account_id if self._connected and self._account_id else "N/A",
@@ -293,6 +354,9 @@ class MoomooClient:
             "total_equity": round(self._total_equity, 2) if self._connected and self._total_equity is not None else None,
             "available_accounts": self.get_accounts()
         }
+        if self._last_error and not self._connected:
+            info["error_message"] = self._last_error
+        return info
 
     def get_account_equity(self) -> Optional[float]:
         """Queries verified account equity from OpenD. Returns None if disconnected or unverified."""
@@ -342,6 +406,7 @@ class MoomooClient:
     def close(self) -> None:
         self._connected = False
         self._last_status = "DISCONNECTED"
+        self._last_error = None
         self._account_id = None
         self._cash_balance = None
         self._total_equity = None

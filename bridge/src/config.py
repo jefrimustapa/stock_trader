@@ -31,6 +31,34 @@ class BridgeConfig:
     OPEND_CONTAINER_NAME: str = os.getenv("OPEND_CONTAINER_NAME", "stock_moomoo_opend")
     DOCKER_SOCKET_PATH: str = os.getenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
 
+    # API Protocol Encryption
+    RSA_KEY_PATH: Path = OPEND_SESSION_DATA_DIR / "rsa_key.pem"
+    ENABLE_PROTO_ENCRYPT: bool = os.getenv("ENABLE_PROTO_ENCRYPT", "true").lower() in ("true", "1", "yes")
+
+    @classmethod
+    def ensure_rsa_key(cls) -> Path:
+        """
+        Ensures a 1024-bit PKCS#1 RSA private key exists for OpenD protocol encryption.
+        Stored with 0600 permissions inside OPEND_SESSION_DATA_DIR.
+        """
+        cls.OPEND_SESSION_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        key_path = cls.RSA_KEY_PATH
+        if not key_path.exists():
+            from cryptography.hazmat.primitives.asymmetric import rsa
+            from cryptography.hazmat.primitives import serialization
+            key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+            pem = key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            key_path.write_bytes(pem)
+        try:
+            key_path.chmod(0o600)
+        except Exception:
+            pass
+        return key_path
+
     @classmethod
     def ensure_data_dir(cls) -> None:
         cls.SHARED_DATA_DIR.mkdir(parents=True, exist_ok=True)

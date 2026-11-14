@@ -489,6 +489,7 @@ app.get('/', authenticateDashboard, async (req, res) => {
     let totalEquity = null;
 
     let availableAccounts = [];
+    let opendErrorMessage = null;
     if (BRIDGE_SERVICE_TOKEN) {
         try {
             const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
@@ -504,8 +505,13 @@ app.get('/', authenticateDashboard, async (req, res) => {
                 if (bridgeRes.data.sentinel && bridgeRes.data.sentinel.status) {
                     sentinelData.status = bridgeRes.data.sentinel.status;
                 }
-                if (bridgeRes.data.account_info && Array.isArray(bridgeRes.data.account_info.available_accounts)) {
-                    availableAccounts = bridgeRes.data.account_info.available_accounts;
+                if (bridgeRes.data.account_info) {
+                    if (Array.isArray(bridgeRes.data.account_info.available_accounts)) {
+                        availableAccounts = bridgeRes.data.account_info.available_accounts;
+                    }
+                    if (bridgeRes.data.account_info.error_message) {
+                        opendErrorMessage = bridgeRes.data.account_info.error_message;
+                    }
                 }
             }
         } catch (err) {
@@ -531,7 +537,7 @@ app.get('/', authenticateDashboard, async (req, res) => {
     let opendColor = '#f87171';
     if (safeOpendStatus === 'CONNECTED') {
         opendColor = 'var(--success)';
-    } else if (safeOpendStatus === 'UNREACHABLE') {
+    } else if (safeOpendStatus === 'UNREACHABLE' || safeOpendStatus === 'CONNECT_ERROR') {
         opendColor = 'var(--danger)';
     } else if (safeOpendStatus === 'WAIT_OTP') {
         opendColor = '#fbbf24';
@@ -550,6 +556,7 @@ app.get('/', authenticateDashboard, async (req, res) => {
 
     const isOpendUnavailable = (watchlistData.source === 'OPEND_UNAVAILABLE') || (safeOpendStatus !== 'CONNECTED');
     const warningMessage = watchlistData.warning || (
+        safeOpendStatus === 'CONNECT_ERROR' ? `Ralat sambungan OpenD API: ${escapeHtml(opendErrorMessage || 'Gagal memulakan sesi dagangan rentas rangkaian.')}` :
         safeOpendStatus === 'WAIT_OTP' ? 'OpenD daemon memerlukan kod pengesahan 2FA (OTP SMS/Emel). Sila masukkan kod OTP 4-8 digit pada kotak OTP di bawah untuk melengkapkan sambungan.' :
         safeOpendStatus === 'WAIT_LOGIN' ? 'OpenD daemon sedang menunggu log masuk broker yang sah daripada pemohon. Sila lengkapkan Account ID dan kata laluan di bawah.' :
         safeOpendStatus === 'IDLE' || safeOpendStatus === 'SIGNED_OUT' ? 'Sesi OpenD telah di-sign-out (mod idle). Masukkan Account ID dan kata laluan untuk memulakan sesi baharu.' :

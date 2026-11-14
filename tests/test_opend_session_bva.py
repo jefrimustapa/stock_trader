@@ -95,6 +95,8 @@ class TestOpenDSessionBVA(unittest.TestCase):
         f3cnn_dir = self.temp_session_dir / "F3CNN"
         f3cnn_dir.mkdir()
         (f3cnn_dir / "cache.bin").write_text("binary-data")
+        rsa_key_file = self.temp_session_dir / "rsa_key.pem"
+        rsa_key_file.write_text("fake-rsa-key")
 
         manager = OpenDManager(session_dir=self.temp_session_dir, container_name="mock_opend")
         result = manager.clean_session_data()
@@ -102,6 +104,7 @@ class TestOpenDSessionBVA(unittest.TestCase):
         self.assertTrue(result)
         self.assertFalse(token_file.exists(), "Session token file mesti dibersihkan")
         self.assertFalse(f3cnn_dir.exists(), "Folder F3CNN mesti dibersihkan")
+        self.assertTrue(rsa_key_file.exists(), "rsa_key.pem mesti dipelihara semasa clean_session_data")
 
         # Set idle mode
         manager.set_idle_mode(True)

@@ -58,7 +58,7 @@ class OpenDManager:
 
         try:
             for item in self.session_dir.iterdir():
-                if item.name in [".idle_mode", "opend_login.json"]:
+                if item.name in [".idle_mode", "opend_login.json", "rsa_key.pem"]:
                     continue
                 try:
                     if item.is_file() or item.is_symlink():
