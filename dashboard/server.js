@@ -16,7 +16,15 @@ const AUTHENTIK_CLIENT_ID = (process.env.AUTHENTIK_CLIENT_ID || '').trim();
 const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.julietmike.net/application/o/stock-trader/').trim();
 const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
 const AUTHENTIK_LOGIN_URL = (process.env.AUTHENTIK_LOGIN_URL || 'https://auth.julietmike.net/flows/-/default/authentication/').trim();
-const AUTHENTIK_LOGOUT_URL = (process.env.AUTHENTIK_LOGOUT_URL || 'https://auth.julietmike.net/flows/-/default/invalidation/').trim();
+
+// Single-application logout endpoint: defaults to Authentik outpost sign_out route.
+// Global invalidation (/flows/-/default/invalidation/) is explicitly blocked to protect global SSO sessions (e.g. Paperclip).
+let rawLogoutUrl = (process.env.AUTHENTIK_LOGOUT_URL || '/outpost.goauthentik.io/sign_out').trim();
+if (rawLogoutUrl.includes('/flows/-/default/invalidation/')) {
+    console.warn('[Dashboard Warning] AUTHENTIK_LOGOUT_URL is configured to global invalidation flow. Overriding to local app logout /outpost.goauthentik.io/sign_out to protect global SSO sessions.');
+    rawLogoutUrl = '/outpost.goauthentik.io/sign_out';
+}
+const AUTHENTIK_LOGOUT_URL = rawLogoutUrl;
 const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
 const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
@@ -230,12 +238,37 @@ async function authenticateDashboard(req, res, next) {
     });
 }
 
-// One-Click Logout route: Clears local cookies and redirects to Authentik invalidation flow
+// One-Click Logout route: Clears application & outpost session cookies and redirects to single-app logout endpoint
 app.get('/logout', (req, res) => {
-    res.clearCookie('authentik_jwt', { path: '/' });
-    res.clearCookie('authentik_session', { path: '/' });
-    res.clearCookie('x_service_token', { path: '/' });
+    // 1. Explicitly clear known session and auth cookies
+    const knownCookies = [
+        'authentik_jwt',
+        'authentik_session',
+        'x_service_token',
+        'CF_Authorization'
+    ];
+    for (const cookieName of knownCookies) {
+        res.clearCookie(cookieName, { path: '/' });
+    }
+
+    // 2. Dynamically clear all incoming cookies (including outpost cookies such as authentik_proxy_*)
+    const rawCookieHeader = req.headers.cookie;
+    if (rawCookieHeader) {
+        const parts = rawCookieHeader.split(';');
+        for (const part of parts) {
+            const trimmed = part.trim();
+            const eqIdx = trimmed.indexOf('=');
+            const name = (eqIdx === -1 ? trimmed : trimmed.substring(0, eqIdx)).trim();
+            if (name) {
+                res.clearCookie(name, { path: '/' });
+            }
+        }
+    }
+
+    // 3. Purge site data for stock-trader domain
     res.setHeader('Clear-Site-Data', '"cache", "cookies", "storage"');
+
+    // 4. Redirect to isolated single-application logout URL
     res.redirect(302, AUTHENTIK_LOGOUT_URL);
 });
 
@@ -407,7 +440,7 @@ app.get('/', authenticateDashboard, (req, res) => {
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span class="badge badge-user">Authentik: ${safeUser}</span>
                 <span class="badge badge-active">Live Dashboard</span>
-                <a href="/logout" class="btn-logout" title="Log Keluar daripada Dashboard dan Authentik">Log Keluar (Logout)</a>
+                <a href="/logout" class="btn-logout" title="Log Keluar daripada Dashboard (Sesi Paperclip kekal aktif)">Log Keluar (Logout)</a>
             </div>
         </header>
 

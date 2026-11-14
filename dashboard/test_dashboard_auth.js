@@ -70,7 +70,8 @@ async function runDashboardTests() {
     const testIssuer = 'https://auth.julietmike.net/application/o/stock-trader/';
     const testServiceToken = 'secret-svc-token-abcde';
     const testForwardSecret = 'test-forward-auth-shared-secret-xyz123';
-    const testLogoutUrl = 'https://auth.julietmike.net/flows/-/default/invalidation/';
+    const testLogoutUrl = '/outpost.goauthentik.io/sign_out';
+    const legacyGlobalInvalidationUrl = 'https://auth.julietmike.net/flows/-/default/invalidation/';
 
     const serverProc = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
         env: {
@@ -78,7 +79,7 @@ async function runDashboardTests() {
             PORT: String(testPort),
             AUTHENTIK_CLIENT_ID: testClientId,
             AUTHENTIK_ISSUER_URL: testIssuer,
-            AUTHENTIK_LOGOUT_URL: testLogoutUrl,
+            AUTHENTIK_LOGOUT_URL: legacyGlobalInvalidationUrl, // Test fail-safe when legacy invalidation URL is provided
             FORWARD_AUTH_SECRET: testForwardSecret,
             BRIDGE_SERVICE_TOKEN: testServiceToken
         }
@@ -276,12 +277,31 @@ async function runDashboardTests() {
             assert.strictEqual(wrongIssRes.statusCode, 401, `Expected 401 for wrong issuer, got ${wrongIssRes.statusCode}`);
             console.log('✓ PASS: RS256 JWT with mismatched issuer rejected with 401');
 
-            // Test 2f: GET /logout endpoint must redirect 302 to Authentik Invalidation URL and clear cookies
-            const logoutRes = await makeRequest(testPort2, {}, '/logout');
+            // Test 2f: GET /logout endpoint must isolate logout to stock-trader app (no global SSO invalidation)
+            const logoutRes = await makeRequest(testPort2, {
+                cookie: 'authentik_proxy_session=mock-proxy-cookie; authentik_jwt=mock-jwt; ; loneCookie; =malformed'
+            }, '/logout');
             assert.strictEqual(logoutRes.statusCode, 302, `Expected 302 for /logout, got ${logoutRes.statusCode}`);
+            assert.ok(logoutRes.headers.location, 'Location header must be present');
+            assert.ok(!logoutRes.headers.location.includes('/flows/-/default/invalidation/'),
+                `Security violation: /logout must NOT redirect to global invalidation flow: ${logoutRes.headers.location}`);
             assert.strictEqual(logoutRes.headers.location, testLogoutUrl, `Expected redirect to ${testLogoutUrl}, got ${logoutRes.headers.location}`);
             assert.ok(logoutRes.headers['clear-site-data'], 'Clear-Site-Data header must be set');
-            console.log('✓ PASS: /logout endpoint redirects 302 to Authentik invalidation URL with cookie clearing');
+            const setCookies = logoutRes.headers['set-cookie'] || [];
+            assert.ok(setCookies.some(c => c.startsWith('authentik_jwt=')), 'Must clear authentik_jwt cookie');
+            assert.ok(setCookies.some(c => c.startsWith('authentik_session=')), 'Must clear authentik_session cookie');
+            assert.ok(setCookies.some(c => c.startsWith('x_service_token=')), 'Must clear x_service_token cookie');
+            assert.ok(setCookies.some(c => c.startsWith('authentik_proxy_session=')), 'Must dynamically clear authentik_proxy_session cookie');
+            assert.ok(setCookies.some(c => c.startsWith('loneCookie=')), 'Must dynamically clear cookie without value');
+            console.log('✓ PASS: /logout endpoint isolates logout to stock-trader app and clears all cookies without global SSO invalidation');
+
+            // Test 2f-2: Fail-safe check when legacy global invalidation URL was configured in AUTHENTIK_LOGOUT_URL
+            const legacyLogoutRes = await makeRequest(testPort, {}, '/logout');
+            assert.strictEqual(legacyLogoutRes.statusCode, 302, `Expected 302 for legacy configured /logout, got ${legacyLogoutRes.statusCode}`);
+            assert.ok(!legacyLogoutRes.headers.location.includes('/flows/-/default/invalidation/'),
+                `Security violation: legacy global invalidation config must be sanitized, got: ${legacyLogoutRes.headers.location}`);
+            assert.strictEqual(legacyLogoutRes.headers.location, testLogoutUrl, `Expected sanitize fallback to ${testLogoutUrl}, got ${legacyLogoutRes.headers.location}`);
+            console.log('✓ PASS: Fail-safe blocks legacy global SSO invalidation URL configuration');
 
             // Test 2h (SDLC #8 defect regression): 401 on invalid/expired JWT must NOT leak err.message
             const expiredJwt = jwt.sign(
