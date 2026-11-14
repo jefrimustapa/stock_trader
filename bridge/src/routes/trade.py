@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from ..config import BridgeConfig
 from ..security import authenticate_request
 from ..hard_rules import HardRulesEngine, OrderRequest, HardRuleViolation
-from ..moomoo_client import MoomooClient
+from ..moomoo_client import get_moomoo_client
 
 logger = logging.getLogger(__name__)
 NY_TZ = ZoneInfo("America/New_York")
@@ -18,11 +18,11 @@ router = APIRouter(prefix="/api/v1/trade", tags=["Trading Operations"])
 
 # Initialize engine with shared SQLite path and moomoo client
 engine = HardRulesEngine(BridgeConfig.EQUITY_BASELINE_DB)
-moomoo_client = MoomooClient(
-    host=BridgeConfig.OPEND_HOST,
-    port=BridgeConfig.OPEND_PORT,
-    trd_env=BridgeConfig.MOOMOO_TRD_ENV
-)
+moomoo_client = get_moomoo_client()
+
+
+class SwitchAccountRequest(BaseModel):
+    account_id: str = Field(..., min_length=1, description="Target trading account ID")
 
 
 class TradeSubmitResponse(BaseModel):
@@ -63,8 +63,9 @@ def submit_trade(
     now_ny = datetime.now(NY_TZ)
     trade_date = now_ny.strftime("%Y-%m-%d")
 
+    client = get_moomoo_client()
     # Fetch verified account equity strictly from OpenD broker or verified local baseline (Fail-Closed)
-    broker_equity = moomoo_client.get_account_equity()
+    broker_equity = client.get_account_equity()
     baseline_equity = engine.get_verified_equity(trade_date, fallback=None)
     account_equity = broker_equity or baseline_equity
 
@@ -104,8 +105,8 @@ def submit_trade(
     engine.register_order_and_record_day_trade_if_roundtrip(trade_date, order)
 
     # Dispatch to OpenD gateway
-    gateway_resp = moomoo_client.submit_order(order.model_dump())
-    opend_status = moomoo_client.get_connection_status()
+    gateway_resp = client.submit_order(order.model_dump())
+    opend_status = client.get_connection_status()
 
     return TradeSubmitResponse(
         status=gateway_resp.get("status", "ACCEPTED"),
@@ -126,14 +127,55 @@ def trigger_kill_switch(caller: str = Depends(authenticate_request)):
     Emergency Rule 8 Kill Switch.
     Honestly and accurately reports OpenD daemon connectivity state.
     """
-    result = engine.execute_rule8_kill_switch(moomoo_client=moomoo_client)
+    client = get_moomoo_client()
+    result = engine.execute_rule8_kill_switch(moomoo_client=client)
     return result
 
 
 @router.get("/positions")
 def get_positions(caller: str = Depends(authenticate_request)):
     """Returns open positions with honest gateway connection status."""
+    client = get_moomoo_client()
     return {
-        "opend_status": moomoo_client.get_connection_status(),
-        "positions": moomoo_client.query_positions()
+        "opend_status": client.get_connection_status(),
+        "positions": client.query_positions()
+    }
+
+
+@router.get("/accounts")
+def get_accounts_list(caller: str = Depends(authenticate_request)):
+    """
+    Returns available trading accounts and active account ID (Seksyen 3.5.B Blueprint).
+    """
+    client = get_moomoo_client()
+    if not client.is_connected():
+        client.connect()
+    return {
+        "status": client.get_connection_status(),
+        "env": client.trd_env,
+        "current_account_id": client._account_id if client._account_id else "N/A",
+        "accounts": client.get_accounts()
+    }
+
+
+@router.post("/switch-account")
+def switch_trading_account(
+    payload: SwitchAccountRequest,
+    caller: str = Depends(authenticate_request)
+):
+    """
+    Dynamically switches active acc_id (e.g. Paper Trading 1 vs 2) via SDK
+    without restarting container (Seksyen 3.5.B Blueprint).
+    """
+    client = get_moomoo_client()
+    success, msg = client.switch_account(payload.account_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg
+        )
+    return {
+        "status": "SUCCESS",
+        "message": msg,
+        "account_info": client.get_account_info()
     }

@@ -26,6 +26,11 @@ class BridgeConfig:
     WATCHLIST_PATH: Path = SHARED_DATA_DIR / "watchlist.json"
     SENTINEL_STATUS_PATH: Path = SHARED_DATA_DIR / "sentinel_status.json"
 
+    # OpenD Session Data & Container Management
+    OPEND_SESSION_DATA_DIR: Path = Path(os.getenv("OPEND_SESSION_DATA_DIR", "/opend_session_data"))
+    OPEND_CONTAINER_NAME: str = os.getenv("OPEND_CONTAINER_NAME", "stock_moomoo_opend")
+    DOCKER_SOCKET_PATH: str = os.getenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
+
     @classmethod
     def ensure_data_dir(cls) -> None:
         cls.SHARED_DATA_DIR.mkdir(parents=True, exist_ok=True)

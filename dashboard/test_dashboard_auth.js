@@ -38,13 +38,13 @@ function testFailFastWhenClientIdMissing() {
 }
 
 // Helper to make HTTP request
-function makeRequest(port, headers = {}, pathStr = '/api/data') {
+function makeRequest(port, headers = {}, pathStr = '/api/data', method = 'GET', body = null) {
     return new Promise((resolve, reject) => {
         const req = http.request({
             hostname: '127.0.0.1',
             port: port,
             path: pathStr,
-            method: 'GET',
+            method: method,
             headers: headers
         }, (res) => {
             let data = '';
@@ -56,6 +56,9 @@ function makeRequest(port, headers = {}, pathStr = '/api/data') {
             }));
         });
         req.on('error', reject);
+        if (body) {
+            req.write(body);
+        }
         req.end();
     });
 }
@@ -425,6 +428,54 @@ async function runDashboardTests() {
             });
             assert.strictEqual(unconfiguredForwardAuthRes.statusCode, 401, `Expected 401 when FORWARD_AUTH_SECRET is unconfigured on server, got ${unconfiguredForwardAuthRes.statusCode}`);
             console.log('✓ PASS: Forward auth rejected fail-closed with 401 when FORWARD_AUTH_SECRET is not configured');
+
+            // Test 2t (HOM-164): Verify Seksyen 3.5.B Blueprint UI Elements in GET /
+            const uiRes = await makeRequest(testPort, {
+                'x-service-token': `Bearer ${testServiceToken}`
+            }, '/');
+            assert.strictEqual(uiRes.statusCode, 200);
+            assert.ok(uiRes.body.includes('Sign-Out Sesi OpenD'), 'Dashboard UI must include Sign-Out Sesi OpenD button');
+            assert.ok(uiRes.body.includes('accSelect'), 'Dashboard UI must include acc_id dropdown');
+            assert.ok(uiRes.body.includes('handleSwitchAccount'), 'Dashboard UI must include handleSwitchAccount script');
+            assert.ok(uiRes.body.includes('handleOpenDSignOut'), 'Dashboard UI must include handleOpenDSignOut script');
+            assert.ok(uiRes.body.includes('loginAccInput'), 'Dashboard UI must include login account input');
+            console.log('✓ PASS: Dashboard renders Seksyen 3.5.B Blueprint UI (Sign-Out OpenD button, acc_id dropdown, and login account switch)');
+
+            // Test 2u (HOM-164): Verify BVA validation on OpenD management endpoints
+            const switchAccEmptyRes = await makeRequest(testPort, {
+                'x-service-token': `Bearer ${testServiceToken}`,
+                'content-type': 'application/json'
+            }, '/api/opend/switch-account', 'POST', JSON.stringify({ account_id: '   ' }));
+            assert.strictEqual(switchAccEmptyRes.statusCode, 400, 'Empty account_id must return 400 Bad Request');
+            console.log('✓ PASS: POST /api/opend/switch-account validates empty account_id with 400');
+
+            const switchLoginEmptyRes = await makeRequest(testPort, {
+                'x-service-token': `Bearer ${testServiceToken}`,
+                'content-type': 'application/json'
+            }, '/api/opend/switch-login', 'POST', JSON.stringify({ login_account: '' }));
+            assert.strictEqual(switchLoginEmptyRes.statusCode, 400, 'Empty login_account must return 400 Bad Request');
+            console.log('✓ PASS: POST /api/opend/switch-login validates empty login_account with 400');
+
+            // Unauthenticated checks for OpenD management routes
+            const unauthSignOut = await makeRequest(testPort, {}, '/api/opend/sign-out', 'POST');
+            assert.strictEqual(unauthSignOut.statusCode, 401, 'Unauthenticated /api/opend/sign-out must return 401');
+            console.log('✓ PASS: Unauthenticated /api/opend/sign-out rejected with 401');
+
+            const unauthAccounts = await makeRequest(testPort, {}, '/api/opend/accounts', 'GET');
+            assert.strictEqual(unauthAccounts.statusCode, 401, 'Unauthenticated /api/opend/accounts must return 401');
+            console.log('✓ PASS: Unauthenticated /api/opend/accounts rejected with 401');
+
+            const unauthSwitchAcc = await makeRequest(testPort, {
+                'content-type': 'application/json'
+            }, '/api/opend/switch-account', 'POST', JSON.stringify({ account_id: '1002' }));
+            assert.strictEqual(unauthSwitchAcc.statusCode, 401, 'Unauthenticated /api/opend/switch-account must return 401');
+            console.log('✓ PASS: Unauthenticated /api/opend/switch-account rejected with 401');
+
+            const unauthSwitchLogin = await makeRequest(testPort, {
+                'content-type': 'application/json'
+            }, '/api/opend/switch-login', 'POST', JSON.stringify({ login_account: '99999' }));
+            assert.strictEqual(unauthSwitchLogin.statusCode, 401, 'Unauthenticated /api/opend/switch-login must return 401');
+            console.log('✓ PASS: Unauthenticated /api/opend/switch-login rejected with 401');
 
         } finally {
             serverProc2.kill();

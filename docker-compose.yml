@@ -53,11 +53,16 @@ services:
       - "127.0.0.1:${BRIDGE_HOST_PORT:-8005}:8000"
     volumes:
       - shared_trading_data:/app/shared_data
+      - opend_session_data:/opend_session_data
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - MOOMOO_OPEND_HOST=moomoo-opend
       - MOOMOO_OPEND_PORT=11111
       - MOOMOO_TELNET_PORT=22222
       - MOOMOO_TRD_ENV=${MOOMOO_TRD_ENV:-SIMULATE}
+      - OPEND_SESSION_DATA_DIR=/opend_session_data
+      - OPEND_CONTAINER_NAME=stock_moomoo_opend
+      - DOCKER_SOCKET_PATH=/var/run/docker.sock
       - PAPERCLIP_BRIDGE_SECRET=${PAPERCLIP_BRIDGE_SECRET:?PAPERCLIP_BRIDGE_SECRET is required}
       - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:?BRIDGE_SERVICE_TOKEN is required}
       - SHARED_DATA_DIR=/app/shared_data
