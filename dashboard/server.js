@@ -17,8 +17,17 @@ const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.
 const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
 const AUTHENTIK_LOGIN_URL = (process.env.AUTHENTIK_LOGIN_URL || 'https://auth.julietmike.net/flows/-/default/authentication/').trim();
 
-// Authentik SSO logout endpoint: defaults to Authentik SSO invalidation flow (HOM-156).
-const AUTHENTIK_LOGOUT_URL = (process.env.AUTHENTIK_LOGOUT_URL || 'https://auth.julietmike.net/flows/-/default/invalidation/').trim();
+// Authentik SSO logout endpoint: defaults to Authentik SSO invalidation flow with post-logout redirect (HOM-156, HOM-158).
+const DEFAULT_POST_LOGOUT_REDIRECT = 'https://stock-trader.beta.julietmike.net/';
+const DEFAULT_AUTHENTIK_LOGOUT_URL = `https://auth.julietmike.net/flows/-/default/invalidation/?next=${encodeURIComponent(DEFAULT_POST_LOGOUT_REDIRECT)}`;
+
+let rawLogoutUrl = (process.env.AUTHENTIK_LOGOUT_URL || DEFAULT_AUTHENTIK_LOGOUT_URL).trim();
+// Ensure next parameter is present if pointing to Authentik invalidation flow and next parameter is not yet appended
+if (rawLogoutUrl.includes('/flows/-/default/invalidation') && !rawLogoutUrl.includes('next=')) {
+    const separator = rawLogoutUrl.includes('?') ? '&' : '?';
+    rawLogoutUrl = `${rawLogoutUrl}${separator}next=${encodeURIComponent(DEFAULT_POST_LOGOUT_REDIRECT)}`;
+}
+const AUTHENTIK_LOGOUT_URL = rawLogoutUrl;
 const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
 const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
