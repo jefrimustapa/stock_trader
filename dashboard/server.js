@@ -78,8 +78,14 @@ function escapeHtml(unsafe) {
 
 // Origin Authentication Middleware: Cloudflare Access Assertion & Service Token
 async function authenticateDashboard(req, res, next) {
-    // 1. Check internal service token using timing-safe comparison
-    const serviceTokenHeader = req.headers['x-service-token'];
+    // 1. Check internal service token using timing-safe comparison (Header or Cookie)
+    let serviceTokenHeader = req.headers['x-service-token'];
+    if (!serviceTokenHeader && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)(?:CF_Authorization|x_service_token)=([^;]+)/);
+        if (match && match[1] === BRIDGE_SERVICE_TOKEN) {
+            serviceTokenHeader = match[1];
+        }
+    }
     if (serviceTokenHeader && BRIDGE_SERVICE_TOKEN) {
         const token = serviceTokenHeader.replace(/^Bearer\s+/i, '').trim();
         const a = Buffer.from(token, 'utf8');
@@ -135,7 +141,58 @@ async function authenticateDashboard(req, res, next) {
         }
     }
 
-    // 3. Strict fail-closed: No sandbox fallback without authentication
+    // 3. If request is from a browser wanting HTML, render an interactive Access Login / Token form
+    const acceptsHtml = req.accepts && req.accepts('html');
+    if (acceptsHtml && req.method === 'GET' && req.path === '/') {
+        return res.status(401).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Required | STOCK-TRADER</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; max-width: 440px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h2 { margin-top: 0; color: #38bdf8; font-size: 22px; }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
+        .input-group { margin: 20px 0; }
+        label { display: block; font-size: 13px; margin-bottom: 6px; color: #cbd5e1; }
+        input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 14px; }
+        button { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; }
+        button:hover { background: #0369a1; }
+        .note { margin-top: 16px; font-size: 12px; color: #64748b; border-top: 1px solid #334155; padding-top: 12px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>STOCK-TRADER Access</h2>
+        <p>This operations dashboard is protected by security controls. Enter your <strong>Service Token</strong> or ensure you are logged into <strong>Cloudflare Zero Trust</strong>.</p>
+        <form onsubmit="handleToken(event)">
+            <div class="input-group">
+                <label for="token">Service Token / Token Pengesahan:</label>
+                <input type="password" id="token" placeholder="Masukkan token pengesahan..." required />
+            </div>
+            <button type="submit">Log Masuk Dashboard</button>
+        </form>
+        <div class="note">
+            Kredensial Sandbox/Ujian: Gunakan token yang dikonfigurasikan atau akses melalui terowong Cloudflare Access.
+        </div>
+    </div>
+    <script>
+        function handleToken(e) {
+            e.preventDefault();
+            const val = document.getElementById('token').value.trim();
+            if (!val) return;
+            // Set cookie and reload
+            document.cookie = "CF_Authorization=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>`);
+    }
+
+    // Strict fail-closed for API/direct requests:
     return res.status(401).json({
         error: 'Authentication required. Cloudflare Access JWT assertion or X-Service-Token header missing or invalid.'
     });
