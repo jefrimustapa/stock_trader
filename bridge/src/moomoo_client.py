@@ -50,6 +50,19 @@ class MoomooClient:
         self._total_equity: Optional[float] = None
         self._last_status: str = "DISCONNECTED"
         self._available_accounts: List[Dict[str, Any]] = []
+        self._opend_manager: Any = None
+
+    def set_opend_manager(self, manager: Any) -> None:
+        self._opend_manager = manager
+
+    def _get_opend_manager(self) -> Any:
+        if self._opend_manager is None:
+            try:
+                from .opend_manager import OpenDManager
+                self._opend_manager = OpenDManager()
+            except Exception:
+                pass
+        return self._opend_manager
 
     def connect(self) -> bool:
         """
@@ -177,9 +190,27 @@ class MoomooClient:
     def get_connection_status(self) -> str:
         if self._connected:
             return "CONNECTED"
-        if self._last_status == "WAIT_LOGIN":
-            return "WAIT_LOGIN"
-        return "DISCONNECTED"
+
+        manager = self._get_opend_manager()
+        if manager is not None and hasattr(manager, "is_idle_mode") and manager.is_idle_mode():
+            return "IDLE"
+
+        # Check if socket reachable
+        socket_reachable = (self._last_status in ["WAIT_LOGIN", "WAIT_OTP"])
+        if not socket_reachable:
+            try:
+                with socket.create_connection((self.host, self.port), timeout=0.5):
+                    socket_reachable = True
+            except Exception:
+                socket_reachable = False
+
+        if not socket_reachable:
+            return "DISCONNECTED"
+
+        if manager is not None and hasattr(manager, "is_waiting_otp") and manager.is_waiting_otp():
+            return "WAIT_OTP"
+
+        return "WAIT_LOGIN"
 
     def get_accounts(self) -> List[Dict[str, Any]]:
         """Returns list of available trading accounts retrieved via OpenAPI SDK."""

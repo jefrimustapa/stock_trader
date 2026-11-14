@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -113,8 +114,9 @@ class TestOpenDSessionBVA(unittest.TestCase):
         manager.set_idle_mode(True)
         self.assertTrue((self.temp_session_dir / ".idle_mode").exists())
 
-        # Update login config
-        success, msg = manager.update_login_config(login_account="98765432", login_pwd_md5="abc123md5hash")
+        # Update login config with valid 32-hex MD5
+        valid_md5 = "5f4dcc3b5aa765d61d8327deb882cf99"
+        success, msg = manager.update_login_config(login_account="98765432", login_pwd_md5=valid_md5)
         self.assertTrue(success)
 
         # .idle_mode must be cleared so OpenD boots with new account
@@ -122,10 +124,11 @@ class TestOpenDSessionBVA(unittest.TestCase):
 
         config_file = self.temp_session_dir / "opend_login.json"
         self.assertTrue(config_file.exists())
+        self.assertEqual(stat.S_IMODE(os.stat(config_file).st_mode), 0o600, "opend_login.json mesti 0600")
         with open(config_file, "r") as f:
             cfg = json.load(f)
         self.assertEqual(cfg["login_account"], "98765432")
-        self.assertEqual(cfg["login_pwd_md5"], "abc123md5hash")
+        self.assertEqual(cfg["login_pwd_md5"], valid_md5)
 
 
 if __name__ == "__main__":

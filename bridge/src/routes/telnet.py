@@ -31,6 +31,11 @@ class SwitchLoginRequest(BaseModel):
     login_pwd_md5: Optional[str] = Field(None, description="MD5 hash of login password (optional)")
 
 
+class SignInRequest(BaseModel):
+    login_account: str = Field(..., min_length=1, description="Moomoo login account ID")
+    login_pwd_md5: str = Field(..., min_length=32, max_length=32, description="MD5 hash of login password (32 hex characters)")
+
+
 @router.post("/otp")
 async def relay_otp(payload: OTPRequest, caller: str = Depends(authenticate_request)):
     """Relays 2FA verification code to OpenD CLI."""
@@ -110,4 +115,44 @@ async def switch_login(payload: SwitchLoginRequest, caller: str = Depends(authen
         "login_account": payload.login_account,
         "container_restart": restart_msg,
         "message": f"Successfully configured login account {payload.login_account} and restarted OpenD gateway."
+    }
+
+
+@router.post("/sign-in")
+async def sign_in_session(payload: SignInRequest, caller: str = Depends(authenticate_request)):
+    """
+    Signs in to Moomoo account (Seksyen 3.5.B Blueprint & HOM-165):
+    1. Terminates old session via Telnet (if active).
+    2. Disconnects local trade context.
+    3. Cleans stale session tokens.
+    4. Updates opend_login.json with 0600 file permissions and clears .idle_mode.
+    5. Restarts OpenD container to authenticate with provided account & password MD5.
+    """
+    try:
+        await telnet_client.logout_session()
+    except Exception:
+        pass
+
+    client = get_moomoo_client()
+    client.close()
+
+    opend_manager.clean_session_data()
+
+    config_ok, config_msg = opend_manager.update_login_config(
+        login_account=payload.login_account,
+        login_pwd_md5=payload.login_pwd_md5
+    )
+    if not config_ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed updating login configuration: {config_msg}"
+        )
+
+    restart_ok, restart_msg = opend_manager.restart_opend_container()
+
+    return {
+        "status": "SUCCESS",
+        "login_account": payload.login_account,
+        "container_restart": restart_msg,
+        "message": f"Successfully configured login credentials for account {payload.login_account} and restarted OpenD gateway."
     }

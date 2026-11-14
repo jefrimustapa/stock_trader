@@ -2,6 +2,7 @@ import http.client
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 from pathlib import Path
@@ -92,16 +93,24 @@ class OpenDManager:
         """
         Deterministic BVA validation and config file update for switching login account.
         Disables .idle_mode flag so OpenD boots with new account.
+        Enforces strict file permissions (0600) so credential hash cannot be read by others.
         """
         if not login_account or not login_account.strip():
             return False, "Login account ID cannot be empty"
 
         clean_account = login_account.strip()
+        clean_md5 = ""
+        if login_pwd_md5 is not None and login_pwd_md5.strip():
+            candidate_md5 = login_pwd_md5.strip()
+            if len(candidate_md5) != 32 or not re.fullmatch(r"^[a-fA-F0-9]{32}$", candidate_md5):
+                return False, "Invalid MD5 format for login_pwd_md5: Must be exactly 32 hexadecimal characters"
+            clean_md5 = candidate_md5
+
         self.ensure_dir()
 
         config_data = {
             "login_account": clean_account,
-            "login_pwd_md5": login_pwd_md5.strip() if login_pwd_md5 and login_pwd_md5.strip() else ""
+            "login_pwd_md5": clean_md5
         }
 
         config_file = self.session_dir / "opend_login.json"
@@ -109,13 +118,68 @@ class OpenDManager:
             with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=2)
 
+            # Enforce strict 0600 file permissions
+            os.chmod(config_file, 0o600)
+
             # Clear idle mode flag since new login configuration is provided
             self.set_idle_mode(False)
-            logger.info("Updated OpenD login config for account %s at %s", clean_account, config_file)
+            logger.info("Updated OpenD login config for account %s at %s (permissions: 0600)", clean_account, config_file)
             return True, f"Login configuration updated for account {clean_account}"
         except Exception as e:
             logger.error("Failed writing OpenD login config: %s", e)
             return False, f"Failed updating login config: {str(e)}"
+
+    def is_waiting_otp(self) -> bool:
+        """
+        Checks whether OpenD gateway is waiting for 2FA phone/device verification code (OTP).
+        Inspects recent GTWLog in opend_session_data for NeedPhoneVerifyCode event.
+        """
+        log_dir = self.session_dir / "Log"
+        if not log_dir.exists():
+            return False
+        try:
+            log_files = sorted(
+                log_dir.glob("GTWLog_*.log"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            if not log_files:
+                return False
+            latest_log = log_files[0]
+            with open(latest_log, "r", encoding="latin1") as f:
+                file_size = latest_log.stat().st_size
+                f.seek(max(0, file_size - 16384))
+                content = f.read()
+                if any(k in content for k in [
+                    "NeedPhoneVerifyCode",
+                    "UserLoginRet_NeedPhoneVerifyCode",
+                    "GtwEventType_NeedPhoneVerifyCode"
+                ]):
+                    last_otp_idx = max(
+                        content.rfind("NeedPhoneVerifyCode"),
+                        content.rfind("UserLoginRet_NeedPhoneVerifyCode")
+                    )
+                    last_fail_idx = content.rfind("OnPhoneVerifyCodeErr")
+                    last_conn_idx = content.rfind("InitConnect")
+                    return True
+        except Exception as e:
+            logger.debug("Error checking OTP state in log: %s", e)
+        return False
+
+    def get_opend_state(self, is_connected: bool, socket_reachable: bool) -> str:
+        """
+        Resolves deterministic gateway state:
+        IDLE -> WAIT_LOGIN -> WAIT_OTP -> CONNECTED (or DISCONNECTED)
+        """
+        if self.is_idle_mode():
+            return "IDLE"
+        if is_connected:
+            return "CONNECTED"
+        if not socket_reachable:
+            return "DISCONNECTED"
+        if self.is_waiting_otp():
+            return "WAIT_OTP"
+        return "WAIT_LOGIN"
 
     def restart_opend_container(self) -> Tuple[bool, str]:
         """

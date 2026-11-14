@@ -384,10 +384,51 @@ app.post('/api/opend/switch-account', authenticateDashboard, async (req, res) =>
     }
 });
 
-app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
-    const { login_account, login_pwd_md5 } = req.body || {};
+app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
+    const { login_account, password, login_pwd_md5 } = req.body || {};
     if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
         return res.status(400).json({ error: 'Login account ID diperlukan' });
+    }
+
+    let finalMd5 = null;
+    if (password && typeof password === 'string' && password.trim()) {
+        // Calculate MD5 hash server-side. Plaintext password is NEVER logged, stored, or output.
+        finalMd5 = crypto.createHash('md5').update(password.trim()).digest('hex');
+    } else if (login_pwd_md5 && typeof login_pwd_md5 === 'string' && login_pwd_md5.trim()) {
+        finalMd5 = login_pwd_md5.trim();
+    } else {
+        return res.status(400).json({ error: 'Kata laluan (atau hash MD5) diperlukan untuk sign-in' });
+    }
+
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/sign-in`, {
+            login_account: login_account.trim(),
+            login_pwd_md5: finalMd5
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 15000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
+});
+
+app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
+    const { login_account, password, login_pwd_md5 } = req.body || {};
+    if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
+        return res.status(400).json({ error: 'Login account ID diperlukan' });
+    }
+    let finalMd5 = null;
+    if (password && typeof password === 'string' && password.trim()) {
+        finalMd5 = crypto.createHash('md5').update(password.trim()).digest('hex');
+    } else if (login_pwd_md5 && typeof login_pwd_md5 === 'string' && login_pwd_md5.trim()) {
+        finalMd5 = login_pwd_md5.trim();
     }
     if (!BRIDGE_SERVICE_TOKEN) {
         return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
@@ -395,7 +436,7 @@ app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/switch-login`, {
             login_account: login_account.trim(),
-            login_pwd_md5: login_pwd_md5 ? String(login_pwd_md5).trim() : null
+            login_pwd_md5: finalMd5
         }, {
             headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
             timeout: 15000
@@ -501,8 +542,12 @@ app.get('/', authenticateDashboard, async (req, res) => {
         opendColor = 'var(--success)';
     } else if (safeOpendStatus === 'UNREACHABLE') {
         opendColor = 'var(--danger)';
+    } else if (safeOpendStatus === 'WAIT_OTP') {
+        opendColor = '#fbbf24';
     } else if (safeOpendStatus === 'WAIT_LOGIN') {
         opendColor = '#f59e0b';
+    } else if (safeOpendStatus === 'IDLE' || safeOpendStatus === 'SIGNED_OUT') {
+        opendColor = '#94a3b8';
     }
 
     let sentinelColor = '#94a3b8';
@@ -514,7 +559,9 @@ app.get('/', authenticateDashboard, async (req, res) => {
 
     const isOpendUnavailable = (watchlistData.source === 'OPEND_UNAVAILABLE') || (safeOpendStatus !== 'CONNECTED');
     const warningMessage = watchlistData.warning || (
-        safeOpendStatus === 'WAIT_LOGIN' ? 'OpenD daemon sedang menunggu log masuk broker yang sah daripada pemohon. Watchlist ditutup (fail-closed).' :
+        safeOpendStatus === 'WAIT_OTP' ? 'OpenD daemon memerlukan kod pengesahan 2FA (OTP SMS/Emel). Sila masukkan kod OTP 4-8 digit pada kotak OTP di bawah untuk melengkapkan sambungan.' :
+        safeOpendStatus === 'WAIT_LOGIN' ? 'OpenD daemon sedang menunggu log masuk broker yang sah daripada pemohon. Sila lengkapkan Account ID dan kata laluan di bawah.' :
+        safeOpendStatus === 'IDLE' || safeOpendStatus === 'SIGNED_OUT' ? 'Sesi OpenD telah di-sign-out (mod idle). Masukkan Account ID dan kata laluan untuk memulakan sesi baharu.' :
         safeOpendStatus === 'UNREACHABLE' ? 'Sambungan ke MCP Bridge gagal (UNREACHABLE). Semak kontena Bridge.' :
         safeOpendStatus === 'DISCONNECTED' ? 'OpenD daemon tidak bersambung (DISCONNECTED).' : null
     );
@@ -686,29 +733,31 @@ app.get('/', authenticateDashboard, async (req, res) => {
                     <div id="signOutResult" style="margin-top: 8px; font-size: 12px; min-height: 16px;"></div>
                 </div>
 
-                <!-- 3. Tukar Akaun Log Masuk Moomoo -->
+                <!-- 3. Tukar Akaun Log Masuk / Sign-In Moomoo -->
                 <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 6px; border: 1px solid var(--border);">
-                    <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #f59e0b;">Tukar Akaun Log Masuk Moomoo</h4>
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #f59e0b;">Log Masuk / Tukar Akaun Moomoo</h4>
                     <p style="color: var(--text-muted); font-size: 12px; margin: 0 0 10px 0;">
-                        Sign-out sesi lama, kemas kini akaun log masuk, dan restart kontena OpenD.
+                        Konfigurasi Moomoo Account ID dan kata laluan. Hash MD5 dijana di pelayan; kata laluan plaintext tidak disimpan atau di-log.
                     </p>
-                    <form onsubmit="handleSwitchLogin(event)" style="display: flex; flex-direction: column; gap: 8px;">
+                    <form onsubmit="handleOpenDSignIn(event)" style="display: flex; flex-direction: column; gap: 8px;">
                         <input type="text" id="loginAccInput" placeholder="Moomoo Login Account ID..." style="padding: 8px 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;" required />
-                        <button type="submit" style="padding: 8px 14px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;">Kemas Kini &amp; Restart OpenD</button>
+                        <input type="password" id="loginPwdInput" placeholder="Kata Laluan Moomoo..." style="padding: 8px 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;" required />
+                        <button type="submit" id="btnOpenDSignIn" style="padding: 8px 14px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;">Log Masuk OpenD</button>
                     </form>
                     <div id="switchLoginResult" style="margin-top: 8px; font-size: 12px; min-height: 16px;"></div>
+                    <div id="signInResult" style="margin-top: 4px; font-size: 12px; min-height: 16px;"></div>
                 </div>
             </div>
         </div>
 
-        <div class="card" style="margin-bottom: 24px;">
-            <h3>Moomoo OpenD 2FA OTP Relay (Port 22222)</h3>
+        <div id="otpCard" class="card" style="margin-bottom: 24px; ${safeOpendStatus === 'WAIT_OTP' ? 'border: 2px solid #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);' : ''}">
+            <h3 style="${safeOpendStatus === 'WAIT_OTP' ? 'color: #fbbf24;' : ''}">Moomoo OpenD 2FA OTP Relay (Port 22222)</h3>
             <p style="color: var(--text-muted); font-size: 13px; margin: 6px 0 12px 0;">
                 Kredensial broker diurus terus ke OpenD tanpa rekod peribadi. Masukkan kod pengesahan SMS/Emel (4-8 digit) di sini untuk disambung ke OpenD Telnet CLI secara selamat.
             </p>
             <form onsubmit="handleOtpSubmit(event)" style="display: flex; gap: 10px; max-width: 440px;">
                 <input type="text" id="otpInput" placeholder="Masukkan 4-8 digit kod OTP..." maxlength="8" style="flex: 1; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 14px;" required />
-                <button type="submit" style="padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Hantar OTP</button>
+                <button type="submit" id="btnSubmitOtp" style="padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Hantar OTP</button>
             </form>
             <div id="otpResult" style="margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
         </div>
@@ -818,28 +867,30 @@ app.get('/', authenticateDashboard, async (req, res) => {
             }
         }
 
-        async function handleSwitchLogin(e) {
+        async function handleOpenDSignIn(e) {
             e.preventDefault();
             const loginAcc = document.getElementById('loginAccInput').value.trim();
-            const resDiv = document.getElementById('switchLoginResult');
-            if (!loginAcc) return;
-            if (!confirm("Tukar akaun log masuk OpenD kepada " + loginAcc + "? Sesi lama akan ditamatkan dan kontena akan direstart.")) {
+            const loginPwd = document.getElementById('loginPwdInput') ? document.getElementById('loginPwdInput').value.trim() : '';
+            const resDiv = document.getElementById('signInResult') || document.getElementById('switchLoginResult');
+            if (!loginAcc || !loginPwd) {
+                resDiv.innerText = "Sila lengkapkan Account ID dan kata laluan.";
+                resDiv.style.color = "var(--danger)";
                 return;
             }
-            resDiv.innerText = "Mengemas kini akaun log masuk & me-restart OpenD...";
+            resDiv.innerText = "Menjana hash MD5 selamat & me-restart gateway OpenD...";
             resDiv.style.color = "var(--accent)";
             try {
-                const resp = await fetch('/api/opend/switch-login', {
+                const resp = await fetch('/api/opend/sign-in', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ login_account: loginAcc })
+                    body: JSON.stringify({ login_account: loginAcc, password: loginPwd })
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    resDiv.innerText = "Akaun log masuk dikemas kini: " + (data.message || 'OK');
+                    resDiv.innerText = "Kredensial berjaya dikonfigurasi & OpenD direstart: " + (data.message || 'OK');
                     resDiv.style.color = "var(--success)";
-                    document.getElementById('loginAccInput').value = '';
-                    setTimeout(() => window.location.reload(), 3000);
+                    if (document.getElementById('loginPwdInput')) document.getElementById('loginPwdInput').value = '';
+                    setTimeout(() => window.location.reload(), 2500);
                 } else {
                     resDiv.innerText = "Gagal: " + (data.error || 'Ralat');
                     resDiv.style.color = "var(--danger)";
@@ -848,6 +899,10 @@ app.get('/', authenticateDashboard, async (req, res) => {
                 resDiv.innerText = "Ralat komunikasi: " + err.message;
                 resDiv.style.color = "var(--danger)";
             }
+        }
+
+        async function handleSwitchLogin(e) {
+            return handleOpenDSignIn(e);
         }
     </script>
 </body>
