@@ -664,6 +664,7 @@ async function main() {
     assert.ok(html.includes('100 Baki Sebenar'), 'Must render real Moomoo remain chip');
     assert.ok(!html.includes('Anggaran'), 'Must remove all Anggaran labels (HOM-217)');
     assert.ok(!html.includes('93 / 100'), 'Must not display internal record 93 / 100 in KPI cards');
+    assert.ok(!html.includes('banner-moomoo-quota-active'), 'Must remove green banner-moomoo-quota-active on healthy connection (HOM-239)');
 
     // Test unavailable fail-closed with friendly error
     const mockMoomooUnavailable = {
@@ -686,6 +687,8 @@ async function main() {
     };
     const htmlUnavail = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockMoomooUnavailable }));
     assert.ok(htmlUnavail.includes('Tidak Tersedia') || htmlUnavail.includes('TIDAK TERSEDIA'), 'Must show Tidak Tersedia when OpenD disconnected');
+    assert.ok(htmlUnavail.includes('banner-moomoo-quota-unavailable'), 'Must keep banner-moomoo-quota-unavailable on error/unavailability (HOM-239)');
+    assert.ok(!htmlUnavail.includes('banner-moomoo-quota-active'), 'Must never show banner-moomoo-quota-active when unavailable');
     assert.ok(!htmlUnavail.includes('ECONNREFUSED'), 'Must sanitize raw ECONNREFUSED to friendly message');
     assert.ok(htmlUnavail.includes('Moomoo OpenD tidak dapat dihubungi'), 'Must show friendly error text');
   });

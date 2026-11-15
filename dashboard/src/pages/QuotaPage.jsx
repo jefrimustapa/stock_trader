@@ -180,58 +180,37 @@ export function QuotaPage({ initialQuotaData = null }) {
         </Box>
       </Box>
 
-      {/* Real Moomoo OpenAPI Quota Banner */}
-      {moomooQuota ? (
-        isMoomooConnected ? (
-          <Alert
-            id="banner-moomoo-quota-active"
-            severity="success"
-            icon={<CheckCircleOutlineIcon sx={{ fontSize: 20 }} />}
+      {/* Real Moomoo OpenAPI Quota Alert (Only shown when unavailable / error, green banner removed per HOM-239) */}
+      {moomooQuota && !isMoomooConnected ? (
+        <Alert
+          id="banner-moomoo-quota-unavailable"
+          severity="warning"
+          icon={<WarningAmberIcon sx={{ fontSize: 20 }} />}
+          sx={{
+            mb: 2,
+            borderRadius: 2,
+            fontSize: '0.82rem',
+            backgroundColor: sneatTokens.warning.soft,
+            color: 'text.primary',
+            '& .MuiAlert-icon': { color: sneatTokens.warning.main },
+          }}
+        >
+          <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
+            Kuota Moomoo OpenAPI Sebenar:&nbsp;
+          </Typography>
+          <Chip
+            size="small"
+            label="TIDAK TERSEDIA"
             sx={{
-              mb: 2,
-              borderRadius: 2,
-              fontSize: '0.82rem',
-              backgroundColor: sneatTokens.success.soft,
-              color: 'text.primary',
-              '& .MuiAlert-icon': { color: sneatTokens.success.main },
+              fontWeight: 700,
+              fontSize: '0.68rem',
+              mr: 1,
+              backgroundColor: sneatTokens.error.soft,
+              color: sneatTokens.error.main,
             }}
-          >
-            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
-              Kuota Moomoo OpenAPI Sebenar:&nbsp;
-            </Typography>
-            Gateway OpenD Aktif. Terpakai: <strong>{realUsed}</strong> / {realTotal} | Baki Sebenar: <strong>{realRemain}</strong> / {realTotal} simbol.
-          </Alert>
-        ) : (
-          <Alert
-            id="banner-moomoo-quota-unavailable"
-            severity="warning"
-            icon={<WarningAmberIcon sx={{ fontSize: 20 }} />}
-            sx={{
-              mb: 2,
-              borderRadius: 2,
-              fontSize: '0.82rem',
-              backgroundColor: sneatTokens.warning.soft,
-              color: 'text.primary',
-              '& .MuiAlert-icon': { color: sneatTokens.warning.main },
-            }}
-          >
-            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
-              Kuota Moomoo OpenAPI Sebenar:&nbsp;
-            </Typography>
-            <Chip
-              size="small"
-              label="TIDAK TERSEDIA"
-              sx={{
-                fontWeight: 700,
-                fontSize: '0.68rem',
-                mr: 1,
-                backgroundColor: sneatTokens.error.soft,
-                color: sneatTokens.error.main,
-              }}
-            />
-            Baki Sebenar: <strong>-</strong> ({formatMoomooError(moomooQuota?.error)}). Mengikut peraturan fail-closed, baki kuota tidak tersedia.
-          </Alert>
-        )
+          />
+          Baki Sebenar: <strong>-</strong> ({formatMoomooError(moomooQuota?.error)}). Mengikut peraturan fail-closed, baki kuota tidak tersedia.
+        </Alert>
       ) : null}
 
       {/* Table Reference Note Banner */}

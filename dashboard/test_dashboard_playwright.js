@@ -468,9 +468,9 @@ async function runPlaywrightSuite() {
     assertCheck('HOM-217 User Acceptance: QuotaPage does not leak raw ECONNREFUSED', !quotaPageText.includes('ECONNREFUSED'));
     assertCheck('HOM-217 User Acceptance: QuotaPage table labeled clearly as Senarai Simbol Direkodkan', quotaPageText.includes('Senarai Simbol Direkodkan'));
 
-    // HOM-213 Acceptance Step 3a: Real Moomoo OpenAPI Quota Banner Verification
-    const hasMoomooBanner = (await quotaPage.locator('#banner-moomoo-quota-active, #banner-moomoo-quota-unavailable').count()) >= 1;
-    assertCheck('HOM-213 User Acceptance: Real Moomoo OpenAPI Quota banner rendered', hasMoomooBanner);
+    // HOM-239 User Acceptance: Real Moomoo OpenAPI green banner removed, unavailable banner preserved for error state
+    const activeGreenBannerCount = await quotaPage.locator('#banner-moomoo-quota-active').count();
+    assertCheck('HOM-239 User Acceptance: Green banner-moomoo-quota-active is removed', activeGreenBannerCount === 0);
 
     // 4. User Acceptance Step 4: Data Table of Active Symbols & STATUS WATCHLIST
     const quotaTable = quotaPage.locator('#table-kline-quota');
