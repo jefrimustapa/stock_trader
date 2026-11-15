@@ -10,7 +10,8 @@
     "test": "node test_dashboard_auth.js",
     "test:signin": "node test_dashboard_signin.js",
     "test:qc": "node test_dashboard_qc.js",
-    "test:all": "node test_dashboard_auth.js && node test_dashboard_signin.js && node test_dashboard_qc.js"
+    "test:playwright": "docker cp test_dashboard_playwright.js playwright-inno-x:/work/ && docker exec -w /work playwright-inno-x node test_dashboard_playwright.js",
+    "test:all": "node test_dashboard_auth.js && node test_dashboard_signin.js && node test_dashboard_qc.js && npm run test:playwright"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

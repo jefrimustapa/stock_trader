@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=client-builder /build/dist ./dist
-COPY server.js test_dashboard_auth.js test_dashboard_signin.js test_dashboard_qc.js index.html ./
+COPY server.js test_dashboard_auth.js test_dashboard_signin.js test_dashboard_qc.js test_dashboard_playwright.js index.html ./
 
 EXPOSE 3000
 CMD ["node", "server.js"]
