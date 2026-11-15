@@ -238,6 +238,15 @@ async function main() {
   const { OpendPage } = await bundleModule('src/pages/OpendPage.jsx');
   const { FunnelPage } = await bundleModule('src/pages/FunnelPage.jsx');
   const { WatchlistPage } = await bundleModule('src/pages/WatchlistPage.jsx');
+  const { FunnelStepper } = await bundleModule('src/components/FunnelStepper.jsx');
+  const {
+    formatPrice,
+    formatCompactNumber,
+    getStage0Summary,
+    getStage0Detail,
+    getStage3Summary,
+    getStage3Detail,
+  } = await bundleModule('src/utils/formatters.js');
   const { getTheme, sneatTokens } = await bundleModule('src/theme.js');
 
   check('Layout exports navItems array with navigation sections', () => {
@@ -493,6 +502,88 @@ async function main() {
     assert.ok(html.includes('btn-theme-toggle'), 'Must render btn-theme-toggle');
     assert.ok(html.includes('btn-logout'), 'Must render btn-logout');
     assert.ok(html.includes('href="/logout"'), 'Logout button must point to /logout');
+  });
+
+  console.log('\n--- 7. QC Screener Active Config Dynamic Text & BVA (HOM-205) ---');
+  check('BVA formatPrice: Correctly formats boundaries ($1.00, $1.01, $5.00, $10, $1000, 0, negative, invalid)', () => {
+    assert.strictEqual(formatPrice(1.00), '$1', 'Boundary 1.00 should format as $1');
+    assert.strictEqual(formatPrice(1.01), '$1.01', 'Boundary 1.01 should format as $1.01');
+    assert.strictEqual(formatPrice(5.00), '$5', 'Scenario 5.00 should format as $5');
+    assert.strictEqual(formatPrice(10.0), '$10', 'Default 10.0 should format as $10');
+    assert.strictEqual(formatPrice(1000.0), '$1000', 'Large boundary 1000 should format as $1000');
+    assert.strictEqual(formatPrice(0), '$0', 'Zero should format as $0');
+    assert.strictEqual(formatPrice(-5.0), '-$5', 'Negative price should format as -$5');
+    assert.strictEqual(formatPrice(null), '-', 'Null price should format as fallback -');
+    assert.strictEqual(formatPrice(undefined), '-', 'Undefined price should format as fallback -');
+    assert.strictEqual(formatPrice('invalid'), '-', 'NaN string should format as fallback -');
+  });
+
+  check('BVA formatCompactNumber: Correctly formats boundaries (10M, 500M, 1B, 10T, 50K, 1M, 100M)', () => {
+    assert.strictEqual(formatCompactNumber(10000000, '$'), '$10M', 'Cap lower boundary 10M');
+    assert.strictEqual(formatCompactNumber(500000000, '$'), '$500M', 'Cap 500M');
+    assert.strictEqual(formatCompactNumber(1000000000, '$'), '$1B', 'Cap 1B');
+    assert.strictEqual(formatCompactNumber(2500000000, '$'), '$2.5B', 'Cap 2.5B');
+    assert.strictEqual(formatCompactNumber(10000000000000, '$'), '$10T', 'Cap upper boundary 10T');
+    assert.strictEqual(formatCompactNumber(50000), '50K', 'Volume lower boundary 50K');
+    assert.strictEqual(formatCompactNumber(1000000), '1M', 'Volume 1M');
+    assert.strictEqual(formatCompactNumber(100000000), '100M', 'Volume 100M');
+    assert.strictEqual(formatCompactNumber(null), '-', 'Null volume should format as -');
+  });
+
+  check('Dynamic Stage 2 & Stage 3 text generator produces accurate texts & clear fallbacks', () => {
+    const config5 = { min_price: 5.0, min_market_cap: 1000000000, min_volume: 1000000, min_rvol: 1.5, max_rvol: 10.0 };
+    assert.strictEqual(getStage0Summary(config5, 'ready'), 'Harga >= $5, Cap >= $1B, ADV >= 1M');
+    assert.ok(getStage0Detail(config5, 'ready').includes('Harga >= $5, Nilai Pasaran >= $1B, ADV >= 1M'));
+
+    const configBva = { min_price: 1.00, min_market_cap: 10000000, min_volume: 50000, min_rvol: 0.8, max_rvol: 5.0 };
+    assert.strictEqual(getStage0Summary(configBva, 'ready'), 'Harga >= $1, Cap >= $10M, ADV >= 50K');
+    assert.ok(getStage0Detail(configBva, 'ready').includes('Harga >= $1, Nilai Pasaran >= $10M, ADV >= 50K'));
+
+    // Loading fallback: must never display old hardcoded values
+    const loadingSummary = getStage0Summary(config5, 'loading');
+    assert.strictEqual(loadingSummary, 'Memuatkan tetapan screener...');
+    assert.ok(!loadingSummary.includes('$10'));
+
+    const loadingDetail = getStage0Detail(config5, 'loading');
+    assert.ok(loadingDetail.includes('memuatkan'));
+    assert.ok(!loadingDetail.includes('$10'));
+
+    // Error / null fallback: must display '-' and never display old hardcoded values
+    const errorSummary = getStage0Summary(null, 'error');
+    assert.strictEqual(errorSummary, 'Harga >= -, Cap >= -, ADV >= -');
+    assert.ok(!errorSummary.includes('$10'));
+
+    const errorDetail = getStage0Detail(null, 'error');
+    assert.ok(errorDetail.includes('Harga >= -, Nilai Pasaran >= -, ADV >= -'));
+    assert.ok(!errorDetail.includes('$10'));
+  });
+
+  check('FunnelPage and FunnelStepper render dynamic active screener config ($5 acceptance scenario)', () => {
+    const config5 = { min_price: 5.0, min_market_cap: 1000000000, min_volume: 1000000, min_rvol: 1.5, max_rvol: 10.0 };
+    const html = renderToString(React.createElement(FunnelPage, {
+      dataPayload: mockDataPayload,
+      screenerConfig: config5,
+      configLoading: false,
+      configError: false,
+    }));
+
+    assert.ok(html.includes('funnel-stage2-desc'), 'Must render funnel-stage2-desc ID on Stepper card');
+    assert.ok(html.includes('criteria-stage2-desc'), 'Must render criteria-stage2-desc ID on Criteria card');
+    assert.ok(html.includes('Harga &gt;= $5') || html.includes('Harga >= $5'), 'Must render dynamic $5 min_price in HTML');
+    assert.ok(!html.includes('Harga &gt;= $10') && !html.includes('Harga >= $10'), 'Must NOT render old hardcoded $10 when config is $5');
+  });
+
+  check('FunnelPage and FunnelStepper handle error/fallback safely without crashing or leaking old values', () => {
+    const html = renderToString(React.createElement(FunnelPage, {
+      dataPayload: mockDataPayload,
+      screenerConfig: null,
+      configLoading: false,
+      configError: true,
+    }));
+
+    assert.ok(html.includes('funnel-stage2-desc'), 'Must render funnel-stage2-desc ID even on error');
+    assert.ok(html.includes('Harga &gt;= -') || html.includes('Harga >= -'), 'Must render fallback - in HTML');
+    assert.ok(!html.includes('Harga &gt;= $10') && !html.includes('Harga >= $10'), 'Must NOT render old hardcoded $10 on error');
   });
 
   console.log('\n================================================================');

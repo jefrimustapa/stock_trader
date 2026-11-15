@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -22,8 +22,62 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import { sneatTokens } from '../theme';
 import { FunnelStepper } from '../components/FunnelStepper';
+import { getStage0Detail, getStage3Detail } from '../utils/formatters';
 
-export function FunnelPage({ dataPayload }) {
+export function FunnelPage({ dataPayload, screenerConfig, configLoading, configError }) {
+  const [localConfig, setLocalConfig] = useState(
+    screenerConfig || dataPayload?.screenerConfig || null
+  );
+  const [loading, setLoading] = useState(
+    screenerConfig !== undefined
+      ? Boolean(configLoading)
+      : (dataPayload?.screenerConfig ? false : true)
+  );
+  const [error, setError] = useState(Boolean(configError));
+
+  useEffect(() => {
+    if (screenerConfig !== undefined) {
+      setLocalConfig(screenerConfig);
+      setLoading(Boolean(configLoading));
+      setError(Boolean(configError));
+      return;
+    }
+    if (dataPayload?.screenerConfig) {
+      setLocalConfig(dataPayload.screenerConfig);
+      setLoading(false);
+      setError(false);
+      return;
+    }
+    let isMounted = true;
+    async function fetchConfig() {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/screener/config');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (isMounted) {
+          setLocalConfig(data?.config || null);
+          setError(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(true);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+    fetchConfig();
+    return () => {
+      isMounted = false;
+    };
+  }, [screenerConfig, configLoading, configError, dataPayload?.screenerConfig]);
+
+  const activeConfig = screenerConfig !== undefined ? screenerConfig : (localConfig || dataPayload?.screenerConfig);
+  const status = loading ? 'loading' : (error || !activeConfig ? 'error' : 'ready');
+
   const watchlist = dataPayload?.watchlist || {};
   const funnel = watchlist.funnel || {};
 
@@ -51,7 +105,7 @@ export function FunnelPage({ dataPayload }) {
       icon: <VerifiedUserIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.info.main,
       bg: sneatTokens.info.soft,
-      desc: 'Penyingkiran saham sen, modal terhad, dan volum nipis (Harga >= $10, Nilai Pasaran >= $1B, ADV >= 1M).',
+      desc: getStage0Detail(activeConfig, status),
       badge: 'Penapis Asas',
     },
     {
@@ -60,7 +114,7 @@ export function FunnelPage({ dataPayload }) {
       icon: <AltRouteIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.warning.main,
       bg: sneatTokens.warning.soft,
-      desc: 'Pengasingan berasaskan logik kuantitatif: Momentum (trend agresif & RVOL tinggi) atau Setup (konsolidasi rapi & hampiran 52W).',
+      desc: getStage3Detail(activeConfig, status),
       badge: 'RS vs SPY',
     },
     {
@@ -146,7 +200,12 @@ export function FunnelPage({ dataPayload }) {
       </Box>
 
       {/* Funnel Stepper Component */}
-      <FunnelStepper dataPayload={dataPayload} />
+      <FunnelStepper
+        dataPayload={dataPayload}
+        screenerConfig={activeConfig}
+        configLoading={loading}
+        configError={error}
+      />
 
       {/* Funnel Stage Criteria Details Card */}
       <Card
@@ -204,6 +263,7 @@ export function FunnelPage({ dataPayload }) {
             {criteriaCards.map((c) => (
               <Grid item xs={12} sm={6} md={2.4} key={c.stage}>
                 <Paper
+                  id={c.stage === 'STAGE 2' ? 'card-criteria-stage2' : undefined}
                   elevation={0}
                   sx={{
                     p: 2,
@@ -244,6 +304,8 @@ export function FunnelPage({ dataPayload }) {
                     </Typography>
 
                     <Typography
+                      id={c.stage === 'STAGE 2' ? 'criteria-stage2-desc' : undefined}
+                      data-testid={c.stage === 'STAGE 2' ? 'criteria-stage2-desc' : undefined}
                       variant="body2"
                       sx={{
                         color: 'text.secondary',

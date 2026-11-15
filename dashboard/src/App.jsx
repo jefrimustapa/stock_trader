@@ -25,6 +25,9 @@ export function App() {
   const [currentPage, setCurrentPage] = useState(getPageFromHash);
   const [statusData, setStatusData] = useState(null);
   const [dataPayload, setDataPayload] = useState(null);
+  const [screenerConfig, setScreenerConfig] = useState(null);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const toggleMode = () => {
@@ -59,9 +62,10 @@ export function App() {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [statusRes, dataRes] = await Promise.all([
-        fetch('/api/status'),
-        fetch('/api/data'),
+      const [statusRes, dataRes, configRes] = await Promise.all([
+        fetch('/api/status').catch((e) => ({ ok: false, err: e })),
+        fetch('/api/data').catch((e) => ({ ok: false, err: e })),
+        fetch('/api/screener/config').catch((e) => ({ ok: false, err: e })),
       ]);
 
       if (statusRes.ok) {
@@ -72,10 +76,20 @@ export function App() {
         const dJson = await dataRes.json();
         setDataPayload(dJson);
       }
+      if (configRes.ok) {
+        const cJson = await configRes.json();
+        if (cJson.config) {
+          setScreenerConfig(cJson.config);
+          setConfigError(false);
+        }
+      } else if (configRes.status >= 400 || configRes.err) {
+        setConfigError(true);
+      }
     } catch (err) {
       console.warn('[Dashboard] Data fetch error:', err);
     } finally {
       setLoading(false);
+      setConfigLoading(false);
     }
   }, []);
 
@@ -85,6 +99,16 @@ export function App() {
     return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
+  useEffect(() => {
+    const handleConfigUpdate = () => {
+      fetchDashboardData();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('screener-config-updated', handleConfigUpdate);
+      return () => window.removeEventListener('screener-config-updated', handleConfigUpdate);
+    }
+  }, [fetchDashboardData]);
+
   const user = statusData?.user || dataPayload?.user || 'jefri';
 
   const renderCurrentPage = () => {
@@ -92,7 +116,14 @@ export function App() {
       case 'opend':
         return <OpendPage statusData={statusData} onRefresh={fetchDashboardData} />;
       case 'funnel':
-        return <FunnelPage dataPayload={dataPayload} />;
+        return (
+          <FunnelPage
+            dataPayload={dataPayload}
+            screenerConfig={screenerConfig}
+            configLoading={configLoading}
+            configError={configError}
+          />
+        );
       case 'watchlist':
         return <WatchlistPage dataPayload={dataPayload} />;
       case 'settings':

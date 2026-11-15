@@ -339,6 +339,85 @@ async function runPlaywrightSuite() {
     assertCheck('Desktop Settings: Page loaded in desktop view', (await desktopSettingsTitle.count()) >= 1);
     await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '07_desktop_settings.png'), fullPage: true });
 
+    // -------------------------------------------------------------
+    // Test Scenario C: Dynamic Funnel Screener Active Config Acceptance (HOM-205)
+    // -------------------------------------------------------------
+    console.log('\n--- Scenario C: Dynamic Funnel Active Config Verification (HOM-205) ---');
+
+    // 1. Desktop Funnel with active config $5.00 (from Scenario A.7 save)
+    await desktopPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(500);
+
+    const funnelStage2Stepper = desktopPage.locator('#funnel-stage2-desc');
+    assertCheck('HOM-205 Funnel Stepper: #funnel-stage2-desc element rendered', (await funnelStage2Stepper.count()) === 1);
+
+    const stepperText5 = await funnelStage2Stepper.innerText();
+    assertCheck('HOM-205 User Acceptance: Funnel Stepper Stage 2 displays active "Harga >= $5"', stepperText5.includes('Harga >= $5') && !stepperText5.includes('Harga >= $10'));
+
+    const criteriaStage2 = desktopPage.locator('#criteria-stage2-desc');
+    assertCheck('HOM-205 Criteria Card: #criteria-stage2-desc element rendered', (await criteriaStage2.count()) === 1);
+
+    const criteriaText5 = await criteriaStage2.innerText();
+    assertCheck('HOM-205 User Acceptance: Criteria Stage 2 displays active "Harga >= $5"', criteriaText5.includes('Harga >= $5') && !criteriaText5.includes('Harga >= $10'));
+
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '08_after_desktop_funnel_5usd.png'), fullPage: true });
+
+    // 2. Mobile Funnel with active config $5.00
+    const mobileFunnelContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    await mobileFunnelContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+    const mobileFunnelPage = await mobileFunnelContext.newPage();
+    await mobileFunnelPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await mobileFunnelPage.waitForTimeout(500);
+
+    const mobileStepperText5 = await mobileFunnelPage.locator('#funnel-stage2-desc').innerText();
+    assertCheck('HOM-205 Mobile Acceptance: Funnel Stepper displays "Harga >= $5" on mobile', mobileStepperText5.includes('Harga >= $5'));
+    await mobileFunnelPage.screenshot({ path: path.join(SCREENSHOT_DIR, '09_after_mobile_funnel_5usd.png'), fullPage: true });
+    await mobileFunnelContext.close();
+
+    // 3. BVA Test: Boundary min_price $1.00
+    console.log('\n--- Scenario C.2: BVA Hard Safety Floor ($1.00) Funnel Dynamic Update ---');
+    await desktopPage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(400);
+
+    const desktopMinPriceInput = desktopPage.locator('#inputMinPrice');
+    await desktopMinPriceInput.fill('1.00');
+    await desktopPage.waitForTimeout(200);
+    const desktopSaveBtn = desktopPage.locator('#btnSaveConfig');
+    await desktopSaveBtn.click();
+    await desktopPage.waitForTimeout(500);
+
+    await desktopPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(500);
+
+    const stepperText1 = await desktopPage.locator('#funnel-stage2-desc').innerText();
+    assertCheck('HOM-205 BVA Acceptance: Funnel Stepper updates to exact boundary "Harga >= $1"', stepperText1.includes('Harga >= $1'));
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '10_desktop_funnel_bva_1usd.png'), fullPage: true });
+
+    // 4. Clean Reset: Revert back to $10.00 default
+    console.log('\n--- Scenario C.3: Clean Reset to $10.00 Default ---');
+    await desktopPage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(400);
+    await desktopMinPriceInput.fill('10.00');
+    await desktopPage.waitForTimeout(200);
+    await desktopSaveBtn.click();
+    await desktopPage.waitForTimeout(500);
+
+    await desktopPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(500);
+
+    const stepperText10 = await desktopPage.locator('#funnel-stage2-desc').innerText();
+    assertCheck('HOM-205 Reset Acceptance: Funnel cleanly returns to default "Harga >= $10"', stepperText10.includes('Harga >= $10'));
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '11_desktop_funnel_reverted_10usd.png'), fullPage: true });
+
     await desktopContext.close();
 
   } finally {

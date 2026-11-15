@@ -224,6 +224,10 @@ export function SettingsPage() {
         setSuccessMsg('Tetapan screener berjaya dikemas kini! Kitaran seterusnya akan menggunakan parameter ini secara dinamik.');
         setErrors({});
 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('screener-config-updated', { detail: data.config }));
+        }
+
         // Refresh audit log
         const auditRes = await fetch('/api/screener/config/audit');
         if (auditRes.ok) {

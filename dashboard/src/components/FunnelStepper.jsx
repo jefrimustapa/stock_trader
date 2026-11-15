@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -17,8 +17,62 @@ import AltRouteIcon from '@mui/icons-material/AltRoute';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { sneatTokens } from '../theme';
+import { getStage0Summary, getStage3Summary } from '../utils/formatters';
 
-export function FunnelStepper({ dataPayload }) {
+export function FunnelStepper({ dataPayload, screenerConfig, configLoading, configError }) {
+  const [localConfig, setLocalConfig] = useState(
+    screenerConfig || dataPayload?.screenerConfig || null
+  );
+  const [loading, setLoading] = useState(
+    screenerConfig !== undefined
+      ? Boolean(configLoading)
+      : (dataPayload?.screenerConfig ? false : true)
+  );
+  const [error, setError] = useState(Boolean(configError));
+
+  useEffect(() => {
+    if (screenerConfig !== undefined) {
+      setLocalConfig(screenerConfig);
+      setLoading(Boolean(configLoading));
+      setError(Boolean(configError));
+      return;
+    }
+    if (dataPayload?.screenerConfig) {
+      setLocalConfig(dataPayload.screenerConfig);
+      setLoading(false);
+      setError(false);
+      return;
+    }
+    let isMounted = true;
+    async function fetchConfig() {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/screener/config');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (isMounted) {
+          setLocalConfig(data?.config || null);
+          setError(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(true);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+    fetchConfig();
+    return () => {
+      isMounted = false;
+    };
+  }, [screenerConfig, configLoading, configError, dataPayload?.screenerConfig]);
+
+  const activeConfig = screenerConfig !== undefined ? screenerConfig : (localConfig || dataPayload?.screenerConfig);
+  const status = loading ? 'loading' : (error || !activeConfig ? 'error' : 'ready');
+
   const watchlist = dataPayload?.watchlist || {};
   const funnel = watchlist.funnel || {};
 
@@ -51,7 +105,7 @@ export function FunnelStepper({ dataPayload }) {
       title: 'Kualiti Stage 0',
       count: stage2Count,
       unit: 'Kaunter',
-      desc: 'Harga >= $10, Cap >= $1B, ADV >= 1M',
+      desc: getStage0Summary(activeConfig, status),
       ratio: stage1Count > 0 ? `${((stage2Count / stage1Count) * 100).toFixed(1)}% Lolos` : '16.7% Lolos',
       color: sneatTokens.info.main,
       bg: sneatTokens.info.soft,
@@ -62,7 +116,7 @@ export function FunnelStepper({ dataPayload }) {
       title: 'Dwi-Lorong',
       count: stage3Count,
       unit: 'Calon',
-      desc: 'Momentum & Setup RS vs SPY',
+      desc: getStage3Summary(activeConfig, status),
       ratio: stage2Count > 0 ? `${((stage3Count / stage2Count) * 100).toFixed(1)}% Dwi-Lorong` : '3.4% Calon',
       color: sneatTokens.warning.main,
       bg: sneatTokens.warning.soft,
@@ -175,6 +229,7 @@ export function FunnelStepper({ dataPayload }) {
             {steps.map((step, idx) => (
               <Grid item xs={12} sm={6} md={2.4} key={step.stage}>
                 <Paper
+                  id={step.stage === 'Peringkat 2' ? 'card-funnel-stage2' : undefined}
                   elevation={0}
                   sx={{
                     p: 2,
@@ -249,6 +304,8 @@ export function FunnelStepper({ dataPayload }) {
                       {step.title}
                     </Typography>
                     <Typography
+                      id={step.stage === 'Peringkat 2' ? 'funnel-stage2-desc' : undefined}
+                      data-testid={step.stage === 'Peringkat 2' ? 'funnel-stage2-desc' : undefined}
                       variant="caption"
                       sx={{
                         color: 'text.secondary',
