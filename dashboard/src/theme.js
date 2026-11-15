@@ -105,6 +105,12 @@ export const getTheme = (mode = 'dark') => {
               backgroundColor: isDark ? '#434360' : '#BAC0CB',
             },
           },
+          'input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active': {
+            WebkitBoxShadow: isDark ? '0 0 0 1000px #2B2C40 inset !important' : '0 0 0 1000px #FFFFFF inset !important',
+            WebkitTextFillColor: isDark ? 'rgba(231, 231, 255, 0.90) !important' : '#566A7F !important',
+            caretColor: isDark ? '#FFFFFF' : '#566A7F',
+            transition: 'background-color 5000s ease-in-out 0s',
+          },
         },
       },
       MuiPaper: {
@@ -161,6 +167,27 @@ export const getTheme = (mode = 'dark') => {
         styleOverrides: {
           root: {
             borderRadius: 8,
+          },
+          input: {
+            '&:-webkit-autofill': {
+              WebkitBoxShadow: isDark ? '0 0 0 1000px #2B2C40 inset !important' : '0 0 0 1000px #FFFFFF inset !important',
+              WebkitTextFillColor: isDark ? 'rgba(231, 231, 255, 0.90) !important' : '#566A7F !important',
+              caretColor: isDark ? '#FFFFFF' : '#566A7F',
+              borderRadius: 'inherit',
+              transition: 'background-color 5000s ease-in-out 0s',
+            },
+            '&:-webkit-autofill:hover': {
+              WebkitBoxShadow: isDark ? '0 0 0 1000px #2B2C40 inset !important' : '0 0 0 1000px #FFFFFF inset !important',
+              WebkitTextFillColor: isDark ? 'rgba(231, 231, 255, 0.90) !important' : '#566A7F !important',
+            },
+            '&:-webkit-autofill:focus': {
+              WebkitBoxShadow: isDark ? '0 0 0 1000px #2B2C40 inset !important' : '0 0 0 1000px #FFFFFF inset !important',
+              WebkitTextFillColor: isDark ? 'rgba(231, 231, 255, 0.90) !important' : '#566A7F !important',
+            },
+            '&:-webkit-autofill:active': {
+              WebkitBoxShadow: isDark ? '0 0 0 1000px #2B2C40 inset !important' : '0 0 0 1000px #FFFFFF inset !important',
+              WebkitTextFillColor: isDark ? 'rgba(231, 231, 255, 0.90) !important' : '#566A7F !important',
+            },
           },
         },
       },

@@ -19,11 +19,15 @@ import {
   Alert,
   CircularProgress,
   Divider,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import LoginIcon from '@mui/icons-material/Login';
 import KeyIcon from '@mui/icons-material/Key';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { sneatTokens } from '../theme';
 
 export function OpendControlPanel({ statusData, onRefresh }) {
@@ -44,6 +48,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   // Sign in form state
   const [loginAcc, setLoginAcc] = useState('');
   const [loginPwd, setLoginPwd] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signInMessage, setSignInMessage] = useState(null);
 
@@ -134,7 +139,10 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   // Handle Moomoo Sign-In
   const handleOpenDSignIn = async (e) => {
     if (e) e.preventDefault();
-    if (!loginAcc || !loginPwd) {
+    const effectiveAcc = (loginAcc || document.getElementById('loginAccInput')?.value || '').trim();
+    const effectivePwd = loginPwd || document.getElementById('loginPwdInput')?.value || '';
+
+    if (!effectiveAcc || !effectivePwd) {
       setSignInMessage({ type: 'error', text: 'Sila lengkapkan Account ID dan kata laluan.' });
       return;
     }
@@ -144,11 +152,13 @@ export function OpendControlPanel({ statusData, onRefresh }) {
       const resp = await fetch('/api/opend/sign-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ login_account: loginAcc, password: loginPwd }),
+        body: JSON.stringify({ login_account: effectiveAcc, password: effectivePwd }),
       });
       const data = await resp.json();
       if (resp.ok) {
         setLoginPwd('');
+        const pwdInputEl = document.getElementById('loginPwdInput');
+        if (pwdInputEl) pwdInputEl.value = '';
         if (data.status === 'WAIT_OTP') {
           setSignInMessage({ type: 'warning', text: 'Kredensial disahkan! Kod OTP 2FA diperlukan.' });
           setOpenOtpDialog(true);
@@ -314,27 +324,52 @@ export function OpendControlPanel({ statusData, onRefresh }) {
               <Box component="form" onSubmit={handleOpenDSignIn} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <TextField
                   id="loginAccInput"
+                  name="username"
                   label="Moomoo Account ID / Emel"
                   variant="outlined"
                   size="small"
                   fullWidth
+                  autoComplete="username"
                   value={loginAcc}
                   onChange={(e) => setLoginAcc(e.target.value)}
                   placeholder="cth. 12345678"
                   required
+                  inputProps={{
+                    autoComplete: 'username',
+                  }}
                 />
 
                 <TextField
                   id="loginPwdInput"
+                  name="password"
                   label="Kata Laluan Moomoo"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   variant="outlined"
                   size="small"
                   fullWidth
+                  autoComplete="current-password"
                   value={loginPwd}
                   onChange={(e) => setLoginPwd(e.target.value)}
                   placeholder="Kata laluan akaun"
                   required
+                  inputProps={{
+                    autoComplete: 'current-password',
+                  }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label="papar atau sembunyikan kata laluan"
+                          onClick={() => setShowPassword(!showPassword)}
+                          edge="end"
+                          size="small"
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
                 />
 
                 <Button
