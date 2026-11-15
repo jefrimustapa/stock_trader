@@ -18,6 +18,7 @@ import {
   DialogActions,
   Alert,
   CircularProgress,
+  Divider,
 } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
