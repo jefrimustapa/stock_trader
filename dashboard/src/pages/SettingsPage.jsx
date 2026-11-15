@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
-  Paper,
   Grid,
   TextField,
   Button,
@@ -11,16 +10,8 @@ import {
   CircularProgress,
   Divider,
   InputAdornment,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Card,
   CardContent,
-  Stack,
-  Tooltip,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
@@ -30,6 +21,11 @@ import StorageIcon from '@mui/icons-material/Storage';
 import SecurityIcon from '@mui/icons-material/Security';
 import HistoryIcon from '@mui/icons-material/History';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import TuneIcon from '@mui/icons-material/Tune';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import SpeedIcon from '@mui/icons-material/Speed';
 import { sneatTokens } from '../theme';
 
 const DEFAULT_CONFIG = {
@@ -279,10 +275,23 @@ export function SettingsPage() {
               fontSize: { xs: '1.2rem', sm: '1.4rem' },
               display: 'flex',
               alignItems: 'center',
-              gap: 1,
+              gap: 1.25,
             }}
           >
-            <SettingsIcon sx={{ color: sneatTokens.primary.main }} />
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: '8px',
+                backgroundColor: sneatTokens.primary.soft,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: sneatTokens.primary.main,
+              }}
+            >
+              <TuneIcon sx={{ fontSize: 22 }} />
+            </Box>
             Tetapan Parameter Screener L0
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
@@ -299,6 +308,7 @@ export function SettingsPage() {
               fontWeight: 700,
               backgroundColor: sneatTokens.success.soft,
               color: sneatTokens.success.main,
+              borderRadius: 1.5,
             }}
           />
           <Chip
@@ -309,6 +319,7 @@ export function SettingsPage() {
               fontWeight: 700,
               backgroundColor: sneatTokens.primary.soft,
               color: sneatTokens.primary.main,
+              borderRadius: 1.5,
             }}
           />
         </Box>
@@ -321,7 +332,12 @@ export function SettingsPage() {
           severity="success"
           icon={<CheckCircleOutlineIcon fontSize="inherit" />}
           onClose={() => setSuccessMsg('')}
-          sx={{ borderRadius: 2 }}
+          sx={{
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: sneatTokens.success.main,
+            fontWeight: 500,
+          }}
         >
           {successMsg}
         </Alert>
@@ -332,7 +348,12 @@ export function SettingsPage() {
           id="configAlertError"
           severity="error"
           onClose={() => setErrorMsg('')}
-          sx={{ borderRadius: 2 }}
+          sx={{
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: sneatTokens.error.main,
+            fontWeight: 500,
+          }}
         >
           {errorMsg}
         </Alert>
@@ -344,32 +365,45 @@ export function SettingsPage() {
         </Box>
       ) : (
         <Grid container spacing={2.5}>
-          {/* Main Form Column */}
-          <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: { xs: 2, sm: 3 },
-                borderRadius: 2.5,
-                border: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
-                  Konfigurasi Parameter Pasaran US
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  Per-cycle hot read (sifar restart kontena)
-                </Typography>
-              </Box>
+          {/* Main Form Column (Left - 7.5 col) */}
+          <Grid item xs={12} md={7} lg={7.5}>
+            <Box component="form" onSubmit={handleSave} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* 1. Min Price Section Card */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+                      <Box
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: '8px',
+                          backgroundColor: sneatTokens.primary.soft,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: sneatTokens.primary.main,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <AttachMoneyIcon sx={{ fontSize: 22 }} />
+                      </Box>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.875rem', sm: '0.95rem' }, lineHeight: 1.3 }}>
+                          1. Harga Minimum Saham (Min Price)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25, fontSize: { xs: '0.72rem', sm: '0.75rem' } }}>
+                          Had keselamatan tegar mandatori &gt;= $1.00 (saham penny disekat)
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={`Semasa: $${Number(config.min_price || 0).toFixed(2)}`}
+                      sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
+                    />
+                  </Box>
 
-              <Box component="form" onSubmit={handleSave} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {/* 1. Min Price */}
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    1. Harga Minimum Saham (Min Price)
-                  </Typography>
                   <TextField
                     id="inputMinPrice"
                     fullWidth
@@ -380,12 +414,13 @@ export function SettingsPage() {
                     error={Boolean(errors.min_price)}
                     helperText={errors.min_price || 'Had keselamatan tegar: Mandatori >= $1.00. Input < $1.00 ditolak serta-merta.'}
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                      startAdornment: <InputAdornment position="start" sx={{ color: 'text.secondary', fontWeight: 600 }}>$</InputAdornment>,
                       inputProps: { min: 1.0, max: 10000.0, step: 0.5 },
                     }}
                   />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', alignSelf: 'center', mr: 0.5 }}>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
                       Pilihan Pantas:
                     </Typography>
                     {[1.0, 3.0, 5.0, 10.0].map((p) => (
@@ -398,19 +433,49 @@ export function SettingsPage() {
                         color={Number(config.min_price) === p ? 'primary' : 'default'}
                         variant={Number(config.min_price) === p ? 'filled' : 'outlined'}
                         onClick={() => handlePresetPrice(p)}
-                        sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, borderRadius: 1.5 }}
                       />
                     ))}
-                  </Stack>
-                </Box>
+                  </Box>
+                </CardContent>
+              </Card>
 
-                <Divider />
+              {/* 2. Min Market Cap Section Card */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+                      <Box
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: '8px',
+                          backgroundColor: sneatTokens.info.soft,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: sneatTokens.info.main,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <AccountBalanceIcon sx={{ fontSize: 22 }} />
+                      </Box>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.875rem', sm: '0.95rem' }, lineHeight: 1.3 }}>
+                          2. Modal Pasaran Minimum (Min Market Cap)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25, fontSize: { xs: '0.72rem', sm: '0.75rem' } }}>
+                          Menapis syarikat mengikut saiz permodalan pasaran institusi
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={`Format: ${formatCurrency(config.min_market_cap)}`}
+                      sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
+                    />
+                  </Box>
 
-                {/* 2. Min Market Cap */}
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    2. Modal Pasaran Minimum (Min Market Cap)
-                  </Typography>
                   <TextField
                     id="inputMinMarketCap"
                     fullWidth
@@ -421,12 +486,13 @@ export function SettingsPage() {
                     error={Boolean(errors.min_market_cap)}
                     helperText={errors.min_market_cap || `Nilai Semasa: ${formatCurrency(config.min_market_cap)}. Julat sah: $10M hingga $10T.`}
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                      startAdornment: <InputAdornment position="start" sx={{ color: 'text.secondary', fontWeight: 600 }}>$</InputAdornment>,
                       inputProps: { min: 10000000.0, max: 10000000000000.0, step: 100000000 },
                     }}
                   />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', alignSelf: 'center', mr: 0.5 }}>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
                       Pilihan Pantas:
                     </Typography>
                     {[
@@ -444,19 +510,49 @@ export function SettingsPage() {
                         color={Number(config.min_market_cap) === c.val ? 'primary' : 'default'}
                         variant={Number(config.min_market_cap) === c.val ? 'filled' : 'outlined'}
                         onClick={() => handlePresetCap(c.val)}
-                        sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, borderRadius: 1.5 }}
                       />
                     ))}
-                  </Stack>
-                </Box>
+                  </Box>
+                </CardContent>
+              </Card>
 
-                <Divider />
+              {/* 3. Min Volume ADV20 Section Card */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+                      <Box
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: '8px',
+                          backgroundColor: sneatTokens.warning.soft,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: sneatTokens.warning.main,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <BarChartIcon sx={{ fontSize: 22 }} />
+                      </Box>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.875rem', sm: '0.95rem' }, lineHeight: 1.3 }}>
+                          3. Purata Volum Harian 20-Hari (ADV20)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25, fontSize: { xs: '0.72rem', sm: '0.75rem' } }}>
+                          Kecairan pasaran mencukupi untuk elak slippage pelaksanaan
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={`Semasa: ${Number(config.min_volume || 0).toLocaleString()} unit`}
+                      sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
+                    />
+                  </Box>
 
-                {/* 3. Min Volume ADV20 */}
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    3. Purata Volum Harian 20-Hari (ADV20)
-                  </Typography>
                   <TextField
                     id="inputMinVolume"
                     fullWidth
@@ -467,11 +563,13 @@ export function SettingsPage() {
                     error={Boolean(errors.min_volume)}
                     helperText={errors.min_volume || `Nilai Semasa: ${Number(config.min_volume || 0).toLocaleString()} saham. Julat sah: 50,000 hingga 1B.`}
                     InputProps={{
+                      endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>saham</InputAdornment>,
                       inputProps: { min: 50000.0, max: 1000000000.0, step: 50000 },
                     }}
                   />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', alignSelf: 'center', mr: 0.5 }}>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
                       Pilihan Pantas:
                     </Typography>
                     {[
@@ -489,21 +587,51 @@ export function SettingsPage() {
                         color={Number(config.min_volume) === v.val ? 'primary' : 'default'}
                         variant={Number(config.min_volume) === v.val ? 'filled' : 'outlined'}
                         onClick={() => handlePresetVol(v.val)}
-                        sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, borderRadius: 1.5 }}
                       />
                     ))}
-                  </Stack>
-                </Box>
+                  </Box>
+                </CardContent>
+              </Card>
 
-                <Divider />
+              {/* 4. Relative Volume Range (RVOL) Section Card */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+                      <Box
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: '8px',
+                          backgroundColor: sneatTokens.secondary.soft,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: sneatTokens.secondary.main,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <SpeedIcon sx={{ fontSize: 22 }} />
+                      </Box>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.875rem', sm: '0.95rem' }, lineHeight: 1.3 }}>
+                          4. Julat Nisbah Volum Relatif (Relative Volume / RVOL)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25, fontSize: { xs: '0.72rem', sm: '0.75rem' } }}>
+                          Nisbah volum aktif berbanding purata historikal saham
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={`Julat: ${config.min_rvol}x - ${config.max_rvol}x`}
+                      sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
+                    />
+                  </Box>
 
-                {/* 4. Relative Volume Range */}
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    4. Julat Nisbah Volum Relatif (Relative Volume / RVOL)
-                  </Typography>
                   <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid item xs={12} sm={6}>
                       <TextField
                         id="inputMinRvol"
                         fullWidth
@@ -515,11 +643,12 @@ export function SettingsPage() {
                         error={Boolean(errors.min_rvol || errors.rvol_cross)}
                         helperText={errors.min_rvol || errors.rvol_cross || 'Had minimum RVOL (>= 0.0)'}
                         InputProps={{
+                          endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>x</InputAdornment>,
                           inputProps: { min: 0.0, max: 50.0, step: 0.1 },
                         }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}>
+                    <Grid item xs={12} sm={6}>
                       <TextField
                         id="inputMaxRvol"
                         fullWidth
@@ -531,14 +660,15 @@ export function SettingsPage() {
                         error={Boolean(errors.max_rvol || errors.rvol_cross)}
                         helperText={errors.max_rvol || 'Had maksimum RVOL (<= 100.0)'}
                         InputProps={{
+                          endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>x</InputAdornment>,
                           inputProps: { min: 0.1, max: 100.0, step: 0.5 },
                         }}
                       />
                     </Grid>
                   </Grid>
 
-                  <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', alignSelf: 'center', mr: 0.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
                       Preset Mod:
                     </Typography>
                     {[
@@ -553,172 +683,278 @@ export function SettingsPage() {
                         clickable
                         variant="outlined"
                         onClick={() => handlePresetRvol(m.min, m.max)}
-                        sx={{ fontSize: '0.75rem' }}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, borderRadius: 1.5 }}
                       />
                     ))}
-                  </Stack>
-                </Box>
+                  </Box>
+                </CardContent>
+              </Card>
 
-                {/* Form Action Buttons */}
-                <Box sx={{ display: 'flex', gap: 1.5, mt: 1, flexWrap: 'wrap' }}>
-                  <Button
-                    id="btnSaveConfig"
-                    type="submit"
-                    variant="contained"
-                    color="primary"
-                    disabled={saving}
-                    startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-                    sx={{ px: 3, fontWeight: 700 }}
-                  >
-                    {saving ? 'Menyimpan...' : 'Simpan Tetapan'}
-                  </Button>
-                  <Button
-                    id="btnResetDefaults"
-                    type="button"
-                    variant="outlined"
-                    color="secondary"
-                    disabled={saving}
-                    startIcon={<RestartAltIcon />}
-                    onClick={handleResetDefaults}
-                    sx={{ fontWeight: 600 }}
-                  >
-                    Set Semula Lalai
-                  </Button>
-                </Box>
-              </Box>
-            </Paper>
+              {/* Form Action Controls Card */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, backgroundColor: 'background.paper' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+                    <Button
+                      id="btnSaveConfig"
+                      type="submit"
+                      variant="contained"
+                      color="primary"
+                      disabled={saving}
+                      startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                      sx={{
+                        flex: { xs: '1 1 100%', sm: 'none' },
+                        px: 3.5,
+                        py: 1.1,
+                        fontWeight: 700,
+                        borderRadius: 2,
+                        boxShadow: '0 4px 12px 0 rgba(105, 108, 255, 0.4)',
+                        '&:hover': {
+                          boxShadow: '0 6px 16px 0 rgba(105, 108, 255, 0.5)',
+                        },
+                      }}
+                    >
+                      {saving ? 'Menyimpan...' : 'Simpan Tetapan'}
+                    </Button>
+                    <Button
+                      id="btnResetDefaults"
+                      type="button"
+                      variant="outlined"
+                      color="secondary"
+                      disabled={saving}
+                      startIcon={<RestartAltIcon />}
+                      onClick={handleResetDefaults}
+                      sx={{
+                        flex: { xs: '1 1 100%', sm: 'none' },
+                        px: 2.5,
+                        py: 1.1,
+                        fontWeight: 600,
+                        borderRadius: 2,
+                      }}
+                    >
+                      Set Semula Lalai
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Box>
           </Grid>
 
-          {/* Sidebar / Info Column */}
-          <Grid size={{ xs: 12, md: 5, lg: 4 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          {/* Sidebar / Info Column (Right - 4.5 col) */}
+          <Grid item xs={12} md={5} lg={4.5}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* Status Summary Card */}
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5,
-                  borderRadius: 2.5,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <InfoOutlinedIcon sx={{ color: sneatTokens.primary.main, fontSize: 20 }} />
-                  Status Konfigurasi Semasa
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, fontSize: '0.85rem' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Harga Min:</Typography>
-                    <Typography id="displayMinPrice" variant="body2" sx={{ fontWeight: 700 }}>
-                      ${Number(originalConfig.min_price).toFixed(2)}
-                    </Typography>
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                    <Box
+                      sx={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '8px',
+                        backgroundColor: sneatTokens.primary.soft,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: sneatTokens.primary.main,
+                      }}
+                    >
+                      <InfoOutlinedIcon sx={{ fontSize: 22 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                        Status Konfigurasi Semasa
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                        Parameter screener yang sedang beroperasi di L0
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Market Cap Min:</Typography>
-                    <Typography id="displayMinMarketCap" variant="body2" sx={{ fontWeight: 700 }}>
-                      {formatCurrency(originalConfig.min_market_cap)}
-                    </Typography>
+
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        backgroundColor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                        Harga Min:
+                      </Typography>
+                      <Typography id="displayMinPrice" variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                        ${Number(originalConfig.min_price).toFixed(2)}
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        backgroundColor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                        Market Cap Min:
+                      </Typography>
+                      <Typography id="displayMinMarketCap" variant="body2" sx={{ fontWeight: 700 }}>
+                        {formatCurrency(originalConfig.min_market_cap)}
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        backgroundColor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                        ADV20 Min:
+                      </Typography>
+                      <Typography id="displayMinVolume" variant="body2" sx={{ fontWeight: 700 }}>
+                        {Number(originalConfig.min_volume).toLocaleString()} unit
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        backgroundColor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                        Julat RVOL:
+                      </Typography>
+                      <Typography id="displayRvolRange" variant="body2" sx={{ fontWeight: 700 }}>
+                        {originalConfig.min_rvol} - {originalConfig.max_rvol}
+                      </Typography>
+                    </Box>
+
+                    <Divider sx={{ my: 0.5 }} />
+
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Kemas Kini Terakhir:</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                        {formatTimestamp(updatedAt)}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Dikemas kini Oleh:</Typography>
+                      <Chip
+                        size="small"
+                        label={updatedBy || 'system'}
+                        sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, backgroundColor: sneatTokens.primary.soft, color: sneatTokens.primary.main, borderRadius: 1 }}
+                      />
+                    </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>ADV20 Min:</Typography>
-                    <Typography id="displayMinVolume" variant="body2" sx={{ fontWeight: 700 }}>
-                      {Number(originalConfig.min_volume).toLocaleString()} unit
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Julat RVOL:</Typography>
-                    <Typography id="displayRvolRange" variant="body2" sx={{ fontWeight: 700 }}>
-                      {originalConfig.min_rvol} - {originalConfig.max_rvol}
-                    </Typography>
-                  </Box>
-                  <Divider sx={{ my: 0.5 }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>Kemas Kini Terakhir:</Typography>
-                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                      {formatTimestamp(updatedAt)}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>Dikemas kini Oleh:</Typography>
-                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                      {updatedBy || 'system'}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Paper>
+                </CardContent>
+              </Card>
 
               {/* Hard Bounds Notice */}
-              <Paper
-                elevation={0}
+              <Card
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2.5,
                   border: '1px solid',
-                  borderColor: sneatTokens.warning.soft,
+                  borderColor: sneatTokens.warning.main,
+                  borderRadius: 2.5,
                   backgroundColor: sneatTokens.warning.soft,
                 }}
               >
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.warning.main, mb: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <SecurityIcon sx={{ fontSize: 18 }} />
-                  Had Keselamatan Mandatori
-                </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.primary', lineHeight: 1.5 }}>
-                  Berdasarkan piawaian perlindungan modal institutional, harga minimum saringan disekat daripada sebarang nilai di bawah <strong>$1.00</strong>. Sebarang cubaan menetapkan harga &lt; $1.00 akan disekat oleh backend validation.
-                </Typography>
-              </Paper>
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
+                    <SecurityIcon sx={{ color: sneatTokens.warning.main, fontSize: 22 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.warning.main }}>
+                      Had Keselamatan Mandatori ($1.00)
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
+                    Berdasarkan piawaian perlindungan modal institutional, harga minimum saringan disekat daripada sebarang nilai di bawah <strong>$1.00</strong>. Sebarang cubaan menetapkan harga &lt; $1.00 akan disekat serta-merta oleh backend validation.
+                  </Typography>
+                </CardContent>
+              </Card>
 
               {/* Audit History Card */}
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5,
-                  borderRadius: 2.5,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <HistoryIcon sx={{ color: sneatTokens.secondary.main, fontSize: 20 }} />
-                  Log Audit Perubahan
-                </Typography>
-                {auditLogs.length === 0 ? (
-                  <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
-                    Tiada sejarah perubahan direkodkan setakat ini.
-                  </Typography>
-                ) : (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxHeight: 260, overflowY: 'auto' }}>
-                    {auditLogs.slice(0, 8).map((log) => {
-                      let parsedNew = {};
-                      try {
-                        parsedNew = JSON.parse(log.new_values);
-                      } catch (e) {}
-                      return (
-                        <Box
-                          key={log.id}
-                          sx={{
-                            p: 1.25,
-                            borderRadius: 1.5,
-                            backgroundColor: 'action.hover',
-                            fontSize: '0.75rem',
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                              {log.user}
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              {formatTimestamp(log.timestamp)}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                    <Box
+                      sx={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '8px',
+                        backgroundColor: sneatTokens.secondary.soft,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: sneatTokens.secondary.main,
+                      }}
+                    >
+                      <HistoryIcon sx={{ fontSize: 22 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                        Log Audit Perubahan
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                        Sejarah modifikasi konfigurasi SQLite WAL
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {auditLogs.length === 0 ? (
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
+                      Tiada sejarah perubahan direkodkan setakat ini.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, maxHeight: 280, overflowY: 'auto' }}>
+                      {auditLogs.slice(0, 8).map((log) => {
+                        let parsedNew = {};
+                        try {
+                          parsedNew = JSON.parse(log.new_values);
+                        } catch (e) {}
+                        return (
+                          <Box
+                            key={log.id}
+                            sx={{
+                              p: 1.25,
+                              borderRadius: 1.5,
+                              backgroundColor: 'action.hover',
+                              fontSize: '0.75rem',
+                              borderLeft: '3px solid',
+                              borderColor: sneatTokens.primary.main,
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                                {log.user}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                                {formatTimestamp(log.timestamp)}
+                              </Typography>
+                            </Box>
+                            <Typography variant="caption" sx={{ color: 'text.primary', display: 'block', lineHeight: 1.4 }}>
+                              Harga: ${parsedNew.min_price} | Cap: {formatCurrency(parsedNew.min_market_cap)} | Vol: {Number(parsedNew.min_volume || 0).toLocaleString()} | RVOL: {parsedNew.min_rvol}-{parsedNew.max_rvol}
                             </Typography>
                           </Box>
-                          <Typography variant="caption" sx={{ color: 'text.primary', display: 'block' }}>
-                            Harga: ${parsedNew.min_price} | Cap: {formatCurrency(parsedNew.min_market_cap)} | Vol: {Number(parsedNew.min_volume || 0).toLocaleString()}
-                          </Typography>
-                        </Box>
-                      );
-                    })}
-                  </Box>
-                )}
-              </Paper>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
             </Box>
           </Grid>
         </Grid>

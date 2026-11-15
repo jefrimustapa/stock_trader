@@ -211,6 +211,7 @@ async function runPlaywrightSuite() {
     console.log('\n--- Scenario A.7: Settings Page & Hard Safety Floor Verification ---');
     await mobilePage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
     await mobilePage.waitForTimeout(400);
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_mobile_settings_clean.png'), fullPage: true });
 
     const settingsTitle = mobilePage.locator('text=Tetapan Parameter Screener');
     assertCheck('Mobile Settings: Page header rendered', (await settingsTitle.count()) >= 1);
