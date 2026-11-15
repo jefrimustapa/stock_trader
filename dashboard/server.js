@@ -555,6 +555,17 @@ app.get('/', authenticateDashboard, async (req, res) => {
     }
 
     const isOpendUnavailable = (watchlistData.source === 'OPEND_UNAVAILABLE') || (safeOpendStatus !== 'CONNECTED');
+    const marketStatus = escapeHtml(watchlistData.market_status || 'OPEN');
+    const isMarketLive = watchlistData.is_live !== false;
+    const funnel = watchlistData.funnel || {
+        cloud_raw_returned: watchlistData.total_screened_cloud || 0,
+        stage0_quality_passed: watchlistData.stage1_passed || 0,
+        lane_momentum_candidates: (watchlistData.watchlist || []).filter(s => s.lane === 'MOMENTUM').length,
+        lane_setup_candidates: (watchlistData.watchlist || []).filter(s => s.lane === 'SETUP').length,
+        kline_analyzed_count: (watchlistData.watchlist || []).length,
+        final_watchlist_count: (watchlistData.watchlist || []).length
+    };
+
     const warningMessage = watchlistData.warning || (
         safeOpendStatus === 'CONNECT_ERROR' ? `Ralat sambungan OpenD API: ${escapeHtml(opendErrorMessage || 'Gagal memulakan sesi dagangan rentas rangkaian.')}` :
         safeOpendStatus === 'WAIT_OTP' ? 'OpenD daemon memerlukan kod pengesahan 2FA (OTP SMS/Emel). Sila masukkan kod OTP 4-8 digit pada kotak OTP di bawah untuk melengkapkan sambungan.' :
@@ -572,20 +583,34 @@ app.get('/', authenticateDashboard, async (req, res) => {
         const adv20Millions = (Number(stock.adv_20 || 0) / 1e6).toFixed(1);
         const rsSpy = Number(stock.rs_spy || 0).toFixed(2);
         const rvol15m = Number(stock.rvol_15m || 0).toFixed(2);
+        const lane = escapeHtml(stock.lane || 'MOMENTUM');
+        const laneScore = Number(stock.lane_score != null ? stock.lane_score : 80.0).toFixed(1);
         const status = escapeHtml(stock.status || 'READY');
+
+        const laneBadge = lane === 'SETUP'
+            ? `<span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid #fbbf24;">SETUP</span>`
+            : `<span class="badge" style="background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid #c084fc;">MOMENTUM</span>`;
+
+        let metricsDetail = '';
+        if (stock.setup_metrics) {
+            const dist = Number(stock.setup_metrics.dist_to_52w_high_pct || 0).toFixed(1);
+            metricsDetail = `<div style="font-size: 11px; color: #94a3b8;">52W: -${dist}%</div>`;
+        }
 
         return `
         <tr>
             <td style="font-weight: bold; color: #38bdf8;">${symbol}</td>
             <td>${name}</td>
+            <td>${laneBadge}</td>
+            <td style="font-weight: bold; color: #e2e8f0;">${laneScore}</td>
             <td>$${price}</td>
             <td style="color: ${changePct >= 0 ? '#4ade80' : '#f87171'}">${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%</td>
             <td>${adv20Millions}M</td>
-            <td style="color: #4ade80;">+${rsSpy}%</td>
+            <td style="color: ${rsSpy >= 0 ? '#4ade80' : '#f87171'}">${rsSpy >= 0 ? '+' : ''}${rsSpy}%</td>
             <td>${rvol15m}x</td>
-            <td><span class="badge badge-ready">${status}</span></td>
+            <td><span class="badge badge-ready">${status}</span>${metricsDetail}</td>
         </tr>`;
-    }).join('') || `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">${isOpendUnavailable ? 'Tiada data kaunter (OpenD belum sah / fail-closed aktif)' : 'No stocks currently in watchlist.'}</td></tr>`;
+    }).join('') || `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 20px;">${isOpendUnavailable ? 'Tiada data kaunter (OpenD belum sah / fail-closed aktif)' : 'No stocks currently in watchlist.'}</td></tr>`;
 
     const accountOptions = (availableAccounts.length > 0 ? availableAccounts : [
         { account_id: safeAccountId !== 'N/A' ? safeAccountId : '1001', sim_acc_type: 'Paper Trading 1 (US Equities)' },
@@ -762,18 +787,59 @@ app.get('/', authenticateDashboard, async (req, res) => {
             <div id="otpResult" style="margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
         </div>
 
-        <h2 style="font-size: 18px; margin-bottom: 12px;">Active Watchlist (Stage 1 & 2 Screens)</h2>
+        ${(!isMarketLive || marketStatus === 'CLOSED') ? `
+        <div style="background-color: #78350f; border: 1px solid #f59e0b; color: #fef3c7; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 20px;">⚠️</div>
+            <div>
+                <strong>Sesi Pasaran US Ditutup (${marketStatus}):</strong> Screener beroperasi menyaring calon Lorong SETUP untuk persediaan sesi seterusnya. Di bawah Hard Rule 6, sebarang pesanan dagangan baharu disekat secara automatik sehingga sesi pasaran New York dibuka semula.
+            </div>
+        </div>` : ''}
+
+        <div class="card" style="margin-bottom: 24px;">
+            <h3>Funnel Saringan Pasaran (5-Peringkat Bertingkat)</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px;">
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">1. Cloud Universe</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--accent); margin-top: 4px;">${funnel.cloud_raw_returned}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Pecahan Awan (0 K-line)</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">2. Kualiti Stage 0</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--accent); margin-top: 4px;">${funnel.stage0_quality_passed}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">&gt;=$10, &gt;=$1B, ADV&gt;=1M</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">3. Momentum / Setup</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #c084fc; margin-top: 4px;">${funnel.lane_momentum_candidates} <span style="font-size: 12px; color: var(--text-muted);">/</span> <span style="color: #fbbf24;">${funnel.lane_setup_candidates}</span></div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Dwi-Lorong Ditapis</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">4. Enriched K-Line</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--success); margin-top: 4px;">${funnel.kline_analyzed_count}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Top 3-5 Calon Per Lorong</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">5. Watchlist Akhir</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--success); margin-top: 4px;">${funnel.final_watchlist_count}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Sedia untuk Tariq & Nawwar</div>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="font-size: 18px; margin-bottom: 12px;">Active Watchlist (Saluran Bertingkat Dua Lorong)</h2>
         <table>
             <thead>
                 <tr>
                     <th>Symbol</th>
                     <th>Name</th>
+                    <th>Lorong</th>
+                    <th>Skor</th>
                     <th>Price</th>
                     <th>Change</th>
                     <th>ADV20</th>
                     <th>RS vs SPY</th>
                     <th>RVOL 15m</th>
-                    <th>Status</th>
+                    <th>Status / Metrik</th>
                 </tr>
             </thead>
             <tbody>

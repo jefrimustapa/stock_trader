@@ -65,8 +65,8 @@ class TestScreenerSchema(unittest.TestCase):
 
         self.assertEqual(output.total_screened_cloud, 3)
         self.assertEqual(output.stage1_passed, 3)
-        self.assertEqual(output.stage2_passed, 3)
-        self.assertEqual(len(output.watchlist), 2)  # US.LOWRVOL filtered out in stage 3
+        self.assertEqual(output.stage2_passed, 2)
+        self.assertEqual(len(output.watchlist), 2)  # US.LOWRVOL filtered out in stage 2 routing
 
         # Verify physical JSON file on disk
         self.assertTrue(self.output_file.exists())
@@ -119,7 +119,7 @@ class TestScreenerSchema(unittest.TestCase):
             mock_ctx._status = 0 # Not ContextStatus.READY
             mock_ctx_cls.return_value = mock_ctx
 
-            stocks, spy_pct, source, warning = fetch_market_universe("127.0.0.1", 11111)
+            stocks, spy_pct, source, warning, skipped = fetch_market_universe("127.0.0.1", 11111)
             self.assertEqual(len(stocks), 0, "Tiada simbol fallback rekaan dibenarkan")
             self.assertEqual(source, "OPEND_UNAVAILABLE")
             self.assertIsNotNone(warning)
