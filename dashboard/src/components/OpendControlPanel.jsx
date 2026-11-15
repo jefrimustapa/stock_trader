@@ -34,9 +34,30 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   const bridge = statusData?.bridge || {};
   const opendStatus = bridge.opend_status || bridge.status || 'UNKNOWN';
 
+  // Helper functions to safely extract string ID and display label from account objects/strings
+  const extractAccId = (a) => {
+    if (!a) return '';
+    if (typeof a === 'string' || typeof a === 'number') return String(a);
+    return String(a.account_id || a.acc_id || a.id || '');
+  };
+
+  const extractAccLabel = (a) => {
+    if (!a) return '';
+    if (typeof a === 'string' || typeof a === 'number') return String(a);
+    const id = extractAccId(a);
+    const env = a.trd_env || a.acc_type || a.sim_acc_type || '';
+    const label = a.label || '';
+    if (label) return `${label} (${id})`;
+    if (env && env !== 'N/A') return `${id} (${env})`;
+    return id;
+  };
+
+  const initialAccs = bridge.account_info?.available_accounts || bridge.available_accounts || bridge.accounts || [];
+  const initialActiveId = extractAccId(bridge.account_id || bridge.active_acc_id || initialAccs[0]);
+
   // Accounts state
-  const [accounts, setAccounts] = useState(bridge.accounts || []);
-  const [selectedAccount, setSelectedAccount] = useState(bridge.active_acc_id || '');
+  const [accounts, setAccounts] = useState(initialAccs);
+  const [selectedAccount, setSelectedAccount] = useState(initialActiveId);
   const [switchingAcc, setSwitchingAcc] = useState(false);
   const [accMessage, setAccMessage] = useState(null);
 
@@ -67,8 +88,11 @@ export function OpendControlPanel({ statusData, onRefresh }) {
           const data = await resp.json();
           if (Array.isArray(data.accounts)) {
             setAccounts(data.accounts);
-            if (!selectedAccount && data.active_acc_id) {
-              setSelectedAccount(data.active_acc_id);
+            const activeId = extractAccId(data.current_account_id || data.active_acc_id);
+            if (activeId) {
+              setSelectedAccount(activeId);
+            } else if (!selectedAccount && data.accounts.length > 0) {
+              setSelectedAccount(extractAccId(data.accounts[0]));
             }
           }
         }
@@ -78,6 +102,18 @@ export function OpendControlPanel({ statusData, onRefresh }) {
     }
     fetchAccounts();
   }, []);
+
+  // Update accounts when statusData updates
+  useEffect(() => {
+    const liveAccs = bridge.account_info?.available_accounts || bridge.available_accounts || bridge.accounts;
+    if (Array.isArray(liveAccs) && liveAccs.length > 0) {
+      setAccounts(liveAccs);
+    }
+    const liveActiveId = extractAccId(bridge.account_id || bridge.active_acc_id);
+    if (liveActiveId && !selectedAccount) {
+      setSelectedAccount(liveActiveId);
+    }
+  }, [bridge.account_id, bridge.active_acc_id, bridge.account_info]);
 
   // Automatically trigger OTP dialog if OpenD is in WAIT_OTP state
   useEffect(() => {
@@ -89,18 +125,19 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   // Handle Account Switch
   const handleSwitchAccount = async (accId) => {
     if (!accId) return;
-    setSelectedAccount(accId);
+    const targetId = extractAccId(accId);
+    setSelectedAccount(targetId);
     setSwitchingAcc(true);
     setAccMessage(null);
     try {
       const resp = await fetch('/api/opend/switch-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accId }),
+        body: JSON.stringify({ account_id: targetId }),
       });
       const data = await resp.json();
       if (resp.ok) {
-        setAccMessage({ type: 'success', text: `Akaun berjaya ditukar kepada ${accId}` });
+        setAccMessage({ type: 'success', text: `Akaun berjaya ditukar kepada ${targetId}` });
         if (onRefresh) onRefresh();
       } else {
         setAccMessage({ type: 'error', text: data.error || 'Gagal menukar akaun dagangan.' });
@@ -242,17 +279,21 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                   <Select
                     labelId="acc-select-label"
                     id="accSelect"
-                    value={selectedAccount}
+                    value={selectedAccount || (accounts.length > 0 ? extractAccId(accounts[0]) : '')}
                     label="Pilih Akaun (acc_id)"
                     disabled={switchingAcc}
                     onChange={(e) => handleSwitchAccount(e.target.value)}
                   >
                     {accounts.length > 0 ? (
-                      accounts.map((acc) => (
-                        <MenuItem key={acc.acc_id || acc} value={acc.acc_id || acc}>
-                          {acc.acc_id || acc} {acc.acc_type ? `(${acc.acc_type})` : ''}
-                        </MenuItem>
-                      ))
+                      accounts.map((acc, idx) => {
+                        const accId = extractAccId(acc);
+                        const accLabel = extractAccLabel(acc);
+                        return (
+                          <MenuItem key={accId || idx} value={accId}>
+                            {accLabel}
+                          </MenuItem>
+                        );
+                      })
                     ) : (
                       <MenuItem value={selectedAccount || 'SIMULATE-1'}>
                         {selectedAccount || 'SIMULATE-1 (Akaun Aktif)'}

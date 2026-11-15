@@ -19,8 +19,9 @@ import { OpendControlPanel } from '../components/OpendControlPanel';
 export function OpendPage({ statusData, onRefresh }) {
   const bridge = statusData?.bridge || {};
   const opendStatus = bridge.opend_status || bridge.status || 'UNKNOWN';
-  const activeAcc = bridge.active_acc_id || (bridge.accounts && bridge.accounts[0]?.acc_id) || 'N/A';
-  const accountsCount = (bridge.accounts || []).length;
+  const availableAccs = bridge.account_info?.available_accounts || bridge.available_accounts || bridge.accounts || [];
+  const activeAcc = String(bridge.account_id || bridge.active_acc_id || availableAccs[0]?.account_id || availableAccs[0]?.acc_id || 'N/A');
+  const accountsCount = availableAccs.length;
 
   const isConnected = String(opendStatus).toUpperCase().includes('CONNECT') &&
     !String(opendStatus).toUpperCase().includes('ERROR') &&

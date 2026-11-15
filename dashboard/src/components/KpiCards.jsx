@@ -27,7 +27,8 @@ export function KpiCards({ statusData, dataPayload }) {
   // Moomoo Account Balance KPI
   const cashBalance = bridge.cash_balance !== undefined ? `$${Number(bridge.cash_balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
   const totalEquity = bridge.total_equity !== undefined ? `$${Number(bridge.total_equity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
-  const activeAccId = bridge.active_acc_id || (bridge.accounts && bridge.accounts[0]?.acc_id) || 'SIMULATED-ACC';
+  const availableAccs = bridge.account_info?.available_accounts || bridge.available_accounts || bridge.accounts || [];
+  const activeAccId = String(bridge.account_id || bridge.active_acc_id || availableAccs[0]?.account_id || availableAccs[0]?.acc_id || 'SIMULATED-ACC');
 
   // Sentinel L4 Engine KPI
   const sentinelStatus = sentinelData.status || 'OFFLINE';

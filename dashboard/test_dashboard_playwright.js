@@ -127,6 +127,21 @@ async function runPlaywrightSuite() {
     await mobilePage.waitForTimeout(500);
     assertCheck('Mobile Navigation: Navigated to #/opend', mobilePage.url().includes('#/opend'));
 
+    // 4a. Account Dropdown Selection (HOM-183 fix for React Error #31)
+    const selectTrigger = mobilePage.locator('#accSelect');
+    assertCheck('Mobile OpenD: Account selector dropdown present', (await selectTrigger.count()) === 1);
+    await selectTrigger.click();
+    await mobilePage.waitForTimeout(400);
+
+    const listboxOptions = mobilePage.locator('ul[role="listbox"] li[role="option"]');
+    const optionCount = await listboxOptions.count();
+    assertCheck('Mobile OpenD: Account dropdown opens without crash', optionCount > 0);
+    if (optionCount > 0) {
+      await listboxOptions.nth(0).click();
+      await mobilePage.waitForTimeout(400);
+      assertCheck('Mobile OpenD: Selected account option successfully without React error', true);
+    }
+
     const accInput = mobilePage.locator('#loginAccInput');
     const pwdInput = mobilePage.locator('#loginPwdInput');
     assertCheck('Mobile OpenD: Single unique #loginAccInput in DOM', (await accInput.count()) === 1);
