@@ -38,7 +38,7 @@ export const navItems = [
   { id: 'opend', label: 'Pengurusan OpenD', shortLabel: 'OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
   { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
   { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
-  { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Penggunaan 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
+  { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Rekod 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
   { id: 'settings', label: 'Tetapan Screener', shortLabel: 'Tetapan', subtitle: 'Parameter L0 & Had Sah', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
 ];
 

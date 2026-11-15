@@ -153,6 +153,7 @@ async function runTests() {
     check('Default percent_used is 0.0', resNoDb.data?.percent_used === 0.0);
     check('Default status is HEALTHY', resNoDb.data?.status === 'HEALTHY');
     check('Default symbols list is an empty array', Array.isArray(resNoDb.data?.symbols) && resNoDb.data.symbols.length === 0);
+    check('Indicates db_exists: false when SQLite file is missing', resNoDb.data?.db_exists === false);
 
     // -------------------------------------------------------------
     // 2. Empty Table Test (DB exists, 0 rows)
@@ -163,6 +164,7 @@ async function runTests() {
     check('Endpoint responds 200 OK on empty table', resEmpty.statusCode === 200);
     check('used_quota is 0 on empty table', resEmpty.data?.used_quota === 0);
     check('remaining_quota is 100 on empty table', resEmpty.data?.remaining_quota === 100);
+    check('Indicates db_exists: true when table exists even with 0 rows', resEmpty.data?.db_exists === true);
 
     // -------------------------------------------------------------
     // 3. Active Symbols (Live Production Simulation: 7 active symbols)

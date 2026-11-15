@@ -36,11 +36,12 @@ export function KpiCards({ statusData, dataPayload }) {
   const managedPositions = sentinelData.managed_positions || 0;
   const isSentinelActive = sentinelStatus === 'ACTIVE';
 
-  // 30-Day K-Line Quota KPI
-  const quota = watchlistData.quota_status || {};
-  const klineUsed = quota.kline_30d_used !== undefined ? quota.kline_30d_used : 0;
-  const klineRemaining = quota.kline_30d_remaining !== undefined ? quota.kline_30d_remaining : 100;
-  const klinePercent = Math.min(100, Math.max(0, (klineUsed / 100) * 100));
+  // 30-Day K-Line Quota KPI (Rekod Dalaman Screener, Anggaran)
+  const quota = watchlistData.quota_status;
+  const hasKlineData = Boolean(quota && typeof quota.kline_30d_remaining === 'number');
+  const klineUsed = hasKlineData ? quota.kline_30d_used : 0;
+  const klineRemaining = hasKlineData ? quota.kline_30d_remaining : '-';
+  const klinePercent = hasKlineData ? Math.min(100, Math.max(0, ((klineUsed || 0) / 100) * 100)) : 0;
 
   const cardActionSx = {
     height: '100%',
@@ -231,7 +232,7 @@ export function KpiCards({ statusData, dataPayload }) {
             id="kpi-card-kline-quota"
             sx={cardActionSx}
             onClick={() => { window.location.hash = '#/quota'; }}
-            title="Klik untuk lihat perincian kuota K-Line 30-hari"
+            title="Klik untuk lihat perincian kuota K-Line 30-hari (rekod dalaman screener, anggaran)"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -241,54 +242,54 @@ export function KpiCards({ statusData, dataPayload }) {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.info.soft,
+                      backgroundColor: (hasKlineData && klinePercent > 80) ? sneatTokens.error.soft : sneatTokens.info.soft,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: klinePercent > 80 ? sneatTokens.error.main : sneatTokens.info.main,
+                      color: (hasKlineData && klinePercent > 80) ? sneatTokens.error.main : sneatTokens.info.main,
                     }}
                   >
                     <QueryStatsIcon sx={{ fontSize: 22 }} />
                   </Box>
                   <Chip
                     size="small"
-                    label={`${klineUsed} / 100 Guna`}
+                    label={hasKlineData ? `${klineUsed} / 100 Direkod` : 'Tiada Data'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.secondary.soft,
-                      color: klinePercent > 80 ? sneatTokens.error.main : 'text.secondary',
+                      backgroundColor: (hasKlineData && klinePercent > 80) ? sneatTokens.error.soft : sneatTokens.secondary.soft,
+                      color: (hasKlineData && klinePercent > 80) ? sneatTokens.error.main : 'text.secondary',
                     }}
                   />
                 </Box>
 
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kuota API K-Line 30-Hari
+                  Kuota API K-Line (Rekod Dalaman Screener)
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {klineRemaining} Baki
+                  {hasKlineData ? `${klineRemaining} Baki` : '-'}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Penggunaan Kuota
+                    {hasKlineData ? 'Anggaran Digunakan' : 'Rekod Screener'}
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {Math.round(klinePercent)}%
+                    {hasKlineData ? `${Math.round(klinePercent)}%` : 'Tiada data'}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={klinePercent}
+                  value={hasKlineData ? klinePercent : 0}
                   sx={{
                     height: 5,
                     borderRadius: 3,
                     backgroundColor: theme => theme.palette.divider,
                     '& .MuiLinearProgress-bar': {
-                      backgroundColor: klinePercent > 80 ? sneatTokens.error.main : sneatTokens.info.main,
+                      backgroundColor: (hasKlineData && klinePercent > 80) ? sneatTokens.error.main : sneatTokens.info.main,
                       borderRadius: 3,
                     },
                   }}

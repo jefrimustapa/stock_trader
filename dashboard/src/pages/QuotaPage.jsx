@@ -61,6 +61,7 @@ export function QuotaPage() {
     fetchQuotaData();
   }, [fetchQuotaData]);
 
+  const isDbMissing = Boolean(quotaData && quotaData.db_exists === false);
   const totalQuota = quotaData?.total_quota ?? 100;
   const usedQuota = quotaData?.used_quota ?? 0;
   const remainingQuota = quotaData?.remaining_quota ?? (totalQuota - usedQuota);
@@ -125,7 +126,7 @@ export function QuotaPage() {
             </Typography>
             <Chip
               size="small"
-              label={`Had: ${totalQuota} Simbol`}
+              label={`Anggaran Had: ${totalQuota} Simbol`}
               sx={{
                 fontWeight: 700,
                 fontSize: '0.72rem',
@@ -135,7 +136,7 @@ export function QuotaPage() {
             />
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, ml: 6 }}>
-            Penjejakan Had 100 Simbol Unik Moomoo OpenAPI (Tetingkap Bergolek 30-Hari)
+            Kuota K-Line (rekod dalaman screener, anggaran). Mungkin berbeza daripada baki sebenar Moomoo.
           </Typography>
         </Box>
 
@@ -153,6 +154,25 @@ export function QuotaPage() {
           </Button>
         </Box>
       </Box>
+
+      {/* Info Disclaimer Banner */}
+      <Alert
+        severity="info"
+        icon={<QueryStatsIcon sx={{ fontSize: 20 }} />}
+        sx={{
+          mb: 3,
+          borderRadius: 2,
+          fontSize: '0.82rem',
+          backgroundColor: sneatTokens.info.soft,
+          color: 'text.primary',
+          '& .MuiAlert-icon': { color: sneatTokens.info.main },
+        }}
+      >
+        <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 600, display: 'inline' }}>
+          Nota Peringatan Rekod Kuota:&nbsp;
+        </Typography>
+        Angka kuota ini adalah rekod dalaman screener (anggaran simbol dikhaskan). Ia mungkin berbeza daripada penggunaan atau baki kuota sebenar dalam akaun Moomoo OpenAPI.
+      </Alert>
 
       {error && (
         <Alert
@@ -192,7 +212,7 @@ export function QuotaPage() {
                   </Box>
                   <Chip
                     size="small"
-                    label={`${remainingQuota} Baki`}
+                    label={isDbMissing ? 'Belum Ada Data' : `${remainingQuota} Baki (Rekod)`}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -203,25 +223,25 @@ export function QuotaPage() {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Baki Kuota Simbol
+                  Baki Kuota Simbol (Anggaran)
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {remainingQuota} / {totalQuota}
+                  {isDbMissing ? '-' : `${remainingQuota} / ${totalQuota}`}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Kapasiti Tersedia
+                    {isDbMissing ? 'Status Rekod' : 'Kapasiti Tersedia (Anggaran)'}
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {100 - Math.round(percentUsed)}%
+                    {isDbMissing ? 'Tiada data' : `${100 - Math.round(percentUsed)}%`}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={Math.max(0, 100 - percentUsed)}
+                  value={isDbMissing ? 0 : Math.max(0, 100 - percentUsed)}
                   sx={{
                     height: 5,
                     borderRadius: 3,
@@ -237,7 +257,7 @@ export function QuotaPage() {
           </Card>
         </Grid>
 
-        {/* Card 2: Simbol Aktif Digunakan */}
+        {/* Card 2: Simbol Aktif Digunakan / Dikhaskan */}
         <Grid item xs={12} sm={6} md={3}>
           <Card id="kpi-quota-used" sx={{ height: '100%', borderRadius: 2.5, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
@@ -259,7 +279,7 @@ export function QuotaPage() {
                   </Box>
                   <Chip
                     size="small"
-                    label={`${usedQuota} / ${totalQuota} Guna`}
+                    label={isDbMissing ? 'Tiada Rekod' : `${usedQuota} / ${totalQuota} Direkod`}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -270,10 +290,10 @@ export function QuotaPage() {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Simbol Menggunakan Kuota
+                  Simbol Dikhaskan / Direkod
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {usedQuota} Simbol
+                  {isDbMissing ? '-' : `${usedQuota} Simbol`}
                 </Typography>
               </Box>
 
@@ -288,7 +308,7 @@ export function QuotaPage() {
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={percentUsed}
+                  value={isDbMissing ? 0 : percentUsed}
                   sx={{
                     height: 5,
                     borderRadius: 3,
@@ -326,7 +346,7 @@ export function QuotaPage() {
                   </Box>
                   <Chip
                     size="small"
-                    label={`${percentUsed}%`}
+                    label={isDbMissing ? '-' : `${percentUsed}%`}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -337,10 +357,10 @@ export function QuotaPage() {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kadar Penggunaan Kuota
+                  Kadar Penggunaan (Anggaran)
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {percentUsed}%
+                  {isDbMissing ? '-' : `${percentUsed}%`}
                 </Typography>
               </Box>
 
@@ -350,12 +370,12 @@ export function QuotaPage() {
                     Had Amaran (75% / 90%)
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {percentUsed >= 90 ? 'Tinggi' : (percentUsed >= 75 ? 'Sederhana' : 'Rendah')}
+                    {isDbMissing ? 'Tiada data' : (percentUsed >= 90 ? 'Tinggi' : (percentUsed >= 75 ? 'Sederhana' : 'Rendah'))}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={percentUsed}
+                  value={isDbMissing ? 0 : percentUsed}
                   sx={{
                     height: 5,
                     borderRadius: 3,
@@ -382,14 +402,16 @@ export function QuotaPage() {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: statusBadge.bg,
+                      backgroundColor: isDbMissing ? sneatTokens.secondary.soft : statusBadge.bg,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: statusBadge.text,
+                      color: isDbMissing ? 'text.secondary' : statusBadge.text,
                     }}
                   >
-                    {percentUsed >= 90 ? (
+                    {isDbMissing ? (
+                      <InventoryIcon sx={{ fontSize: 22 }} />
+                    ) : percentUsed >= 90 ? (
                       <ErrorOutlineIcon sx={{ fontSize: 22 }} />
                     ) : percentUsed >= 75 ? (
                       <WarningAmberIcon sx={{ fontSize: 22 }} />
@@ -399,27 +421,27 @@ export function QuotaPage() {
                   </Box>
                   <Chip
                     size="small"
-                    label={statusBadge.label}
+                    label={isDbMissing ? 'TIADA DATA' : statusBadge.label}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: statusBadge.bg,
-                      color: statusBadge.text,
+                      backgroundColor: isDbMissing ? sneatTokens.secondary.soft : statusBadge.bg,
+                      color: isDbMissing ? 'text.secondary' : statusBadge.text,
                     }}
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Status Kesihatan Kuota
+                  Status Rekod Kuota
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: statusBadge.text }}>
-                  {statusBadge.label}
+                <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: isDbMissing ? 'text.secondary' : statusBadge.text }}>
+                  {isDbMissing ? 'TIADA REKOD' : statusBadge.label}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Dikemas kini: {formatDate(quotaData?.as_of)}
+                  Dikemas kini: {isDbMissing ? 'Belum dijana' : formatDate(quotaData?.as_of)} (Rekod Dalaman)
                 </Typography>
               </Box>
             </CardContent>
@@ -433,10 +455,10 @@ export function QuotaPage() {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Senarai Simbol Kuota K-Line
+                Senarai Simbol Kuota K-Line (Rekod Dalaman)
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Setiap simbol yang diminta K-line memegang 1 slot kuota selama 30 hari bermula dari tarikh permintaan pertama
+                Rekod simbol yang dikhaskan dalam tetingkap 30-hari (anggaran dalaman, mungkin berbeza daripada baki sebenar Moomoo)
               </Typography>
             </Box>
 
@@ -471,17 +493,27 @@ export function QuotaPage() {
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
               <CircularProgress size={36} color="primary" />
               <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-                Memuatkan data kuota K-line...
+                Memuatkan rekod kuota K-line...
+              </Typography>
+            </Box>
+          ) : isDbMissing ? (
+            <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+              <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
+              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                Belum Ada Data Rekod Kuota
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
+                Pangkalan data kuota K-line belum diwujudkan atau enjin screener belum memulakan rekod aktiviti simbol. Keadaan ini berbeza daripada situasi kapasiti penuh (100 / 100).
               </Typography>
             </Box>
           ) : rawSymbols.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
               <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Tiada Simbol Menggunakan Kuota
+                Kapasiti Kuota Penuh (100 / 100 Baki)
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 460, mx: 'auto' }}>
-                Pangkalan data kuota K-line kosong atau belum ada simbol yang dipanggil oleh enjin screener. Kapasiti kuota adalah 100% penuh (100 / 100 baki).
+              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
+                Pangkalan data wujud tetapi tiada simbol aktif direkodkan dalam tetingkap 30-hari. Kapasiti kuota dalaman adalah 100% tersedia (0 simbol direkodkan).
               </Typography>
             </Box>
           ) : (

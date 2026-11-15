@@ -715,7 +715,8 @@ function getKlineQuotaData(customDbPath = null) {
             percent_used: 0.0,
             status: 'HEALTHY',
             as_of: now.toISOString(),
-            symbols: []
+            symbols: [],
+            db_exists: false
         };
     }
 
@@ -732,7 +733,8 @@ function getKlineQuotaData(customDbPath = null) {
                 percent_used: 0.0,
                 status: 'HEALTHY',
                 as_of: now.toISOString(),
-                symbols: []
+                symbols: [],
+                db_exists: false
             };
         }
 
@@ -782,7 +784,8 @@ function getKlineQuotaData(customDbPath = null) {
             percent_used: percentUsed,
             status,
             as_of: now.toISOString(),
-            symbols
+            symbols,
+            db_exists: true
         };
     } catch (err) {
         if (db) {

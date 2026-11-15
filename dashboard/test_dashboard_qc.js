@@ -103,6 +103,10 @@ const mockDataPayload = {
       stage4_kline: 10,
       stage5_final: 6,
     },
+    quota_status: {
+      kline_30d_used: 12,
+      kline_30d_remaining: 88,
+    },
     watchlist: [
       {
         symbol: 'NVDA',
@@ -609,6 +613,25 @@ async function main() {
     assert.ok(html.includes('kpi-card-kline-quota'), 'Must render Card 4 with ID kpi-card-kline-quota');
     assert.ok(html.includes('Klik untuk lihat perincian kuota K-Line 30-hari'), 'Card 4 title must indicate K-Line quota details');
     assert.ok(!html.includes('Klik untuk ke paparan Watchlist Dwi-Lorong'), 'Card 4 must no longer link to Watchlist');
+    assert.ok(html.includes('Kuota API K-Line (Rekod Dalaman Screener)'), 'Card 4 must display internal record label');
+    assert.ok(html.includes('Direkod'), 'Card 4 must indicate recorded quota rather than claim Moomoo usage');
+  });
+
+  check('KpiCards Card 4 handles missing quota_status without defaulting to 100 Baki (HOM-212 Scope B)', () => {
+    const htmlMissingQuota = renderToString(React.createElement(KpiCards, {
+      statusData: mockStatusData,
+      dataPayload: { watchlist: { quota_status: null } },
+    }));
+    assert.ok(!htmlMissingQuota.includes('100 Baki'), 'Must not claim 100 Baki when quota data is missing');
+    assert.ok(htmlMissingQuota.includes('Tiada Data') || htmlMissingQuota.includes('-'), 'Must display - / Tiada Data when quota is missing');
+  });
+
+  check('QuotaPage renders disclaimer note and internal record subtitle (HOM-212 Scope A & C)', () => {
+    const html = renderToString(React.createElement(QuotaPage));
+    assert.ok(html.includes('Nota Peringatan Rekod Kuota'), 'Must render quota disclaimer alert');
+    assert.ok(html.includes('rekod dalaman screener, anggaran'), 'Must display internal record disclaimer');
+    assert.ok(html.includes('Mungkin berbeza daripada baki sebenar Moomoo'), 'Must warn that numbers may differ from actual Moomoo balance');
+    assert.ok(!html.includes('memegang 1 slot'), 'Must remove inaccurate 1 slot text');
   });
 
   console.log('\n================================================================');
