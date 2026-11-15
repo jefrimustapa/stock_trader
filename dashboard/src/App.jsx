@@ -3,16 +3,25 @@ import { ThemeProvider, CssBaseline, Box, CircularProgress, Typography } from '@
 import { getTheme } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
-import { KpiCards } from './components/KpiCards';
-import { OpendControlPanel } from './components/OpendControlPanel';
-import { FunnelStepper } from './components/FunnelStepper';
-import { WatchlistTable } from './components/WatchlistTable';
+import { OverviewPage } from './pages/OverviewPage';
+import { OpendPage } from './pages/OpendPage';
+import { FunnelPage } from './pages/FunnelPage';
+import { WatchlistPage } from './pages/WatchlistPage';
+
+const VALID_PAGES = ['overview', 'opend', 'funnel', 'watchlist'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
-    return localStorage.getItem('stock_trader_theme_mode') || 'dark';
+    return (typeof localStorage !== 'undefined' && localStorage.getItem('stock_trader_theme_mode')) || 'dark';
   });
 
+  const getPageFromHash = () => {
+    if (typeof window === 'undefined') return 'overview';
+    const cleanHash = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
+    return VALID_PAGES.includes(cleanHash) ? cleanHash : 'overview';
+  };
+
+  const [currentPage, setCurrentPage] = useState(getPageFromHash);
   const [statusData, setStatusData] = useState(null);
   const [dataPayload, setDataPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,8 +29,30 @@ export function App() {
   const toggleMode = () => {
     const nextMode = mode === 'dark' ? 'light' : 'dark';
     setMode(nextMode);
-    localStorage.setItem('stock_trader_theme_mode', nextMode);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('stock_trader_theme_mode', nextMode);
+    }
   };
+
+  const navigateTo = (pageId) => {
+    if (VALID_PAGES.includes(pageId)) {
+      setCurrentPage(pageId);
+      if (typeof window !== 'undefined') {
+        window.location.hash = `#/${pageId}`;
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const page = getPageFromHash();
+      setCurrentPage(page);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('hashchange', handleHashChange);
+      return () => window.removeEventListener('hashchange', handleHashChange);
+    }
+  }, []);
 
   const theme = getTheme(mode);
 
@@ -55,30 +86,55 @@ export function App() {
 
   const user = statusData?.user || dataPayload?.user || 'jefri';
 
+  const renderCurrentPage = () => {
+    switch (currentPage) {
+      case 'opend':
+        return <OpendPage statusData={statusData} onRefresh={fetchDashboardData} />;
+      case 'funnel':
+        return <FunnelPage dataPayload={dataPayload} />;
+      case 'watchlist':
+        return <WatchlistPage dataPayload={dataPayload} />;
+      case 'overview':
+      default:
+        return (
+          <OverviewPage
+            statusData={statusData}
+            dataPayload={dataPayload}
+            onNavigate={navigateTo}
+          />
+        );
+    }
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <ErrorBoundary>
         <Layout
+          currentPage={currentPage}
+          onNavigate={navigateTo}
           currentMode={mode}
           onToggleMode={toggleMode}
           user={user}
           statusData={statusData}
         >
           {loading && !statusData ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                py: 10,
+              }}
+            >
               <CircularProgress size={40} color="primary" />
               <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
                 Memuatkan metrik papan pemuka...
               </Typography>
             </Box>
           ) : (
-            <>
-              <KpiCards statusData={statusData} dataPayload={dataPayload} />
-              <OpendControlPanel statusData={statusData} onRefresh={fetchDashboardData} />
-              <FunnelStepper dataPayload={dataPayload} />
-              <WatchlistTable dataPayload={dataPayload} />
-            </>
+            renderCurrentPage()
           )}
         </Layout>
       </ErrorBoundary>

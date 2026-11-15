@@ -14,7 +14,6 @@ import {
   Paper,
   Divider,
   Button,
-  useMediaQuery,
   useTheme,
   Tooltip,
 } from '@mui/material';
@@ -32,32 +31,34 @@ import { sneatTokens } from '../theme';
 
 const SIDEBAR_WIDTH = 260;
 
-const navItems = [
-  { id: 'overview', label: 'Ringkasan & Metrik', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
-  { id: 'opend-control', label: 'Pengurusan OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
-  { id: 'funnel', label: 'Corong Saringan', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
-  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
+export const navItems = [
+  { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
+  { id: 'opend', label: 'Pengurusan OpenD', shortLabel: 'OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
+  { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
+  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
 ];
 
-export function Layout({ currentMode, onToggleMode, user, statusData, children }) {
+export function Layout({
+  currentPage = 'overview',
+  onNavigate,
+  currentMode,
+  onToggleMode,
+  user,
+  statusData,
+  children,
+}) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeNav, setActiveNav] = useState('overview');
   const theme = useTheme();
-  const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const scrollToSection = (id) => {
-    setActiveNav(id);
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const handleItemClick = (id) => {
+    if (onNavigate) {
+      onNavigate(id);
     }
-    if (!isMdUp) {
-      setMobileOpen(false);
-    }
+    setMobileOpen(false);
   };
 
   const opendStatus = statusData?.bridge?.opend_status || statusData?.bridge?.status || 'UNKNOWN';
@@ -132,11 +133,12 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
       {/* Nav List */}
       <List sx={{ px: 1.5, py: 2, flex: 1 }}>
         {navItems.map((item) => {
-          const isActive = activeNav === item.id;
+          const isActive = currentPage === item.id;
           return (
             <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
-                onClick={() => scrollToSection(item.id)}
+                id={`nav-item-${item.id}`}
+                onClick={() => handleItemClick(item.id)}
                 sx={{
                   borderRadius: '8px',
                   py: 1.2,
@@ -201,43 +203,47 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
-      {/* Sidebar for Desktop */}
-      {isMdUp && (
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: SIDEBAR_WIDTH,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': {
-              width: SIDEBAR_WIDTH,
-              boxSizing: 'border-box',
-              borderRight: `1px solid ${theme.palette.divider}`,
-              backgroundColor: 'background.paper',
-            },
-          }}
-        >
-          {drawerContent}
-        </Drawer>
-      )}
-
-      {/* Sidebar for Mobile */}
-      {!isMdUp && (
+      {/* Responsive Navigation Sidebars */}
+      <Box
+        component="nav"
+        sx={{ width: { md: SIDEBAR_WIDTH }, flexShrink: { md: 0 } }}
+        aria-label="papan navigasi utama"
+      >
+        {/* Mobile temporary drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
           onClose={handleDrawerToggle}
           ModalProps={{ keepMounted: true }}
           sx={{
+            display: { xs: 'block', md: 'none' },
             '& .MuiDrawer-paper': {
-              width: SIDEBAR_WIDTH,
               boxSizing: 'border-box',
+              width: SIDEBAR_WIDTH,
               backgroundColor: 'background.paper',
             },
           }}
         >
           {drawerContent}
         </Drawer>
-      )}
+
+        {/* Desktop permanent drawer */}
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: SIDEBAR_WIDTH,
+              borderRight: `1px solid ${theme.palette.divider}`,
+              backgroundColor: 'background.paper',
+            },
+          }}
+          open
+        >
+          {drawerContent}
+        </Drawer>
+      </Box>
 
       {/* Main Content Area */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -245,8 +251,8 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
         <Paper
           elevation={0}
           sx={{
-            py: 1.5,
-            px: { xs: 2, sm: 3 },
+            py: 1.2,
+            px: { xs: 1.5, sm: 3 },
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -259,21 +265,26 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(43, 44, 64, 0.85)' : 'rgba(255, 255, 255, 0.85)',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {!isMdUp && (
-              <IconButton onClick={handleDrawerToggle} edge="start" size="small">
-                <MenuIcon />
-              </IconButton>
-            )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton
+              onClick={handleDrawerToggle}
+              edge="start"
+              size="small"
+              id="btn-mobile-menu"
+              sx={{ display: { md: 'none' } }}
+            >
+              <MenuIcon />
+            </IconButton>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>
               Dashboard Kawalan &amp; Dagangan Saham US
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
             {/* OpenD Status Chip */}
             <Chip
               size="small"
+              id="chip-opend-status"
               label={`OpenD: ${statusChip.label}`}
               sx={{
                 backgroundColor: statusChip.bg,
@@ -287,19 +298,21 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
             {user && (
               <Chip
                 size="small"
+                id="chip-user-info"
                 label={typeof user === 'string' ? user : (user.username || user.email || 'Pengguna')}
                 sx={{
                   backgroundColor: sneatTokens.primary.soft,
                   color: sneatTokens.primary.main,
                   fontWeight: 600,
                   fontSize: '0.75rem',
+                  display: { xs: 'none', sm: 'inline-flex' },
                 }}
               />
             )}
 
             {/* Dark/Light Mode Switch */}
             <Tooltip title={currentMode === 'dark' ? 'Tukar ke Mod Cerah' : 'Tukar ke Mod Gelap'}>
-              <IconButton onClick={onToggleMode} size="small" color="inherit">
+              <IconButton onClick={onToggleMode} size="small" color="inherit" id="btn-theme-toggle">
                 {currentMode === 'dark' ? (
                   <LightModeOutlinedIcon sx={{ fontSize: 20, color: '#FFAB00' }} />
                 ) : (
@@ -310,6 +323,7 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
 
             {/* Logout Button */}
             <Button
+              id="btn-logout"
               variant="outlined"
               size="small"
               color="secondary"
@@ -320,6 +334,7 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
                 borderColor: theme.palette.divider,
                 fontSize: '0.8rem',
                 py: 0.5,
+                px: { xs: 1, sm: 1.5 },
               }}
             >
               Log Keluar
@@ -327,8 +342,57 @@ export function Layout({ currentMode, onToggleMode, user, statusData, children }
           </Box>
         </Paper>
 
+        {/* Responsive Mobile / Quick-Tab Page Navigation Bar */}
+        <Paper
+          elevation={0}
+          id="page-tab-bar"
+          sx={{
+            px: { xs: 1.5, sm: 3 },
+            py: 1,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            backgroundColor: theme.palette.mode === 'dark' ? '#27283c' : '#fcfcfd',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            overflowX: 'auto',
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
+          {navItems.map((item) => {
+            const isActive = currentPage === item.id;
+            return (
+              <Button
+                key={item.id}
+                id={`tab-btn-${item.id}`}
+                variant={isActive ? 'contained' : 'text'}
+                size="small"
+                onClick={() => handleItemClick(item.id)}
+                startIcon={item.icon}
+                sx={{
+                  borderRadius: '20px',
+                  px: 2,
+                  py: 0.5,
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  boxShadow: 'none',
+                  backgroundColor: isActive ? sneatTokens.primary.main : 'transparent',
+                  color: isActive ? '#ffffff' : 'text.secondary',
+                  '&:hover': {
+                    backgroundColor: isActive ? sneatTokens.primary.main : sneatTokens.primary.soft,
+                    color: isActive ? '#ffffff' : sneatTokens.primary.main,
+                    boxShadow: 'none',
+                  },
+                }}
+              >
+                {item.shortLabel || item.label}
+              </Button>
+            );
+          })}
+        </Paper>
+
         {/* Page Container */}
-        <Container maxWidth="xl" sx={{ py: 3, px: { xs: 2, sm: 3 }, flexGrow: 1 }}>
+        <Container maxWidth="xl" sx={{ py: 3, px: { xs: 1.5, sm: 3 }, flexGrow: 1 }}>
           {children}
         </Container>
       </Box>
