@@ -300,9 +300,11 @@ async function main() {
     assert.ok(html.includes('btn-nav-opend'), 'Must have btn-nav-opend button');
     assert.ok(html.includes('btn-nav-funnel'), 'Must have btn-nav-funnel button');
     assert.ok(html.includes('btn-nav-watchlist'), 'Must have btn-nav-watchlist button');
+    assert.ok(html.includes('btn-nav-settings'), 'Must have btn-nav-settings button');
     assert.ok(html.includes('Buka Pengurusan OpenD'), 'Must have text Buka Pengurusan OpenD');
     assert.ok(html.includes('Lihat Corong Saringan'), 'Must have text Lihat Corong Saringan');
     assert.ok(html.includes('Buka Watchlist Dwi-Lorong'), 'Must have text Buka Watchlist Dwi-Lorong');
+    assert.ok(html.includes('Buka Tetapan Screener'), 'Must have text Buka Tetapan Screener');
   });
 
   check('OverviewPage handles null/empty status and data safely (BVA)', () => {

@@ -48,6 +48,8 @@ export function KpiCards({ statusData, dataPayload }) {
     transition: 'all 0.2s ease-in-out',
     border: '1px solid',
     borderColor: 'divider',
+    borderRadius: 2.5,
+    backgroundColor: 'background.paper',
     '&:hover': {
       transform: 'translateY(-3px)',
       boxShadow: '0 8px 24px rgba(105, 108, 255, 0.12)',
@@ -56,11 +58,7 @@ export function KpiCards({ statusData, dataPayload }) {
   };
 
   return (
-    <Box id="overview" sx={{ mb: 4 }}>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-        Ringkasan &amp; Status Operasi
-      </Typography>
-
+    <Box id="overview">
       <Grid container spacing={2.5}>
         {/* Card 1: OpenD Gateway -> navigates to #/opend */}
         <Grid item xs={12} sm={6} md={3}>
@@ -69,42 +67,46 @@ export function KpiCards({ statusData, dataPayload }) {
             onClick={() => { window.location.hash = '#/opend'; }}
             title="Klik untuk ke halaman Pengurusan OpenD"
           >
-            <CardContent sx={{ p: 2.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '8px',
-                    backgroundColor: isOpendConnected ? sneatTokens.success.soft : sneatTokens.warning.soft,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: isOpendConnected ? sneatTokens.success.main : sneatTokens.warning.main,
-                  }}
-                >
-                  <HubIcon sx={{ fontSize: 24 }} />
+            <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '8px',
+                      backgroundColor: isOpendConnected ? sneatTokens.success.soft : sneatTokens.warning.soft,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isOpendConnected ? sneatTokens.success.main : sneatTokens.warning.main,
+                    }}
+                  >
+                    <HubIcon sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Chip
+                    size="small"
+                    label={trdEnv}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.7rem',
+                      borderRadius: 1.5,
+                      backgroundColor: trdEnv === 'REAL' ? sneatTokens.error.soft : sneatTokens.info.soft,
+                      color: trdEnv === 'REAL' ? sneatTokens.error.main : sneatTokens.info.main,
+                    }}
+                  />
                 </Box>
-                <Chip
-                  size="small"
-                  label={trdEnv}
-                  sx={{
-                    fontWeight: 700,
-                    fontSize: '0.7rem',
-                    backgroundColor: trdEnv === 'REAL' ? sneatTokens.error.soft : sneatTokens.info.soft,
-                    color: trdEnv === 'REAL' ? sneatTokens.error.main : sneatTokens.info.main,
-                  }}
-                />
+
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
+                  Gerbang OpenD Moomoo
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isOpendConnected ? sneatTokens.success.main : sneatTokens.warning.main }}>
+                  {opendStatus}
+                </Typography>
               </Box>
 
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Gerbang OpenD Moomoo
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isOpendConnected ? sneatTokens.success.main : sneatTokens.warning.main }}>
-                {opendStatus}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                   Port 11111 (API) &bull; 22222 (Telnet)
                 </Typography>
                 <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
@@ -120,42 +122,46 @@ export function KpiCards({ statusData, dataPayload }) {
             onClick={() => { window.location.hash = '#/opend'; }}
             title="Klik untuk ke halaman Pengurusan OpenD & Akaun"
           >
-            <CardContent sx={{ p: 2.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '8px',
-                    backgroundColor: sneatTokens.primary.soft,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: sneatTokens.primary.main,
-                  }}
-                >
-                  <AccountBalanceWalletIcon sx={{ fontSize: 24 }} />
+            <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '8px',
+                      backgroundColor: sneatTokens.primary.soft,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: sneatTokens.primary.main,
+                    }}
+                  >
+                    <AccountBalanceWalletIcon sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Chip
+                    size="small"
+                    label={`Acc: ${activeAccId}`}
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: '0.7rem',
+                      borderRadius: 1.5,
+                      backgroundColor: sneatTokens.secondary.soft,
+                      color: 'text.primary',
+                    }}
+                  />
                 </Box>
-                <Chip
-                  size="small"
-                  label={`Acc: ${activeAccId}`}
-                  sx={{
-                    fontWeight: 600,
-                    fontSize: '0.7rem',
-                    backgroundColor: sneatTokens.secondary.soft,
-                    color: 'text.primary',
-                  }}
-                />
+
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
+                  Baki Tunai &amp; Jumlah Ekuiti
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
+                  {cashBalance}
+                </Typography>
               </Box>
 
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Baki Tunai &amp; Jumlah Ekuiti
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                {cashBalance}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                   Jumlah Ekuiti: <strong>{totalEquity}</strong>
                 </Typography>
                 <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
@@ -171,42 +177,46 @@ export function KpiCards({ statusData, dataPayload }) {
             onClick={() => { window.location.hash = '#/funnel'; }}
             title="Klik untuk ke paparan Corong Saringan & Sentinel"
           >
-            <CardContent sx={{ p: 2.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '8px',
-                    backgroundColor: isSentinelActive ? sneatTokens.success.soft : sneatTokens.secondary.soft,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: isSentinelActive ? sneatTokens.success.main : sneatTokens.secondary.main,
-                  }}
-                >
-                  <ShieldIcon sx={{ fontSize: 24 }} />
+            <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '8px',
+                      backgroundColor: isSentinelActive ? sneatTokens.success.soft : sneatTokens.secondary.soft,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isSentinelActive ? sneatTokens.success.main : sneatTokens.secondary.main,
+                    }}
+                  >
+                    <ShieldIcon sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Chip
+                    size="small"
+                    label={`${managedPositions} Posisi`}
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: '0.7rem',
+                      borderRadius: 1.5,
+                      backgroundColor: sneatTokens.info.soft,
+                      color: sneatTokens.info.main,
+                    }}
+                  />
                 </Box>
-                <Chip
-                  size="small"
-                  label={`${managedPositions} Posisi`}
-                  sx={{
-                    fontWeight: 600,
-                    fontSize: '0.7rem',
-                    backgroundColor: sneatTokens.info.soft,
-                    color: sneatTokens.info.main,
-                  }}
-                />
+
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
+                  Pengawasan Sentinel L4
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isSentinelActive ? sneatTokens.success.main : 'text.primary' }}>
+                  {sentinelStatus}
+                </Typography>
               </Box>
 
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Pengawasan Sentinel L4
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isSentinelActive ? sneatTokens.success.main : 'text.primary' }}>
-                {sentinelStatus}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                   Circuit Breaker &amp; Risk Guard
                 </Typography>
                 <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
@@ -222,39 +232,58 @@ export function KpiCards({ statusData, dataPayload }) {
             onClick={() => { window.location.hash = '#/watchlist'; }}
             title="Klik untuk ke paparan Watchlist Dwi-Lorong"
           >
-            <CardContent sx={{ p: 2.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '8px',
-                    backgroundColor: klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.info.soft,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: klinePercent > 80 ? sneatTokens.error.main : sneatTokens.info.main,
-                  }}
-                >
-                  <QueryStatsIcon sx={{ fontSize: 24 }} />
+            <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '8px',
+                      backgroundColor: klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.info.soft,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: klinePercent > 80 ? sneatTokens.error.main : sneatTokens.info.main,
+                    }}
+                  >
+                    <QueryStatsIcon sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Chip
+                    size="small"
+                    label={`${klineUsed} / 100 Guna`}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.7rem',
+                      borderRadius: 1.5,
+                      backgroundColor: klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.secondary.soft,
+                      color: klinePercent > 80 ? sneatTokens.error.main : 'text.secondary',
+                    }}
+                  />
                 </Box>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  {klineUsed} / 100 Digunakan
+
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
+                  Kuota API K-Line 30-Hari
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
+                  {klineRemaining} Baki
                 </Typography>
               </Box>
 
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                Kuota API K-Line 30-Hari
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                {klineRemaining} Baki
-              </Typography>
-              <Box sx={{ mt: 1.5, width: '100%' }}>
+              <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
+                    Penggunaan Kuota
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
+                    {Math.round(klinePercent)}%
+                  </Typography>
+                </Box>
                 <LinearProgress
                   variant="determinate"
                   value={klinePercent}
                   sx={{
-                    height: 6,
+                    height: 5,
                     borderRadius: 3,
                     backgroundColor: theme => theme.palette.divider,
                     '& .MuiLinearProgress-bar': {
