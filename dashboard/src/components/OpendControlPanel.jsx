@@ -21,11 +21,15 @@ import {
   Divider,
   InputAdornment,
   IconButton,
+  Chip,
 } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import LoginIcon from '@mui/icons-material/Login';
 import KeyIcon from '@mui/icons-material/Key';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LockResetIcon from '@mui/icons-material/LockReset';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { sneatTokens } from '../theme';
@@ -33,6 +37,10 @@ import { sneatTokens } from '../theme';
 export function OpendControlPanel({ statusData, onRefresh }) {
   const bridge = statusData?.bridge || {};
   const opendStatus = bridge.opend_status || bridge.status || 'UNKNOWN';
+
+  const isConnected = String(opendStatus).toUpperCase().includes('CONNECT') &&
+    !String(opendStatus).toUpperCase().includes('ERROR') &&
+    !String(opendStatus).toUpperCase().includes('DISCONNECT');
 
   // Helper functions to safely extract string ID and display label from account objects/strings
   const extractAccId = (a) => {
@@ -72,6 +80,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   const [showPassword, setShowPassword] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signInMessage, setSignInMessage] = useState(null);
+  const [manualShowLogin, setManualShowLogin] = useState(false);
 
   // OTP Dialog state
   const [openOtpDialog, setOpenOtpDialog] = useState(false);
@@ -162,6 +171,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
       if (resp.ok) {
         setSignOutMessage({ type: 'success', text: 'Sesi OpenD berjaya ditamatkan.' });
         setOpenSignOutDialog(false);
+        setManualShowLogin(false);
         if (onRefresh) onRefresh();
       } else {
         setSignOutMessage({ type: 'error', text: data.error || 'Gagal menamatkan sesi OpenD.' });
@@ -201,6 +211,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
           setOpenOtpDialog(true);
         } else if (data.status === 'CONNECTED') {
           setSignInMessage({ type: 'success', text: 'Log masuk berjaya! Status OpenD kini CONNECTED.' });
+          setManualShowLogin(false);
           if (onRefresh) onRefresh();
         } else {
           setSignInMessage({ type: 'info', text: data.message || `Status dikemas kini: ${data.status}` });
@@ -237,8 +248,9 @@ export function OpendControlPanel({ statusData, onRefresh }) {
         setOtpCode('');
         setTimeout(() => {
           setOpenOtpDialog(false);
+          setManualShowLogin(false);
           if (onRefresh) onRefresh();
-        }, 1500);
+        }, 1200);
       } else {
         setOtpMessage({ type: 'error', text: data.error || 'Pengesahan OTP gagal.' });
       }
@@ -252,75 +264,96 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   return (
     <Box id="opend-control" sx={{ mb: 4 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-        Pengurusan Akaun &amp; Sesi Dagangan OpenD
+        Pengurusan Sesi &amp; Akaun Dagangan OpenD
       </Typography>
 
-      <Grid container spacing={2.5}>
-        {/* Panel Kiri: Pertukaran Akaun & Kawalan Sesi */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <SwapHorizIcon color="primary" /> Pertukaran Akaun Dagangan Pantas
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Pilih akaun dagangan Paper Trading (SIMULATE) atau REAL tanpa perlu memulakan semula (restart) kontena OpenD.
-              </Typography>
+      {/* Keadaan 1: Terhubung (Connected) -> Hanya tunjuk Logout & Pertukaran Akaun. Sembunyikan Borang Login */}
+      {isConnected && !manualShowLogin ? (
+        <Card sx={{ maxWidth: 840, mx: 'auto' }}>
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <CheckCircleIcon sx={{ color: sneatTokens.success.main, fontSize: 28 }} />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Sesi Broker Telnet Aktif &amp; Terhubung
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Status OpenD: <strong>{opendStatus}</strong>. Gateway sedia untuk dagangan dan suapan pasaran.
+                  </Typography>
+                </Box>
+              </Box>
+              <Chip
+                icon={<CheckCircleIcon sx={{ fontSize: '16px !important' }} />}
+                label={opendStatus}
+                sx={{
+                  fontWeight: 700,
+                  backgroundColor: sneatTokens.success.soft,
+                  color: sneatTokens.success.main,
+                }}
+              />
+            </Box>
 
-              {accMessage && (
-                <Alert severity={accMessage.type} sx={{ mb: 2, borderRadius: '8px' }}>
-                  {accMessage.text}
-                </Alert>
-              )}
+            {accMessage && (
+              <Alert severity={accMessage.type} sx={{ mb: 2, borderRadius: '8px' }}>
+                {accMessage.text}
+              </Alert>
+            )}
 
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 4 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel id="acc-select-label">Pilih Akaun (acc_id)</InputLabel>
-                  <Select
-                    labelId="acc-select-label"
-                    id="accSelect"
-                    value={selectedAccount || (accounts.length > 0 ? extractAccId(accounts[0]) : '')}
-                    label="Pilih Akaun (acc_id)"
-                    disabled={switchingAcc}
-                    onChange={(e) => handleSwitchAccount(e.target.value)}
-                  >
-                    {accounts.length > 0 ? (
-                      accounts.map((acc, idx) => {
-                        const accId = extractAccId(acc);
-                        const accLabel = extractAccLabel(acc);
-                        return (
-                          <MenuItem key={accId || idx} value={accId}>
-                            {accLabel}
-                          </MenuItem>
-                        );
-                      })
-                    ) : (
-                      <MenuItem value={selectedAccount || 'SIMULATE-1'}>
-                        {selectedAccount || 'SIMULATE-1 (Akaun Aktif)'}
-                      </MenuItem>
-                    )}
-                  </Select>
-                </FormControl>
-                {switchingAcc && <CircularProgress size={24} />}
+            {signOutMessage && (
+              <Alert severity={signOutMessage.type} sx={{ mb: 2, borderRadius: '8px' }}>
+                {signOutMessage.text}
+              </Alert>
+            )}
+
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary', mt: 2, mb: 1 }}>
+              Pertukaran Akaun Dagangan Pantas
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="acc-select-label">Pilih Akaun (acc_id)</InputLabel>
+                <Select
+                  labelId="acc-select-label"
+                  id="accSelect"
+                  value={selectedAccount || (accounts.length > 0 ? extractAccId(accounts[0]) : '')}
+                  label="Pilih Akaun (acc_id)"
+                  disabled={switchingAcc}
+                  onChange={(e) => handleSwitchAccount(e.target.value)}
+                >
+                  {accounts.length > 0 ? (
+                    accounts.map((acc, idx) => {
+                      const accId = extractAccId(acc);
+                      const accLabel = extractAccLabel(acc);
+                      return (
+                        <MenuItem key={accId || idx} value={accId}>
+                          {accLabel}
+                        </MenuItem>
+                      );
+                    })
+                  ) : (
+                    <MenuItem value={selectedAccount || 'SIMULATE-1'}>
+                      {selectedAccount || 'SIMULATE-1 (Akaun Aktif)'}
+                    </MenuItem>
+                  )}
+                </Select>
+              </FormControl>
+              {switchingAcc && <CircularProgress size={24} />}
+            </Box>
+
+            <Divider sx={{ my: 2.5 }} />
+
+            {/* Kawalan Logout (Hanya ditunjukkan bila sudah login/connected) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  Tamatkan Sesi Semasa
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Membersihkan token cache dan mengembalikan gerbang OpenD ke mod idle.
+                </Typography>
               </Box>
 
-              <Divider sx={{ my: 2 }} />
-
-              {/* Sesi OpenD Sign Out */}
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>
-                Penamatan Sesi Broker
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                Tamatkan sesi OpenD Telnet untuk membersihkan token cache dan mengembalikan gerbang ke mod idle.
-              </Typography>
-
-              {signOutMessage && (
-                <Alert severity={signOutMessage.type} sx={{ mb: 2, borderRadius: '8px' }}>
-                  {signOutMessage.text}
-                </Alert>
-              )}
-
-              <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                 <Button
                   id="btnSignOut"
                   variant="outlined"
@@ -333,101 +366,128 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                 </Button>
 
                 <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<KeyIcon />}
-                  onClick={() => setOpenOtpDialog(true)}
+                  variant="text"
+                  size="small"
+                  startIcon={<LockResetIcon />}
+                  onClick={() => setManualShowLogin(true)}
+                  sx={{ color: 'text.secondary', textTransform: 'none' }}
                 >
-                  Geganti 2FA OTP
+                  Tukar Kredensial Moomoo
                 </Button>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Box>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Keadaan 2: Belum Login / Disconnected / Tukar Kredensial -> Tunjukkan Borang Login, Sembunyikan Logout */
+        <Card sx={{ maxWidth: 640, mx: 'auto' }}>
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <LoginIcon sx={{ color: sneatTokens.primary.main, fontSize: 28 }} />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Log Masuk &amp; Kredensial Moomoo
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Sesi belum disambungkan. Sila masukkan kredensial Moomoo untuk memulakan OpenD.
+                  </Typography>
+                </Box>
+              </Box>
+              <Chip
+                icon={<WarningAmberIcon sx={{ fontSize: '16px !important' }} />}
+                label={opendStatus}
+                sx={{
+                  fontWeight: 700,
+                  backgroundColor: sneatTokens.warning.soft,
+                  color: sneatTokens.warning.main,
+                }}
+              />
+            </Box>
 
-        {/* Panel Kanan: Log Masuk Moomoo & Kredensial */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <LoginIcon color="primary" /> Log Masuk &amp; Kredensial Moomoo
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Masukkan ID akaun dan kata laluan Moomoo. Kata laluan di-hash MD5 di peringkat pelayan untuk keselamatan mutlak.
-              </Typography>
+            {signInMessage && (
+              <Alert severity={signInMessage.type} sx={{ mb: 2, borderRadius: '8px' }}>
+                {signInMessage.text}
+              </Alert>
+            )}
 
-              {signInMessage && (
-                <Alert severity={signInMessage.type} sx={{ mb: 2, borderRadius: '8px' }}>
-                  {signInMessage.text}
-                </Alert>
-              )}
+            <Box component="form" onSubmit={handleOpenDSignIn} sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                id="loginAccInput"
+                name="username"
+                label="Moomoo Account ID / Emel"
+                variant="outlined"
+                size="small"
+                fullWidth
+                autoComplete="username"
+                value={loginAcc}
+                onChange={(e) => setLoginAcc(e.target.value)}
+                placeholder="cth. 12345678"
+                required
+                inputProps={{
+                  autoComplete: 'username',
+                }}
+              />
 
-              <Box component="form" onSubmit={handleOpenDSignIn} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <TextField
-                  id="loginAccInput"
-                  name="username"
-                  label="Moomoo Account ID / Emel"
-                  variant="outlined"
-                  size="small"
-                  fullWidth
-                  autoComplete="username"
-                  value={loginAcc}
-                  onChange={(e) => setLoginAcc(e.target.value)}
-                  placeholder="cth. 12345678"
-                  required
-                  inputProps={{
-                    autoComplete: 'username',
-                  }}
-                />
+              <TextField
+                id="loginPwdInput"
+                name="password"
+                label="Kata Laluan Moomoo"
+                type={showPassword ? 'text' : 'password'}
+                variant="outlined"
+                size="small"
+                fullWidth
+                autoComplete="current-password"
+                value={loginPwd}
+                onChange={(e) => setLoginPwd(e.target.value)}
+                placeholder="Kata laluan akaun"
+                required
+                inputProps={{
+                  autoComplete: 'current-password',
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="papar atau sembunyikan kata laluan"
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                        size="small"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
-                <TextField
-                  id="loginPwdInput"
-                  name="password"
-                  label="Kata Laluan Moomoo"
-                  type={showPassword ? 'text' : 'password'}
-                  variant="outlined"
-                  size="small"
-                  fullWidth
-                  autoComplete="current-password"
-                  value={loginPwd}
-                  onChange={(e) => setLoginPwd(e.target.value)}
-                  placeholder="Kata laluan akaun"
-                  required
-                  inputProps={{
-                    autoComplete: 'current-password',
-                  }}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          aria-label="papar atau sembunyikan kata laluan"
-                          onClick={() => setShowPassword(!showPassword)}
-                          edge="end"
-                          size="small"
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mt: 1 }}>
                 <Button
                   type="submit"
                   variant="contained"
                   color="primary"
                   startIcon={signingIn ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
                   disabled={signingIn}
-                  sx={{ mt: 1 }}
+                  sx={{ flex: 1 }}
                 >
                   {signingIn ? 'Menghantar Kredensial...' : 'Log Masuk ke OpenD'}
                 </Button>
+
+                {isConnected && manualShowLogin && (
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => setManualShowLogin(false)}
+                  >
+                    Batal
+                  </Button>
+                )}
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dialog Pengesahan Sign-Out */}
       <Dialog open={openSignOutDialog} onClose={() => setOpenSignOutDialog(false)}>
@@ -452,7 +512,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog Masukan Kod 2FA OTP */}
+      {/* Dialog Masukan Kod 2FA OTP (Hanya dipaparkan secara popup bila WAIT_OTP atau semasa log masuk) */}
       <Dialog open={openOtpDialog} onClose={() => setOpenOtpDialog(false)}>
         <DialogTitle sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
           <KeyIcon sx={{ color: sneatTokens.warning.main }} /> Masukkan Kod Pengesahan 2FA OTP

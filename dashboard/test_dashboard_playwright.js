@@ -98,38 +98,22 @@ async function runPlaywrightSuite() {
     const bgDark = await mobilePage.evaluate(() => window.getComputedStyle(document.body).backgroundColor);
     assertCheck('Theme Toggle: Successfully switched back to Dark Mode (#232333)', bgDark === 'rgb(35, 35, 51)' || bgDark.includes('35'));
 
-    // 3. Mobile Navigation Drawer Slide-Out & Route Navigation
-    await menuBtn.click();
-    await mobilePage.waitForTimeout(400);
-    const drawerModal = mobilePage.locator('.MuiDrawer-modal');
-    assertCheck('Mobile Navigation: Drawer opens on hamburger click', (await drawerModal.count()) === 1);
-
-    // Click Watchlist navigation
-    const navWatchlist = drawerModal.locator('text=Watchlist Dwi-Lorong');
-    await navWatchlist.click();
+    // 3. Card Click Navigation: Click OpenD Gateway KPI card
+    const opendKpiCard = mobilePage.locator('text=Gerbang OpenD Moomoo').first();
+    assertCheck('Mobile Overview: OpenD Gateway KPI card present', (await opendKpiCard.count()) === 1);
+    await opendKpiCard.click();
     await mobilePage.waitForTimeout(500);
-    assertCheck('Mobile Navigation: Navigated to #/watchlist', mobilePage.url().includes('#/watchlist'));
+    assertCheck('Card Click Navigation: Clicked OpenD KPI card and navigated to #/opend', mobilePage.url().includes('#/opend'));
 
-    // Check Watchlist tabs & horizontal table scroll
-    const setupTab = mobilePage.locator('button[role="tab"]').filter({ hasText: 'Setup' });
-    if ((await setupTab.count()) > 0) {
-      await setupTab.click();
-      await mobilePage.waitForTimeout(300);
-      assertCheck('Mobile Watchlist: Clicked and filtered by Setup tab', true);
-    }
-    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '02_mobile_watchlist.png'), fullPage: true });
+    // 4. Mobile OpenD Page: Unified State-Driven Flow (HOM-183)
+    const btnSignOut = mobilePage.locator('#btnSignOut');
+    const selectTrigger = mobilePage.locator('#accSelect');
 
-    // 4. Mobile OpenD Page & Form Interaction
-    await menuBtn.click();
-    await mobilePage.waitForTimeout(400);
-    const navOpend = drawerModal.locator('text=Pengurusan OpenD');
-    await navOpend.click();
-    await mobilePage.waitForTimeout(500);
-    assertCheck('Mobile Navigation: Navigated to #/opend', mobilePage.url().includes('#/opend'));
+    const isConnectedVisible = (await btnSignOut.count()) === 1;
+    assertCheck('Mobile OpenD: State-driven UI - On CONNECTED, Logout button #btnSignOut is displayed', isConnectedVisible);
+    assertCheck('Mobile OpenD: State-driven UI - On CONNECTED, Account selector #accSelect is displayed', (await selectTrigger.count()) === 1);
 
     // 4a. Account Dropdown Selection (HOM-183 fix for React Error #31)
-    const selectTrigger = mobilePage.locator('#accSelect');
-    assertCheck('Mobile OpenD: Account selector dropdown present', (await selectTrigger.count()) === 1);
     await selectTrigger.click();
     await mobilePage.waitForTimeout(400);
 
@@ -142,10 +126,21 @@ async function runPlaywrightSuite() {
       assertCheck('Mobile OpenD: Selected account option successfully without React error', true);
     }
 
+    // 4b. When connected, verify the default login form is hidden
+    const initialAccInput = mobilePage.locator('#loginAccInput');
+    assertCheck('Mobile OpenD: Login form #loginAccInput is hidden while connected', (await initialAccInput.count()) === 0);
+
+    // 4c. Toggle credential change to test form fields and password masking
+    const switchCredBtn = mobilePage.locator('text=Tukar Kredensial Moomoo');
+    if ((await switchCredBtn.count()) > 0) {
+      await switchCredBtn.click();
+      await mobilePage.waitForTimeout(300);
+    }
+
     const accInput = mobilePage.locator('#loginAccInput');
     const pwdInput = mobilePage.locator('#loginPwdInput');
-    assertCheck('Mobile OpenD: Single unique #loginAccInput in DOM', (await accInput.count()) === 1);
-    assertCheck('Mobile OpenD: Single unique #loginPwdInput in DOM', (await pwdInput.count()) === 1);
+    assertCheck('Mobile OpenD: Single unique #loginAccInput rendered when changing credentials', (await accInput.count()) === 1);
+    assertCheck('Mobile OpenD: Single unique #loginPwdInput rendered when changing credentials', (await pwdInput.count()) === 1);
 
     // Fill form credentials
     await accInput.fill('101578176');
@@ -174,7 +169,31 @@ async function runPlaywrightSuite() {
 
     await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '03_mobile_opend_filled.png'), fullPage: true });
 
-    // 5. Funnel Screener Page
+    // Cancel credential change and revert to connected view
+    const cancelCredBtn = mobilePage.locator('button:has-text("Batal")');
+    if ((await cancelCredBtn.count()) > 0) {
+      await cancelCredBtn.click();
+      await mobilePage.waitForTimeout(300);
+    }
+
+    // 5. Drawer Navigation to Watchlist
+    await menuBtn.click();
+    await mobilePage.waitForTimeout(400);
+    const drawerModal = mobilePage.locator('.MuiDrawer-modal');
+    const navWatchlist = drawerModal.locator('text=Watchlist Dwi-Lorong');
+    await navWatchlist.click();
+    await mobilePage.waitForTimeout(500);
+    assertCheck('Mobile Navigation: Navigated to #/watchlist', mobilePage.url().includes('#/watchlist'));
+
+    const setupTab = mobilePage.locator('button[role="tab"]').filter({ hasText: 'Setup' });
+    if ((await setupTab.count()) > 0) {
+      await setupTab.click();
+      await mobilePage.waitForTimeout(300);
+      assertCheck('Mobile Watchlist: Clicked and filtered by Setup tab', true);
+    }
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '02_mobile_watchlist.png'), fullPage: true });
+
+    // 6. Funnel Screener Page
     await mobilePage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
     await mobilePage.waitForTimeout(400);
     const funnelCards = mobilePage.locator('text=Cloud Universe');

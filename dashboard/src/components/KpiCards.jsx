@@ -12,6 +12,7 @@ import HubIcon from '@mui/icons-material/Hub';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import ShieldIcon from '@mui/icons-material/Shield';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { sneatTokens } from '../theme';
 
 export function KpiCards({ statusData, dataPayload }) {
@@ -41,6 +42,19 @@ export function KpiCards({ statusData, dataPayload }) {
   const klineRemaining = quota.kline_30d_remaining !== undefined ? quota.kline_30d_remaining : 100;
   const klinePercent = Math.min(100, Math.max(0, (klineUsed / 100) * 100));
 
+  const cardActionSx = {
+    height: '100%',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease-in-out',
+    border: '1px solid',
+    borderColor: 'divider',
+    '&:hover': {
+      transform: 'translateY(-3px)',
+      boxShadow: '0 8px 24px rgba(105, 108, 255, 0.12)',
+      borderColor: 'primary.main',
+    },
+  };
+
   return (
     <Box id="overview" sx={{ mb: 4 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
@@ -48,9 +62,13 @@ export function KpiCards({ statusData, dataPayload }) {
       </Typography>
 
       <Grid container spacing={2.5}>
-        {/* Card 1: OpenD Gateway */}
+        {/* Card 1: OpenD Gateway -> navigates to #/opend */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', position: 'relative' }}>
+          <Card
+            sx={cardActionSx}
+            onClick={() => { window.location.hash = '#/opend'; }}
+            title="Klik untuk ke halaman Pengurusan OpenD"
+          >
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Box
@@ -85,16 +103,23 @@ export function KpiCards({ statusData, dataPayload }) {
               <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isOpendConnected ? sneatTokens.success.main : sneatTokens.warning.main }}>
                 {opendStatus}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                Port 11111 (API) &bull; 22222 (Telnet)
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Port 11111 (API) &bull; 22222 (Telnet)
+                </Typography>
+                <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Card 2: Baki Akaun & Ekuiti */}
+        {/* Card 2: Baki Akaun & Ekuiti -> navigates to #/opend */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
+          <Card
+            sx={cardActionSx}
+            onClick={() => { window.location.hash = '#/opend'; }}
+            title="Klik untuk ke halaman Pengurusan OpenD & Akaun"
+          >
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Box
@@ -129,16 +154,23 @@ export function KpiCards({ statusData, dataPayload }) {
               <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
                 {cashBalance}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                Jumlah Ekuiti: <strong>{totalEquity}</strong>
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Jumlah Ekuiti: <strong>{totalEquity}</strong>
+                </Typography>
+                <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Card 3: Sentinel L4 Engine */}
+        {/* Card 3: Sentinel L4 Engine -> navigates to #/funnel */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
+          <Card
+            sx={cardActionSx}
+            onClick={() => { window.location.hash = '#/funnel'; }}
+            title="Klik untuk ke paparan Corong Saringan & Sentinel"
+          >
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Box
@@ -173,16 +205,23 @@ export function KpiCards({ statusData, dataPayload }) {
               <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isSentinelActive ? sneatTokens.success.main : 'text.primary' }}>
                 {sentinelStatus}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                Circuit Breaker &amp; Risk Guard
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Circuit Breaker &amp; Risk Guard
+                </Typography>
+                <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Card 4: Penjejak Kuota K-Line */}
+        {/* Card 4: Penjejak Kuota K-Line -> navigates to #/watchlist */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
+          <Card
+            sx={cardActionSx}
+            onClick={() => { window.location.hash = '#/watchlist'; }}
+            title="Klik untuk ke paparan Watchlist Dwi-Lorong"
+          >
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Box
