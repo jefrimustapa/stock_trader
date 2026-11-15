@@ -7,10 +7,15 @@ import {
   Grid,
   Paper,
   Chip,
+  LinearProgress,
 } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import CloudQueueIcon from '@mui/icons-material/CloudQueue';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { sneatTokens } from '../theme';
 
 export function FunnelStepper({ dataPayload }) {
@@ -36,8 +41,10 @@ export function FunnelStepper({ dataPayload }) {
       count: stage1Count,
       unit: 'Kaunter',
       desc: 'Semua saham US aktif di Moomoo',
+      ratio: '100% Pasaran',
       color: sneatTokens.secondary.main,
       bg: sneatTokens.secondary.soft,
+      icon: <CloudQueueIcon sx={{ fontSize: 20 }} />,
     },
     {
       stage: 'Peringkat 2',
@@ -45,8 +52,10 @@ export function FunnelStepper({ dataPayload }) {
       count: stage2Count,
       unit: 'Kaunter',
       desc: 'Harga >= $10, Cap >= $1B, ADV >= 1M',
+      ratio: stage1Count > 0 ? `${((stage2Count / stage1Count) * 100).toFixed(1)}% Lolos` : '16.7% Lolos',
       color: sneatTokens.info.main,
       bg: sneatTokens.info.soft,
+      icon: <VerifiedUserIcon sx={{ fontSize: 20 }} />,
     },
     {
       stage: 'Peringkat 3',
@@ -54,8 +63,10 @@ export function FunnelStepper({ dataPayload }) {
       count: stage3Count,
       unit: 'Calon',
       desc: 'Momentum & Setup RS vs SPY',
+      ratio: stage2Count > 0 ? `${((stage3Count / stage2Count) * 100).toFixed(1)}% Dwi-Lorong` : '3.4% Calon',
       color: sneatTokens.warning.main,
       bg: sneatTokens.warning.soft,
+      icon: <AltRouteIcon sx={{ fontSize: 20 }} />,
     },
     {
       stage: 'Peringkat 4',
@@ -63,8 +74,10 @@ export function FunnelStepper({ dataPayload }) {
       count: stage4Count,
       unit: 'Teratas',
       desc: 'Kuota API 3-5 kaunter per lorong',
+      ratio: 'Kuota API Fokus',
       color: sneatTokens.primary.main,
       bg: sneatTokens.primary.soft,
+      icon: <ShowChartIcon sx={{ fontSize: 20 }} />,
     },
     {
       stage: 'Peringkat 5',
@@ -72,73 +85,199 @@ export function FunnelStepper({ dataPayload }) {
       count: stage5Count,
       unit: 'Saham Terpilih',
       desc: 'Sedia untuk eksekusi Tariq & Nawwar',
+      ratio: 'Sedia Eksekusi',
       color: sneatTokens.success.main,
       bg: sneatTokens.success.soft,
+      icon: <CheckCircleIcon sx={{ fontSize: 20 }} />,
     },
   ];
 
   return (
-    <Box id="funnel" sx={{ mb: 4 }}>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <FilterListIcon sx={{ color: sneatTokens.primary.main }} />
-        Corong Saringan 5-Peringkat (5-Stage Screening Funnel)
-      </Typography>
+    <Box id="funnel" sx={{ width: '100%' }}>
+      <Card
+        sx={{
+          borderRadius: '10px',
+          overflow: 'hidden',
+          border: (t) => `1px solid ${t.palette.divider}`,
+          boxShadow: (t) => t.palette.mode === 'dark'
+            ? '0 2px 14px 0 rgba(0, 0, 0, 0.28)'
+            : '0 2px 10px 0 rgba(67, 89, 113, 0.08)',
+        }}
+      >
+        {/* Card Header Toolbar */}
+        <Box
+          sx={{
+            p: { xs: 2, sm: 2.5 },
+            pb: { xs: 1.5, sm: 2 },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1.5,
+            borderBottom: 1,
+            borderColor: 'divider',
+            backgroundColor: (t) => t.palette.mode === 'dark' ? 'rgba(255,255,255,0.01)' : '#FAFAFC',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: '8px',
+                backgroundColor: sneatTokens.primary.soft,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: sneatTokens.primary.main,
+                boxShadow: '0 2px 6px 0 rgba(105, 108, 255, 0.2)',
+              }}
+            >
+              <FilterListIcon sx={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                Saluran Penapisan Corong 5-Peringkat
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
+                Penapisan kuantitatif bertingkat dari Cloud Universe sehingga Calon Akhir
+              </Typography>
+            </Box>
+          </Box>
 
-      <Card>
-        <CardContent sx={{ p: 3 }}>
-          <Grid container spacing={2} alignItems="center">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Chip
+              size="small"
+              label="Aliran Progresif"
+              sx={{
+                fontWeight: 600,
+                backgroundColor: sneatTokens.info.soft,
+                color: sneatTokens.info.main,
+                borderRadius: 1.5,
+              }}
+            />
+            <Chip
+              size="small"
+              label={`${stage5Count} Calon Akhir`}
+              sx={{
+                fontWeight: 700,
+                backgroundColor: sneatTokens.success.soft,
+                color: sneatTokens.success.main,
+                borderRadius: 1.5,
+              }}
+            />
+          </Box>
+        </Box>
+
+        {/* 5-Stage Step Grid */}
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Grid container spacing={2} alignItems="stretch">
             {steps.map((step, idx) => (
-              <React.Fragment key={step.stage}>
-                <Grid item xs={12} sm={6} md={2.4}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: '8px',
-                      backgroundColor: step.bg,
-                      border: `1px solid ${step.color}30`,
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Chip
-                        size="small"
-                        label={step.stage}
-                        sx={{
-                          fontSize: '0.65rem',
-                          fontWeight: 700,
-                          backgroundColor: 'background.paper',
-                          color: step.color,
-                        }}
-                      />
-                      {idx === steps.length - 1 && (
-                        <CheckCircleIcon sx={{ color: sneatTokens.success.main, fontSize: 18 }} />
-                      )}
+              <Grid item xs={12} sm={6} md={2.4} key={step.stage}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: '8px',
+                    backgroundColor: (t) => t.palette.mode === 'dark' ? '#252636' : '#FFFFFF',
+                    border: (t) => `1px solid ${step.color}40`,
+                    boxShadow: (t) => t.palette.mode === 'dark'
+                      ? '0 2px 6px 0 rgba(0,0,0,0.2)'
+                      : '0 2px 6px 0 rgba(67, 89, 113, 0.05)',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: (t) => `0 4px 12px 0 ${step.color}25`,
+                    },
+                  }}
+                >
+                  {/* Top Bar of Card: Stage Chip & Icon */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                    <Chip
+                      size="small"
+                      label={step.stage}
+                      sx={{
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        backgroundColor: step.bg,
+                        color: step.color,
+                        borderRadius: 1.5,
+                        px: 0.5,
+                      }}
+                    />
+                    <Box
+                      sx={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: '6px',
+                        backgroundColor: step.bg,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: step.color,
+                      }}
+                    >
+                      {step.icon}
                     </Box>
+                  </Box>
 
-                    <Box sx={{ my: 1 }}>
-                      <Typography variant="h4" sx={{ fontWeight: 800, color: step.color }}>
-                        {step.count.toLocaleString()}
-                      </Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                        {step.unit}
-                      </Typography>
-                    </Box>
+                  {/* Metric Number */}
+                  <Box sx={{ my: 1 }}>
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        fontWeight: 800,
+                        color: step.color,
+                        lineHeight: 1.1,
+                        fontSize: { xs: '1.75rem', sm: '2rem' },
+                      }}
+                    >
+                      {step.count.toLocaleString()}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mt: 0.25 }}>
+                      {step.unit}
+                    </Typography>
+                  </Box>
 
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.85rem' }}>
-                        {step.title}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                        {step.desc}
-                      </Typography>
-                    </Box>
-                  </Paper>
-                </Grid>
-              </React.Fragment>
+                  {/* Title & Description */}
+                  <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.85rem', color: 'text.primary' }}>
+                      {step.title}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        mt: 0.5,
+                        lineHeight: 1.3,
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      {step.desc}
+                    </Typography>
+                  </Box>
+
+                  {/* Ratio / Conversion Footer */}
+                  <Box sx={{ mt: 1.5, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 700, color: step.color }}>
+                      {step.ratio}
+                    </Typography>
+                    {idx < steps.length - 1 ? (
+                      <ArrowForwardIcon sx={{ fontSize: 14, color: 'text.secondary', opacity: 0.6 }} />
+                    ) : (
+                      <CheckCircleIcon sx={{ fontSize: 14, color: sneatTokens.success.main }} />
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
             ))}
           </Grid>
         </CardContent>

@@ -12,6 +12,8 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TuneIcon from '@mui/icons-material/Tune';
 import { sneatTokens } from '../theme';
 import { WatchlistTable } from '../components/WatchlistTable';
 
@@ -36,26 +38,41 @@ export function WatchlistPage({ dataPayload }) {
   ).length;
 
   return (
-    <Box id="page-watchlist" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
+    <Box id="page-watchlist" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2.5, sm: 3 } }}>
       {/* Page Header */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
-        <Box>
-          <Typography
-            variant="h5"
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
             sx={{
-              fontWeight: 700,
-              fontSize: { xs: '1.2rem', sm: '1.5rem' },
+              width: 40,
+              height: 40,
+              borderRadius: '8px',
+              backgroundColor: sneatTokens.primary.soft,
               display: 'flex',
               alignItems: 'center',
-              gap: 1,
+              justifyContent: 'center',
+              color: sneatTokens.primary.main,
+              boxShadow: '0 2px 8px 0 rgba(105, 108, 255, 0.35)',
+              flexShrink: 0,
             }}
           >
-            <ViewListIcon sx={{ color: sneatTokens.primary.main }} />
-            Watchlist Saham Aktif Dwi-Lorong
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-            Kaunter saham US melepasi saringan corong 5-peringkat, disusun mengikut lorong MOMENTUM dan SETUP.
-          </Typography>
+            <ViewListIcon sx={{ fontSize: 24 }} />
+          </Box>
+          <Box>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: '1.2rem', sm: '1.45rem' },
+                lineHeight: 1.25,
+              }}
+            >
+              Watchlist Saham Aktif Dwi-Lorong
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25, fontSize: { xs: '0.78rem', sm: '0.85rem' } }}>
+              Kaunter saham US melepasi saringan corong 5-peringkat, disusun mengikut lorong MOMENTUM dan SETUP.
+            </Typography>
+          </Box>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -67,6 +84,7 @@ export function WatchlistPage({ dataPayload }) {
               fontWeight: 700,
               backgroundColor: isMarketOpen ? sneatTokens.success.soft : sneatTokens.secondary.soft,
               color: isMarketOpen ? sneatTokens.success.main : sneatTokens.secondary.main,
+              borderRadius: 1.5,
             }}
           />
           <Chip
@@ -76,6 +94,7 @@ export function WatchlistPage({ dataPayload }) {
               fontWeight: 600,
               backgroundColor: isLive ? sneatTokens.success.soft : sneatTokens.secondary.soft,
               color: isLive ? sneatTokens.success.main : sneatTokens.secondary.main,
+              borderRadius: 1.5,
             }}
           />
           <Chip
@@ -85,6 +104,7 @@ export function WatchlistPage({ dataPayload }) {
             sx={{
               fontWeight: 500,
               backgroundColor: 'action.hover',
+              borderRadius: 1.5,
             }}
           />
         </Box>
@@ -96,25 +116,57 @@ export function WatchlistPage({ dataPayload }) {
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: '8px',
+              p: 2.25,
+              borderRadius: '10px',
               border: (t) => `1px solid ${t.palette.divider}`,
               backgroundColor: 'background.paper',
+              boxShadow: (t) => t.palette.mode === 'dark'
+                ? '0 2px 14px 0 rgba(0, 0, 0, 0.28)'
+                : '0 2px 10px 0 rgba(67, 89, 113, 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
+              transition: 'transform 0.15s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+              },
             }}
           >
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                JUMLAH KAUNTER AKTIF
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                {items.length}
-              </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '8px',
+                  backgroundColor: sneatTokens.primary.soft,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: sneatTokens.primary.main,
+                }}
+              >
+                <ViewListIcon sx={{ fontSize: 24 }} />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
+                  JUMLAH KAUNTER AKTIF
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.25, lineHeight: 1.1 }}>
+                  {items.length}
+                </Typography>
+              </Box>
             </Box>
-            <Chip label="Watchlist" size="small" sx={{ backgroundColor: sneatTokens.primary.soft, color: sneatTokens.primary.main, fontWeight: 700 }} />
+            <Chip
+              label="Watchlist"
+              size="small"
+              sx={{
+                backgroundColor: sneatTokens.primary.soft,
+                color: sneatTokens.primary.main,
+                fontWeight: 700,
+                borderRadius: 1.5,
+              }}
+            />
           </Paper>
         </Grid>
 
@@ -122,25 +174,57 @@ export function WatchlistPage({ dataPayload }) {
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: '8px',
+              p: 2.25,
+              borderRadius: '10px',
               border: (t) => `1px solid ${t.palette.divider}`,
               backgroundColor: 'background.paper',
+              boxShadow: (t) => t.palette.mode === 'dark'
+                ? '0 2px 14px 0 rgba(0, 0, 0, 0.28)'
+                : '0 2px 10px 0 rgba(67, 89, 113, 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
+              transition: 'transform 0.15s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+              },
             }}
           >
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                LORONG MOMENTUM
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: sneatTokens.primary.main }}>
-                {momentumCount}
-              </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '8px',
+                  backgroundColor: sneatTokens.primary.soft,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: sneatTokens.primary.main,
+                }}
+              >
+                <TrendingUpIcon sx={{ fontSize: 24 }} />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
+                  LORONG MOMENTUM
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.25, lineHeight: 1.1, color: sneatTokens.primary.main }}>
+                  {momentumCount}
+                </Typography>
+              </Box>
             </Box>
-            <Chip label="Ungu" size="small" sx={{ backgroundColor: sneatTokens.primary.soft, color: sneatTokens.primary.main, fontWeight: 700 }} />
+            <Chip
+              label="Ungu"
+              size="small"
+              sx={{
+                backgroundColor: sneatTokens.primary.soft,
+                color: sneatTokens.primary.main,
+                fontWeight: 700,
+                borderRadius: 1.5,
+              }}
+            />
           </Paper>
         </Grid>
 
@@ -148,25 +232,57 @@ export function WatchlistPage({ dataPayload }) {
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: '8px',
+              p: 2.25,
+              borderRadius: '10px',
               border: (t) => `1px solid ${t.palette.divider}`,
               backgroundColor: 'background.paper',
+              boxShadow: (t) => t.palette.mode === 'dark'
+                ? '0 2px 14px 0 rgba(0, 0, 0, 0.28)'
+                : '0 2px 10px 0 rgba(67, 89, 113, 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
+              transition: 'transform 0.15s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+              },
             }}
           >
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                LORONG SETUP
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: sneatTokens.warning.main }}>
-                {setupCount}
-              </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '8px',
+                  backgroundColor: sneatTokens.warning.soft,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: sneatTokens.warning.main,
+                }}
+              >
+                <TuneIcon sx={{ fontSize: 24 }} />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
+                  LORONG SETUP
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.25, lineHeight: 1.1, color: sneatTokens.warning.main }}>
+                  {setupCount}
+                </Typography>
+              </Box>
             </Box>
-            <Chip label="Ambar" size="small" sx={{ backgroundColor: sneatTokens.warning.soft, color: sneatTokens.warning.main, fontWeight: 700 }} />
+            <Chip
+              label="Ambar"
+              size="small"
+              sx={{
+                backgroundColor: sneatTokens.warning.soft,
+                color: sneatTokens.warning.main,
+                fontWeight: 700,
+                borderRadius: 1.5,
+              }}
+            />
           </Paper>
         </Grid>
       </Grid>

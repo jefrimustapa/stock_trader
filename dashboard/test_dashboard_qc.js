@@ -387,6 +387,15 @@ async function main() {
     assert.ok(html.includes('STAGE 5'), 'Must have STAGE 5 badge');
   });
 
+  check('FunnelPage renders Sneat UI v6 progressive flow banner and Watchlist navigation link (HOM-203)', () => {
+    const html = renderToString(React.createElement(FunnelPage, {
+      dataPayload: mockDataPayload,
+    }));
+    assert.ok(html.includes('Aliran Progresif'), 'Must render progressive flow chip');
+    assert.ok(html.includes('Saluran Penapisan Corong 5-Peringkat'), 'Must render unified funnel card title');
+    assert.ok(html.includes('Buka Jadual Watchlist'), 'Must render quick link to Watchlist table');
+  });
+
   console.log('\n--- 5. QC Page 4: WatchlistPage Elements ---');
   check('WatchlistPage renders page container and dual-lane summary', () => {
     const html = renderToString(React.createElement(WatchlistPage, {
@@ -424,6 +433,14 @@ async function main() {
     assert.ok(html.includes('TSLA'), 'Must render TSLA row');
     assert.ok(html.includes('AMD'), 'Must render AMD row');
     assert.ok(html.includes('PLTR'), 'Must render PLTR row');
+  });
+
+  check('WatchlistTable renders mobile horizontal scroll indicator and sticky column architecture (HOM-203)', () => {
+    const html = renderToString(React.createElement(WatchlistPage, {
+      dataPayload: mockDataPayload,
+    }));
+    assert.ok(html.includes('Leret mendatar jadual untuk metrik penuh'), 'Must render mobile horizontal scroll hint');
+    assert.ok(html.includes('sticky'), 'Must use sticky positioning for Simbol column');
   });
 
   console.log('\n--- 6. QC Layout & Navigation Elements ---');
