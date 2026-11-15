@@ -32,10 +32,10 @@ import { sneatTokens } from '../theme';
 const SIDEBAR_WIDTH = 260;
 
 export const navItems = [
-  { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
-  { id: 'opend', label: 'Pengurusan OpenD', shortLabel: 'OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
-  { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
-  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
+  { id: 'overview', label: 'Ringkasan & Metrik', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
+  { id: 'opend', label: 'Pengurusan OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
+  { id: 'funnel', label: 'Corong Saringan', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
+  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export function Layout({
@@ -98,6 +98,8 @@ export function Layout({
   };
 
   const statusChip = getStatusChip(opendStatus);
+
+  const activeItem = navItems.find((n) => n.id === currentPage) || navItems[0];
 
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -265,18 +267,22 @@ export function Layout({
             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(43, 44, 64, 0.85)' : 'rgba(255, 255, 255, 0.85)',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <IconButton
               onClick={handleDrawerToggle}
               edge="start"
               size="small"
               id="btn-mobile-menu"
               sx={{ display: { md: 'none' } }}
+              aria-label="buka menu"
             >
               <MenuIcon />
             </IconButton>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>
-              Dashboard Kawalan &amp; Dagangan Saham US
+              Dashboard Kawalan &amp; Dagangan Saham US &bull; {activeItem.label}
+            </Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, display: { xs: 'block', sm: 'none' } }}>
+              {activeItem.label}
             </Typography>
           </Box>
 
@@ -340,55 +346,6 @@ export function Layout({
               Log Keluar
             </Button>
           </Box>
-        </Paper>
-
-        {/* Responsive Mobile / Quick-Tab Page Navigation Bar */}
-        <Paper
-          elevation={0}
-          id="page-tab-bar"
-          sx={{
-            px: { xs: 1.5, sm: 3 },
-            py: 1,
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            backgroundColor: theme.palette.mode === 'dark' ? '#27283c' : '#fcfcfd',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            overflowX: 'auto',
-            '&::-webkit-scrollbar': { display: 'none' },
-          }}
-        >
-          {navItems.map((item) => {
-            const isActive = currentPage === item.id;
-            return (
-              <Button
-                key={item.id}
-                id={`tab-btn-${item.id}`}
-                variant={isActive ? 'contained' : 'text'}
-                size="small"
-                onClick={() => handleItemClick(item.id)}
-                startIcon={item.icon}
-                sx={{
-                  borderRadius: '20px',
-                  px: 2,
-                  py: 0.5,
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                  boxShadow: 'none',
-                  backgroundColor: isActive ? sneatTokens.primary.main : 'transparent',
-                  color: isActive ? '#ffffff' : 'text.secondary',
-                  '&:hover': {
-                    backgroundColor: isActive ? sneatTokens.primary.main : sneatTokens.primary.soft,
-                    color: isActive ? '#ffffff' : sneatTokens.primary.main,
-                    boxShadow: 'none',
-                  },
-                }}
-              >
-                {item.shortLabel || item.label}
-              </Button>
-            );
-          })}
         </Paper>
 
         {/* Page Container */}
