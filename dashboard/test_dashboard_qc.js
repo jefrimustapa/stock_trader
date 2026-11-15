@@ -400,6 +400,8 @@ async function main() {
     assert.ok(html.includes('LORONG SETUP'), 'Must render Setup metric card');
     assert.ok(html.includes('4'), 'Must show 4 active counters');
     assert.ok(html.includes('2'), 'Must show 2 Momentum and 2 Setup counters');
+    assert.ok(html.includes('MuiGrid-grid-xs-12'), 'Watchlist cards must use xs=12 for responsive mobile layout');
+    assert.ok(html.includes('MuiGrid-grid-sm-4'), 'Watchlist cards must use sm=4 for desktop layout');
   });
 
   check('WatchlistPage renders filter tabs and full table columns', () => {

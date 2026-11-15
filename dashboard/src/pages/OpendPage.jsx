@@ -27,20 +27,29 @@ export function OpendPage({ statusData, onRefresh }) {
     !String(opendStatus).toUpperCase().includes('DISCONNECT');
 
   return (
-    <Box id="page-opend" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box id="page-opend" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
       {/* Page Header */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              fontSize: { xs: '1.2rem', sm: '1.5rem' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
             <TuneIcon sx={{ color: sneatTokens.warning.main }} />
             Pengurusan Gerbang OpenD &amp; Sesi Dagangan
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
             Kawalan sesi broker Moomoo, pertukaran akaun pantas, log masuk kredensial selamat, dan geganti 2FA OTP (Seksyen 3.5.B Blueprint).
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Chip
             size="small"
             icon={isConnected ? <CheckCircleIcon sx={{ fontSize: '14px !important' }} /> : <WarningAmberIcon sx={{ fontSize: '14px !important' }} />}
@@ -74,7 +83,7 @@ export function OpendPage({ statusData, onRefresh }) {
         }}
       >
         <Grid container spacing={2} alignItems="center">
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <RouterIcon sx={{ color: sneatTokens.info.main, fontSize: 20 }} />
               <Box>
@@ -87,7 +96,7 @@ export function OpendPage({ statusData, onRefresh }) {
               </Box>
             </Box>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               Bilangan Akaun Tersedia
             </Typography>
@@ -95,7 +104,7 @@ export function OpendPage({ statusData, onRefresh }) {
               {accountsCount} Akaun Dikonfigurasi
             </Typography>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               Keselamatan Kata Laluan
             </Typography>
@@ -103,7 +112,7 @@ export function OpendPage({ statusData, onRefresh }) {
               MD5 Server Hashing (Aktif)
             </Typography>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               Sokongan 2FA
             </Typography>

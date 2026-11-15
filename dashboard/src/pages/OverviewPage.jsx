@@ -37,7 +37,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
   ).length;
 
   return (
-    <Box id="page-overview" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box id="page-overview" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
       {/* Welcome & Overview Header */}
       <Box
         sx={{
@@ -45,15 +45,24 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 2,
+          gap: 1.5,
         }}
       >
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              fontSize: { xs: '1.2rem', sm: '1.5rem' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
             <DashboardIcon sx={{ color: sneatTokens.primary.main }} />
             Ringkasan &amp; Prestasi Pasaran
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
             Pemantauan masa nyata gerbang OpenD, akaun Moomoo, enjin Sentinel L4, dan kuota API.
           </Typography>
         </Box>
@@ -92,7 +101,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
         </Typography>
         <Grid container spacing={2.5}>
           {/* Section 1: OpenD Control */}
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid item xs={12} sm={6} md={4}>
             <Card
               sx={{
                 height: '100%',
@@ -151,7 +160,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           </Grid>
 
           {/* Section 2: Screening Funnel */}
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid item xs={12} sm={6} md={4}>
             <Card
               sx={{
                 height: '100%',
@@ -210,7 +219,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           </Grid>
 
           {/* Section 3: Dual-Lane Watchlist */}
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid item xs={12} sm={6} md={4}>
             <Card
               sx={{
                 height: '100%',
@@ -285,7 +294,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           Pematuhan Seni Bina &amp; Keselamatan
         </Typography>
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18 }} />
               <Typography variant="body2">Authentik SSO &amp; Forward-Auth</Typography>
@@ -294,7 +303,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
               Perlindungan HMAC &amp; RS256 JWKS
             </Typography>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18 }} />
               <Typography variant="body2">Keselamatan Kredensial MD5</Typography>
@@ -303,7 +312,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
               Kata laluan di-hash sebelum ke OpenD
             </Typography>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18 }} />
               <Typography variant="body2">Sentinel L4 Circuit Breaker</Typography>
@@ -312,7 +321,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
               Had kerugian &amp; pemantauan automatik
             </Typography>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18 }} />
               <Typography variant="body2">Cloudflare Named Tunnel</Typography>

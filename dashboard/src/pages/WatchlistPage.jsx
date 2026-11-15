@@ -21,7 +21,10 @@ export function WatchlistPage({ dataPayload }) {
   const marketStatus = watchlist.market_status || 'CLOSED';
   const isMarketOpen = String(marketStatus).toUpperCase() === 'OPEN';
   const isLive = watchlist.is_live || false;
-  const dataAsOf = watchlist.data_as_of || dataPayload?.timestamp || 'Terkini';
+  const rawDataAsOf = watchlist.data_as_of || dataPayload?.timestamp || 'Terkini';
+  const dataAsOf = typeof rawDataAsOf === 'string' && rawDataAsOf.includes('T')
+    ? rawDataAsOf.split('.')[0].replace('T', ' ')
+    : rawDataAsOf;
 
   const momentumCount = items.filter(
     (i) => String(i.lane || '').toUpperCase() === 'MOMENTUM'
@@ -31,15 +34,24 @@ export function WatchlistPage({ dataPayload }) {
   ).length;
 
   return (
-    <Box id="page-watchlist" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box id="page-watchlist" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
       {/* Page Header */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              fontSize: { xs: '1.2rem', sm: '1.5rem' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
             <ViewListIcon sx={{ color: sneatTokens.primary.main }} />
             Watchlist Saham Aktif Dwi-Lorong
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
             Kaunter saham US melepasi saringan corong 5-peringkat, disusun mengikut lorong MOMENTUM dan SETUP.
           </Typography>
         </Box>
@@ -78,7 +90,7 @@ export function WatchlistPage({ dataPayload }) {
 
       {/* Quick Summary Cards */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 4 }}>
+        <Grid item xs={12} sm={4}>
           <Paper
             elevation={0}
             sx={{
@@ -89,6 +101,7 @@ export function WatchlistPage({ dataPayload }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              width: '100%',
             }}
           >
             <Box>
@@ -103,7 +116,7 @@ export function WatchlistPage({ dataPayload }) {
           </Paper>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 4 }}>
+        <Grid item xs={12} sm={4}>
           <Paper
             elevation={0}
             sx={{
@@ -114,6 +127,7 @@ export function WatchlistPage({ dataPayload }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              width: '100%',
             }}
           >
             <Box>
@@ -128,7 +142,7 @@ export function WatchlistPage({ dataPayload }) {
           </Paper>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 4 }}>
+        <Grid item xs={12} sm={4}>
           <Paper
             elevation={0}
             sx={{
@@ -139,6 +153,7 @@ export function WatchlistPage({ dataPayload }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              width: '100%',
             }}
           >
             <Box>

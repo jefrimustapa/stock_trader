@@ -32,10 +32,10 @@ import { sneatTokens } from '../theme';
 const SIDEBAR_WIDTH = 260;
 
 export const navItems = [
-  { id: 'overview', label: 'Ringkasan & Metrik', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
-  { id: 'opend', label: 'Pengurusan OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
-  { id: 'funnel', label: 'Corong Saringan', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
-  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
+  { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
+  { id: 'opend', label: 'Pengurusan OpenD', shortLabel: 'OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
+  { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
+  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export function Layout({
@@ -253,7 +253,7 @@ export function Layout({
         <Paper
           elevation={0}
           sx={{
-            py: 1.2,
+            py: 1,
             px: { xs: 1.5, sm: 3 },
             display: 'flex',
             alignItems: 'center',
@@ -267,26 +267,42 @@ export function Layout({
             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(43, 44, 64, 0.85)' : 'rgba(255, 255, 255, 0.85)',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Brand / Page Title */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 }, minWidth: 0, flexShrink: 1 }}>
             <IconButton
               onClick={handleDrawerToggle}
               edge="start"
               size="small"
               id="btn-mobile-menu"
-              sx={{ display: { md: 'none' } }}
+              sx={{ display: { md: 'none' }, mr: { xs: 0.5, sm: 1 } }}
               aria-label="buka menu"
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>
+            <Typography
+              variant="subtitle1"
+              noWrap
+              sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}
+            >
               Dashboard Kawalan &amp; Dagangan Saham US &bull; {activeItem.label}
             </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, display: { xs: 'block', sm: 'none' } }}>
-              {activeItem.label}
+            <Typography
+              variant="subtitle2"
+              noWrap
+              sx={{
+                fontWeight: 700,
+                display: { xs: 'block', sm: 'none' },
+                fontSize: '0.875rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {activeItem.shortLabel || activeItem.label}
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
+          {/* Action Controls */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, sm: 1.5 }, flexShrink: 0 }}>
             {/* OpenD Status Chip */}
             <Chip
               size="small"
@@ -295,8 +311,10 @@ export function Layout({
               sx={{
                 backgroundColor: statusChip.bg,
                 color: statusChip.text,
-                fontWeight: 600,
-                fontSize: '0.75rem',
+                fontWeight: 700,
+                fontSize: { xs: '0.68rem', sm: '0.75rem' },
+                height: { xs: 24, sm: 26 },
+                '& .MuiChip-label': { px: { xs: 0.8, sm: 1.2 } },
               }}
             />
 
@@ -318,11 +336,11 @@ export function Layout({
 
             {/* Dark/Light Mode Switch */}
             <Tooltip title={currentMode === 'dark' ? 'Tukar ke Mod Cerah' : 'Tukar ke Mod Gelap'}>
-              <IconButton onClick={onToggleMode} size="small" color="inherit" id="btn-theme-toggle">
+              <IconButton onClick={onToggleMode} size="small" color="inherit" id="btn-theme-toggle" sx={{ p: { xs: 0.5, sm: 1 } }}>
                 {currentMode === 'dark' ? (
-                  <LightModeOutlinedIcon sx={{ fontSize: 20, color: '#FFAB00' }} />
+                  <LightModeOutlinedIcon sx={{ fontSize: { xs: 18, sm: 20 }, color: '#FFAB00' }} />
                 ) : (
-                  <DarkModeOutlinedIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                  <DarkModeOutlinedIcon sx={{ fontSize: { xs: 18, sm: 20 }, color: 'text.secondary' }} />
                 )}
               </IconButton>
             </Tooltip>
@@ -333,23 +351,27 @@ export function Layout({
               variant="outlined"
               size="small"
               color="secondary"
-              startIcon={<LogoutIcon sx={{ fontSize: 16 }} />}
               href="/logout"
+              aria-label="Log Keluar"
               sx={{
                 borderRadius: '8px',
                 borderColor: theme.palette.divider,
-                fontSize: '0.8rem',
-                py: 0.5,
-                px: { xs: 1, sm: 1.5 },
+                fontSize: '0.75rem',
+                minWidth: { xs: 32, sm: 'auto' },
+                px: { xs: 0.8, sm: 1.5 },
+                py: { xs: 0.4, sm: 0.5 },
               }}
             >
-              Log Keluar
+              <LogoutIcon sx={{ fontSize: 16 }} />
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, ml: 0.5, fontWeight: 600 }}>
+                Log Keluar
+              </Box>
             </Button>
           </Box>
         </Paper>
 
         {/* Page Container */}
-        <Container maxWidth="xl" sx={{ py: 3, px: { xs: 1.5, sm: 3 }, flexGrow: 1 }}>
+        <Container maxWidth="xl" sx={{ py: { xs: 2, sm: 3 }, px: { xs: 1.5, sm: 3 }, flexGrow: 1 }}>
           {children}
         </Container>
       </Box>

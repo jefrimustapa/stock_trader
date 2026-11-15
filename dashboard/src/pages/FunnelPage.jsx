@@ -30,20 +30,29 @@ export function FunnelPage({ dataPayload }) {
   const conversionPct = ((finalCount / (funnel.stage1_universe || 8500)) * 100).toFixed(2);
 
   return (
-    <Box id="page-funnel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box id="page-funnel" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
       {/* Page Header */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              fontSize: { xs: '1.2rem', sm: '1.5rem' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
             <FilterAltIcon sx={{ color: sneatTokens.info.main }} />
             Corong Saringan Saham 5-Peringkat
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
             Seni bina saringan hybrid (HOM-178 Approach C): penapisan progresif daripada ribuan saham US sehingga senarai calon berkualiti tinggi.
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Chip
             size="small"
             label={`Kadar Pilihan: ${conversionPct}%`}
@@ -84,7 +93,7 @@ export function FunnelPage({ dataPayload }) {
         </Typography>
 
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, md: 2.4 }}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Box sx={{ p: 1.5, borderRadius: '8px', backgroundColor: (t) => t.palette.mode === 'dark' ? '#2f3045' : '#f8f9fa', height: '100%' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.secondary.main, display: 'block' }}>
                 STAGE 1
@@ -98,7 +107,7 @@ export function FunnelPage({ dataPayload }) {
             </Box>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 2.4 }}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Box sx={{ p: 1.5, borderRadius: '8px', backgroundColor: (t) => t.palette.mode === 'dark' ? '#2f3045' : '#f8f9fa', height: '100%' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.info.main, display: 'block' }}>
                 STAGE 2
@@ -112,7 +121,7 @@ export function FunnelPage({ dataPayload }) {
             </Box>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 2.4 }}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Box sx={{ p: 1.5, borderRadius: '8px', backgroundColor: (t) => t.palette.mode === 'dark' ? '#2f3045' : '#f8f9fa', height: '100%' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.warning.main, display: 'block' }}>
                 STAGE 3
@@ -126,7 +135,7 @@ export function FunnelPage({ dataPayload }) {
             </Box>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 2.4 }}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Box sx={{ p: 1.5, borderRadius: '8px', backgroundColor: (t) => t.palette.mode === 'dark' ? '#2f3045' : '#f8f9fa', height: '100%' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.primary.main, display: 'block' }}>
                 STAGE 4
@@ -140,7 +149,7 @@ export function FunnelPage({ dataPayload }) {
             </Box>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 2.4 }}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <Box sx={{ p: 1.5, borderRadius: '8px', backgroundColor: (t) => t.palette.mode === 'dark' ? '#2f3045' : '#f8f9fa', height: '100%' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.success.main, display: 'block' }}>
                 STAGE 5

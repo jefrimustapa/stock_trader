@@ -43,12 +43,21 @@ export function WatchlistTable({ dataPayload }) {
     <Box id="watchlist" sx={{ mb: 4 }}>
       {/* Header & Market Status Banner */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1.5 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography
+          variant="h5"
+          sx={{
+            fontWeight: 700,
+            fontSize: { xs: '1.15rem', sm: '1.4rem' },
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
           <ViewListIcon sx={{ color: sneatTokens.primary.main }} />
           Jadual Watchlist Saham Aktif Dwi-Lorong
         </Typography>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           {/* Market Status Pill */}
           <Chip
             size="small"
@@ -73,49 +82,62 @@ export function WatchlistTable({ dataPayload }) {
           />
 
           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-            Kemas kini: {typeof dataAsOf === 'string' && dataAsOf.includes('T') ? new Date(dataAsOf).toLocaleTimeString() : dataAsOf}
+            Kemas kini: {typeof dataAsOf === 'string' && dataAsOf.includes('T') ? dataAsOf.split('.')[0].replace('T', ' ') : dataAsOf}
           </Typography>
         </Box>
       </Box>
 
       <Card>
         {/* Tabs Filter */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, pt: 1 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, pt: 0.5 }}>
           <Tabs
             value={laneFilter}
             onChange={(e, val) => setLaneFilter(val)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             textColor="primary"
             indicatorColor="primary"
+            sx={{ minHeight: 44 }}
           >
-            <Tab label={`Semua (${rawItems.length})`} value="ALL" sx={{ fontWeight: 600 }} />
+            <Tab label={`Semua (${rawItems.length})`} value="ALL" sx={{ fontWeight: 600, minHeight: 44 }} />
             <Tab
               label={`Momentum (${rawItems.filter(i => (i.lane || '').toUpperCase() === 'MOMENTUM').length})`}
               value="MOMENTUM"
-              sx={{ fontWeight: 600 }}
+              sx={{ fontWeight: 600, minHeight: 44 }}
             />
             <Tab
               label={`Setup (${rawItems.filter(i => (i.lane || '').toUpperCase() === 'SETUP').length})`}
               value="SETUP"
-              sx={{ fontWeight: 600 }}
+              sx={{ fontWeight: 600, minHeight: 44 }}
             />
           </Tabs>
         </Box>
 
         <CardContent sx={{ p: 0 }}>
-          <TableContainer component={Paper} elevation={0} sx={{ backgroundColor: 'transparent' }}>
-            <Table size="small">
+          <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{
+              backgroundColor: 'transparent',
+              width: '100%',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            <Table size="small" sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Simbol</TableCell>
-                  <TableCell>Nama Syarikat</TableCell>
-                  <TableCell align="center">Lorong</TableCell>
-                  <TableCell align="right">Skor</TableCell>
-                  <TableCell align="right">Harga Semasa</TableCell>
-                  <TableCell align="right">Perubahan %</TableCell>
-                  <TableCell align="right">ADV 20 (M)</TableCell>
-                  <TableCell align="right">RS vs SPY</TableCell>
-                  <TableCell align="right">RVOL 15m</TableCell>
-                  <TableCell align="right">Jarak 52W High</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Simbol</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Nama Syarikat</TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Lorong</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Skor</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Harga Semasa</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Perubahan %</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>ADV 20 (M)</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>RS vs SPY</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>RVOL 15m</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Jarak 52W High</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
