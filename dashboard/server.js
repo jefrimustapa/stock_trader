@@ -518,9 +518,26 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
     }
 });
 
+function parseStrictNumericField(val, fieldName) {
+    if (typeof val !== 'number' && typeof val !== 'string') {
+        return { error: `${fieldName} mestilah nombor atau string berangka yang sah.` };
+    }
+    if (typeof val === 'string' && val.trim() === '') {
+        return { error: `${fieldName} tidak boleh kosong.` };
+    }
+    const num = Number(val);
+    if (!Number.isFinite(num)) {
+        return { error: `${fieldName} mestilah nombor yang sah.` };
+    }
+    return { value: num };
+}
+
 app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
-        const body = req.body || {};
+        if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+            return res.status(400).json({ error: 'Body mestilah objek JSON yang sah.' });
+        }
+        const body = req.body;
         const db = getScreenerDb();
         const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol FROM screener_config WHERE id = 1').get();
         if (!current) {
@@ -534,10 +551,9 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         let newMaxRvol = current.max_rvol;
 
         if (body.min_price !== undefined) {
-            const val = Number(body.min_price);
-            if (!Number.isFinite(val)) {
-                return res.status(400).json({ error: 'Harga minimum mestilah nombor yang sah.' });
-            }
+            const parsed = parseStrictNumericField(body.min_price, 'Harga minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_price.min) {
                 return res.status(400).json({ error: 'Harga minimum tidak boleh kurang daripada $1.00 (Had Keselamatan).' });
             }
@@ -548,10 +564,9 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
 
         if (body.min_market_cap !== undefined) {
-            const val = Number(body.min_market_cap);
-            if (!Number.isFinite(val)) {
-                return res.status(400).json({ error: 'Permodalan pasaran minimum mestilah nombor yang sah.' });
-            }
+            const parsed = parseStrictNumericField(body.min_market_cap, 'Permodalan pasaran minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_market_cap.min) {
                 return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh kurang daripada $${SCREENER_CONFIG_LIMITS.min_market_cap.min.toLocaleString()}.` });
             }
@@ -562,10 +577,9 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
 
         if (body.min_volume !== undefined) {
-            const val = Number(body.min_volume);
-            if (!Number.isFinite(val)) {
-                return res.status(400).json({ error: 'Volum minimum mestilah nombor yang sah.' });
-            }
+            const parsed = parseStrictNumericField(body.min_volume, 'Volum minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_volume.min) {
                 return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh kurang daripada ${SCREENER_CONFIG_LIMITS.min_volume.min.toLocaleString()} saham.` });
             }
@@ -576,10 +590,9 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
 
         if (body.min_rvol !== undefined) {
-            const val = Number(body.min_rvol);
-            if (!Number.isFinite(val)) {
-                return res.status(400).json({ error: 'RVOL minimum mestilah nombor yang sah.' });
-            }
+            const parsed = parseStrictNumericField(body.min_rvol, 'RVOL minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_rvol.min || val > SCREENER_CONFIG_LIMITS.min_rvol.max) {
                 return res.status(400).json({ error: `RVOL minimum mestilah antara ${SCREENER_CONFIG_LIMITS.min_rvol.min} dan ${SCREENER_CONFIG_LIMITS.min_rvol.max}.` });
             }
@@ -587,10 +600,9 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
 
         if (body.max_rvol !== undefined) {
-            const val = Number(body.max_rvol);
-            if (!Number.isFinite(val)) {
-                return res.status(400).json({ error: 'RVOL maksimum mestilah nombor yang sah.' });
-            }
+            const parsed = parseStrictNumericField(body.max_rvol, 'RVOL maksimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.max_rvol.min || val > SCREENER_CONFIG_LIMITS.max_rvol.max) {
                 return res.status(400).json({ error: `RVOL maksimum mestilah antara ${SCREENER_CONFIG_LIMITS.max_rvol.min} dan ${SCREENER_CONFIG_LIMITS.max_rvol.max}.` });
             }
@@ -600,6 +612,30 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         // Cross-field validation: min_rvol <= max_rvol
         if (newMinRvol > newMaxRvol) {
             return res.status(400).json({ error: 'RVOL minimum tidak boleh melebihi RVOL maksimum.' });
+        }
+
+        const hasChanges = (
+            newMinPrice !== current.min_price ||
+            newMinMarketCap !== current.min_market_cap ||
+            newMinVolume !== current.min_volume ||
+            newMinRvol !== current.min_rvol ||
+            newMaxRvol !== current.max_rvol
+        );
+
+        if (!hasChanges) {
+            return res.json({
+                message: 'Tiada perubahan konfigurasi',
+                config: {
+                    min_price: current.min_price,
+                    min_market_cap: current.min_market_cap,
+                    min_volume: current.min_volume,
+                    min_rvol: current.min_rvol,
+                    max_rvol: current.max_rvol
+                },
+                limits: SCREENER_CONFIG_LIMITS,
+                updated_at: current.updated_at,
+                updated_by: current.updated_by
+            });
         }
 
         const now = new Date().toISOString();

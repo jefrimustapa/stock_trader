@@ -95,6 +95,9 @@ export function SettingsPage() {
   }, [fetchConfig]);
 
   const validateField = (field, value) => {
+    if (value === '' || value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+      return 'Nilai tidak boleh kosong.';
+    }
     const num = Number(value);
     if (!Number.isFinite(num)) {
       return 'Nilai mestilah nombor yang sah';
@@ -607,25 +610,25 @@ export function SettingsPage() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>Harga Min:</Typography>
                     <Typography id="displayMinPrice" variant="body2" sx={{ fontWeight: 700 }}>
-                      ${Number(config.min_price).toFixed(2)}
+                      ${Number(originalConfig.min_price).toFixed(2)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>Market Cap Min:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {formatCurrency(config.min_market_cap)}
+                    <Typography id="displayMinMarketCap" variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatCurrency(originalConfig.min_market_cap)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>ADV20 Min:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {Number(config.min_volume).toLocaleString()} unit
+                    <Typography id="displayMinVolume" variant="body2" sx={{ fontWeight: 700 }}>
+                      {Number(originalConfig.min_volume).toLocaleString()} unit
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>Julat RVOL:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {config.min_rvol} - {config.max_rvol}
+                    <Typography id="displayRvolRange" variant="body2" sx={{ fontWeight: 700 }}>
+                      {originalConfig.min_rvol} - {originalConfig.max_rvol}
                     </Typography>
                   </Box>
                   <Divider sx={{ my: 0.5 }} />

@@ -218,19 +218,6 @@ async function runPlaywrightSuite() {
     const minPriceInput = mobilePage.locator('#inputMinPrice');
     assertCheck('Mobile Settings: min_price input field present', (await minPriceInput.count()) === 1);
 
-    // Test BVA Rejection: User types $0.99 (< $1.00 hard safety floor)
-    await minPriceInput.fill('0.99');
-    await mobilePage.waitForTimeout(200);
-    const saveBtn = mobilePage.locator('#btnSaveConfig');
-    await saveBtn.click();
-    await mobilePage.waitForTimeout(400);
-
-    const errorAlert = mobilePage.locator('#configAlertError');
-    assertCheck('Mobile Settings BVA: Error alert displayed for price $0.99', (await errorAlert.count()) >= 1);
-    const errorText = await errorAlert.innerText();
-    assertCheck('Mobile Settings BVA: Error text mentions $1.00 safety floor', errorText.includes('$1.00'));
-    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_mobile_settings_bva_error.png'), fullPage: true });
-
     // Test User Acceptance Scenario: User sets $5.00 and clicks Save
     const chip5 = mobilePage.locator('#chipPrice5');
     if ((await chip5.count()) > 0) {
@@ -239,6 +226,7 @@ async function runPlaywrightSuite() {
       await minPriceInput.fill('5.00');
     }
     await mobilePage.waitForTimeout(200);
+    const saveBtn = mobilePage.locator('#btnSaveConfig');
     await saveBtn.click();
     await mobilePage.waitForTimeout(500);
 
@@ -248,7 +236,73 @@ async function runPlaywrightSuite() {
     const displayMinPrice = mobilePage.locator('#displayMinPrice');
     const displayedText = await displayMinPrice.innerText();
     assertCheck('Mobile Settings Acceptance: Status card displays $5.00', displayedText.includes('5.00'));
-    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '06_mobile_settings_success.png'), fullPage: true });
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_mobile_settings_success.png'), fullPage: true });
+
+    // -------------------------------------------------------------
+    // Post-Rejection Status Card & Boundary Integrity (HOM-193 Defect 1)
+    // -------------------------------------------------------------
+    console.log('\n--- Scenario A.7b: Post-Rejection Status Card & Persistence Verification (HOM-193) ---');
+    const errorAlert = mobilePage.locator('#configAlertError');
+
+    // Case 1: Rejection with $0.99
+    await minPriceInput.fill('0.99');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for price $0.99', (await errorAlert.count()) >= 1);
+    const cardPriceAfter099 = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after $0.99 rejected', cardPriceAfter099.includes('5.00') && !cardPriceAfter099.includes('0.99'));
+
+    // Case 2: Rejection with $0.00
+    await minPriceInput.fill('0.00');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for price $0.00', (await errorAlert.count()) >= 1);
+    const cardPriceAfter000 = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after $0.00 rejected', cardPriceAfter000.includes('5.00') && !cardPriceAfter000.includes('0.00'));
+
+    // Case 3: Rejection with -$3.00
+    await minPriceInput.fill('-3.00');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for price -$3.00', (await errorAlert.count()) >= 1);
+    const cardPriceAfterNeg = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after -$3.00 rejected', cardPriceAfterNeg.includes('5.00') && !cardPriceAfterNeg.includes('-3'));
+
+    // Case 4: Rejection with empty string ""
+    await minPriceInput.fill('');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for empty input', (await errorAlert.count()) >= 1);
+    const cardPriceAfterEmpty = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after empty input rejected', cardPriceAfterEmpty.includes('5.00'));
+
+    // Case 5: Reload persistence
+    await mobilePage.reload({ waitUntil: 'networkidle' });
+    await mobilePage.waitForTimeout(400);
+    const cardPriceAfterReload = await displayMinPrice.innerText();
+    assertCheck('Persistence: Status card persists $5.00 after full page reload', cardPriceAfterReload.includes('5.00'));
+
+    // Case 6: Cross-field min_rvol > max_rvol (10.0 > 2.0)
+    const minRvolInput = mobilePage.locator('input[type="number"]').nth(3); // min_rvol input
+    const maxRvolInput = mobilePage.locator('input[type="number"]').nth(4); // max_rvol input
+    if ((await minRvolInput.count()) >= 1 && (await maxRvolInput.count()) >= 1) {
+      await minRvolInput.fill('10.0');
+      await maxRvolInput.fill('2.0');
+      await mobilePage.waitForTimeout(200);
+      await saveBtn.click();
+      await mobilePage.waitForTimeout(400);
+      assertCheck('Mobile Settings Cross-Field: Error alert displayed for min_rvol > max_rvol', (await errorAlert.count()) >= 1);
+      const displayRvolRange = mobilePage.locator('#displayRvolRange');
+      if ((await displayRvolRange.count()) >= 1) {
+        const rvolRangeText = await displayRvolRange.innerText();
+        assertCheck('Status Card Integrity: RVOL range does NOT display inverted 10 - 2 after rejection', !rvolRangeText.includes('10 - 2') && !rvolRangeText.includes('10.0 - 2.0'));
+      }
+    }
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '06_mobile_settings_rejection_integrity.png'), fullPage: true });
 
     assertCheck('Mobile Session: Clean console with zero errors', consoleErrors.length === 0);
     await mobileContext.close();

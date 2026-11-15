@@ -168,7 +168,21 @@ class TestScreenerSchema(unittest.TestCase):
             self.assertEqual(ScreenerConfig.CLOUD_MIN_MARKET_CAP, 500000000.0)
             self.assertEqual(ScreenerConfig.CLOUD_MIN_ADV20, 500000.0)
             self.assertEqual(ScreenerConfig.MOM_MIN_RVOL, 1.2)
+            self.assertEqual(ScreenerConfig.MOM_MAX_RVOL, 18.0)
             self.assertEqual(cfg["min_price"], 5.0)
+            self.assertEqual(cfg["max_rvol"], 18.0)
+
+            # Test defect 4: when DB row is missing/empty, reset to env defaults
+            conn = sqlite3.connect(str(test_db))
+            conn.execute("DELETE FROM screener_config WHERE id = 1")
+            conn.commit()
+            conn.close()
+
+            cfg_reset = ScreenerConfig.load_active_config()
+            self.assertEqual(ScreenerConfig.CLOUD_MIN_PRICE, 10.0)
+            self.assertEqual(ScreenerConfig.MOM_MIN_RVOL, 1.30)
+            self.assertEqual(ScreenerConfig.MOM_MAX_RVOL, 20.00)
+            self.assertEqual(cfg_reset["max_rvol"], 20.00)
         finally:
             ScreenerConfig.CONFIG_DB_PATH = orig_db
             ScreenerConfig.CLOUD_MIN_PRICE = orig_p
@@ -212,6 +226,30 @@ class TestScreenerSchema(unittest.TestCase):
                 lane="MOMENTUM",
                 lane_score=75.0
             )
+
+    def test_momentum_lane_filters_rvol_above_max(self):
+        """
+        HOM-193 Defect 2: max_rvol mesti berkesan menapis calon yang melepasi had maksimum RVOL.
+        """
+        from screener.src.config import ScreenerConfig
+        from screener.src.schemas import FunnelStageMetrics
+
+        raw = [
+            {"symbol": "US.EXCESS_RVOL", "name": "Excess Vol", "price": 50.0, "market_cap": 2e9, "adv_20": 2e6, "change_pct": 5.0, "rvol_15m": 6.0, "rs_spy": 2.0, "dist_52w": -0.05},
+            {"symbol": "US.GOOD_RVOL", "name": "Good Vol", "price": 50.0, "market_cap": 2e9, "adv_20": 2e6, "change_pct": 5.0, "rvol_15m": 2.5, "rs_spy": 2.0, "dist_52w": -0.05},
+        ]
+        funnel = FunnelStageMetrics()
+        orig_max = getattr(ScreenerConfig, "MOM_MAX_RVOL", 20.0)
+        try:
+            ScreenerConfig.MOM_MAX_RVOL = 3.0
+            passed = self.screener.evaluate_momentum_lane(raw, funnel=funnel)
+            symbols = [p["symbol"] for p in passed]
+            self.assertIn("US.GOOD_RVOL", symbols)
+            self.assertNotIn("US.EXCESS_RVOL", symbols)
+            dropped_reasons = [d["reason"] for d in funnel.dropped_reasons if d["symbol"] == "US.EXCESS_RVOL"]
+            self.assertIn("RVOL_ABOVE_MOMENTUM_MAX", dropped_reasons)
+        finally:
+            ScreenerConfig.MOM_MAX_RVOL = orig_max
 
 
 if __name__ == "__main__":

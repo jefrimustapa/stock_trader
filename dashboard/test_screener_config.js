@@ -196,7 +196,34 @@ async function runTests() {
         const bvaRvolValid = await makeRequest('/api/screener/config', 'PATCH', authHeader, { min_rvol: 0.8, max_rvol: 15.0 });
         check('BVA: Valid RVOL range (0.8 - 15.0) accepted with HTTP 200', bvaRvolValid.statusCode === 200);
 
-        // Test 6: Audit Trail & Data Integrity
+        // Test 6b: Type Validation & Empty Payload Handling (HOM-193 Defect 3)
+        console.log('\n--- 6b. Strict Type Validation & Empty Payload Handling (HOM-193) ---');
+        const boolReject = await makeRequest('/api/screener/config', 'PATCH', authHeader, { min_price: true });
+        check('Strict Type: Boolean { min_price: true } rejected with HTTP 400', boolReject.statusCode === 400);
+
+        const boolFalseReject = await makeRequest('/api/screener/config', 'PATCH', authHeader, { min_price: false });
+        check('Strict Type: Boolean { min_price: false } rejected with HTTP 400', boolFalseReject.statusCode === 400);
+
+        const arrayFieldReject = await makeRequest('/api/screener/config', 'PATCH', authHeader, { min_price: [7] });
+        check('Strict Type: Array { min_price: [7] } rejected with HTTP 400', arrayFieldReject.statusCode === 400);
+
+        const emptyStringReject = await makeRequest('/api/screener/config', 'PATCH', authHeader, { min_price: "" });
+        check('Strict Type: Empty string { min_price: "" } rejected with HTTP 400', emptyStringReject.statusCode === 400);
+
+        const arrayBodyReject = await makeRequest('/api/screener/config', 'PATCH', authHeader, [7]);
+        check('Strict Type: Array body [7] rejected with HTTP 400', arrayBodyReject.statusCode === 400);
+
+        // Record audit count before empty PATCH
+        const auditBefore = await makeRequest('/api/screener/config/audit', 'GET', authHeader);
+        const countBefore = Array.isArray(auditBefore.data.audit) ? auditBefore.data.audit.length : 0;
+
+        // Empty PATCH {}
+        const emptyPatchRes = await makeRequest('/api/screener/config', 'PATCH', authHeader, {});
+        const auditAfter = await makeRequest('/api/screener/config/audit', 'GET', authHeader);
+        const countAfter = Array.isArray(auditAfter.data.audit) ? auditAfter.data.audit.length : 0;
+        check('Empty Payload {}: Does NOT write audit entry', countAfter === countBefore);
+
+        // Test 7: Audit Trail & Data Integrity
         console.log('\n--- 7. Audit Trail & SQLite Persistence Verification ---');
         const auditRes = await makeRequest('/api/screener/config/audit', 'GET', authHeader);
         check('GET /api/screener/config/audit returns HTTP 200', auditRes.statusCode === 200);
