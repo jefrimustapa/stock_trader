@@ -420,6 +420,96 @@ async function runPlaywrightSuite() {
 
     await desktopContext.close();
 
+    // -------------------------------------------------------------
+    // Scenario D: K-Line Quota Acceptance Scenario (HOM-210)
+    // -------------------------------------------------------------
+    console.log('\n--- Scenario D: K-Line Quota Separate Page Acceptance (HOM-210) ---');
+    const quotaContext = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+    await quotaContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+    const quotaPage = await quotaContext.newPage();
+
+    // 1. User Acceptance Step 1: Open Overview, observe Card 4 (K-Line quota summary)
+    await quotaPage.goto(`${TARGET_URL}/#/overview`, { waitUntil: 'networkidle' });
+    await quotaPage.waitForTimeout(400);
+
+    const klineCard = quotaPage.locator('#kpi-card-kline-quota');
+    assertCheck('HOM-210 User Acceptance: Overview renders Card 4 K-Line Quota with ID #kpi-card-kline-quota', (await klineCard.count()) === 1);
+    const cardText = await klineCard.innerText();
+    assertCheck('HOM-210 User Acceptance: Card 4 displays remaining quota summary (e.g. Baki)', cardText.includes('Baki') && cardText.includes('Kuota API K-Line'));
+
+    // 2. User Acceptance Step 2: Click Card 4 -> Navigate to #/quota
+    await klineCard.click();
+    await quotaPage.waitForTimeout(500);
+    assertCheck('HOM-210 User Acceptance: Clicking Card 4 navigates to #/quota', quotaPage.url().includes('#/quota'));
+
+    // 3. User Acceptance Step 3: Quota Page Layout & 4 KPI Cards
+    const quotaContainer = quotaPage.locator('#quota-page');
+    assertCheck('HOM-210 User Acceptance: #quota-page container rendered', (await quotaContainer.count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Page title "Penggunaan Kuota K-Line 30-Hari" rendered', (await quotaPage.locator('text=Penggunaan Kuota K-Line 30-Hari').count()) >= 1);
+    assertCheck('HOM-210 User Acceptance: Baki Kuota KPI card rendered', (await quotaPage.locator('#kpi-quota-remaining').count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Simbol Digunakan KPI card rendered', (await quotaPage.locator('#kpi-quota-used').count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Peratus Penggunaan KPI card rendered', (await quotaPage.locator('#kpi-quota-percent').count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Status Kesihatan KPI card rendered', (await quotaPage.locator('#kpi-quota-status').count()) === 1);
+
+    // 4. User Acceptance Step 4: Data Table of Active Symbols
+    const quotaTable = quotaPage.locator('#table-kline-quota');
+    assertCheck('HOM-210 User Acceptance: K-Line quota data table rendered', (await quotaTable.count()) === 1);
+    const mgclyRow = quotaPage.locator('text=US.MGCLY').first();
+    assertCheck('HOM-210 User Acceptance: Table displays active symbol US.MGCLY', (await mgclyRow.count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Table displays 30-day countdown badge', (await quotaPage.locator('text=Hari Lagi').count()) >= 1);
+
+    // 5. User Acceptance Step 5: Search & Filter Functionality
+    const searchInput = quotaPage.locator('#input-search-quota-symbol');
+    assertCheck('HOM-210 User Acceptance: Symbol search filter input rendered', (await searchInput.count()) === 1);
+    await searchInput.fill('MGCLY');
+    await quotaPage.waitForTimeout(300);
+    const visibleRows = quotaPage.locator('#table-kline-quota tbody tr');
+    assertCheck('HOM-210 User Acceptance: Search isolates matching symbol US.MGCLY', (await visibleRows.count()) === 1);
+
+    // Clear search
+    await searchInput.fill('');
+    await quotaPage.waitForTimeout(300);
+    assertCheck('HOM-210 User Acceptance: Clearing search restores full symbol list (>= 7 symbols)', (await visibleRows.count()) >= 7);
+
+    // Desktop Screenshot
+    await quotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '12_desktop_kline_quota_page.png'), fullPage: true });
+
+    // 6. Mobile Viewport Verification
+    console.log('\n--- Scenario D.2: Mobile Viewport Quota Page Verification (390 x 844) ---');
+    const mobileQuotaContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    await mobileQuotaContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+    const mobileQuotaPage = await mobileQuotaContext.newPage();
+    await mobileQuotaPage.goto(`${TARGET_URL}/#/quota`, { waitUntil: 'networkidle' });
+    await mobileQuotaPage.waitForTimeout(400);
+
+    const mobileHasHorizontalOverflow = await mobileQuotaPage.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth;
+    });
+    assertCheck('HOM-210 Mobile Acceptance: No horizontal page overflow on #/quota mobile', !mobileHasHorizontalOverflow);
+    assertCheck('HOM-210 Mobile Acceptance: Quota table present on mobile', (await mobileQuotaPage.locator('#table-kline-quota').count()) === 1);
+    await mobileQuotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '13_mobile_kline_quota_page.png'), fullPage: true });
+
+    await mobileQuotaContext.close();
+    await quotaContext.close();
+
   } finally {
     await browser.close();
   }

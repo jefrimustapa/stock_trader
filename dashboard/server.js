@@ -700,6 +700,109 @@ app.get('/api/screener/config/audit', authenticateDashboard, (req, res) => {
     }
 });
 
+// --- K-Line Quota Reader (node:sqlite) ---
+function getKlineQuotaData(customDbPath = null) {
+    const quotaDbPath = customDbPath || path.join(SHARED_DATA_DIR, 'quota_tracker.sqlite');
+    const TOTAL_QUOTA = 100;
+    const now = new Date();
+    const nowMs = now.getTime();
+
+    if (!fs.existsSync(quotaDbPath)) {
+        return {
+            total_quota: TOTAL_QUOTA,
+            used_quota: 0,
+            remaining_quota: TOTAL_QUOTA,
+            percent_used: 0.0,
+            status: 'HEALTHY',
+            as_of: now.toISOString(),
+            symbols: []
+        };
+    }
+
+    let db;
+    try {
+        db = new DatabaseSync(quotaDbPath, { readOnly: true });
+        const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='kline_quota_history'").get();
+        if (!tableCheck) {
+            db.close();
+            return {
+                total_quota: TOTAL_QUOTA,
+                used_quota: 0,
+                remaining_quota: TOTAL_QUOTA,
+                percent_used: 0.0,
+                status: 'HEALTHY',
+                as_of: now.toISOString(),
+                symbols: []
+            };
+        }
+
+        const rows = db.prepare(`
+            SELECT symbol, first_requested_at, expires_at, request_count
+            FROM kline_quota_history
+            ORDER BY expires_at ASC, symbol ASC
+        `).all();
+
+        db.close();
+
+        const symbols = (rows || []).map(row => {
+            const expDate = new Date(row.expires_at);
+            const expMs = expDate.getTime();
+            const diffMs = expMs - nowMs;
+            const daysRemaining = Number.isFinite(expMs)
+                ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+                : 0;
+            const isExpired = Number.isFinite(expMs) ? (diffMs <= 0) : true;
+
+            return {
+                symbol: row.symbol,
+                first_requested_at: row.first_requested_at,
+                expires_at: row.expires_at,
+                request_count: Number(row.request_count) || 1,
+                days_remaining: daysRemaining,
+                status: isExpired ? 'EXPIRED' : 'ACTIVE'
+            };
+        });
+
+        const activeSymbols = symbols.filter(s => s.status === 'ACTIVE');
+        const usedQuota = activeSymbols.length;
+        const remainingQuota = Math.max(0, TOTAL_QUOTA - usedQuota);
+        const percentUsed = Number(((usedQuota / TOTAL_QUOTA) * 100).toFixed(1));
+
+        let status = 'HEALTHY';
+        if (percentUsed >= 90) {
+            status = 'CRITICAL';
+        } else if (percentUsed >= 75) {
+            status = 'WARNING';
+        }
+
+        return {
+            total_quota: TOTAL_QUOTA,
+            used_quota: usedQuota,
+            remaining_quota: remainingQuota,
+            percent_used: percentUsed,
+            status,
+            as_of: now.toISOString(),
+            symbols
+        };
+    } catch (err) {
+        if (db) {
+            try { db.close(); } catch (e) {}
+        }
+        console.error('[Dashboard] Error reading kline quota db:', err);
+        throw err;
+    }
+}
+
+app.get('/api/screener/kline-quota', authenticateDashboard, (req, res) => {
+    try {
+        const quotaData = getKlineQuotaData();
+        return res.json(quotaData);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching kline quota data:', err);
+        return res.status(500).json({ error: 'Gagal membaca data kuota K-line: ' + err.message });
+    }
+});
+
 app.get('/api/data', authenticateDashboard, (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');

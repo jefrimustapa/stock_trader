@@ -8,8 +8,9 @@ import { OpendPage } from './pages/OpendPage';
 import { FunnelPage } from './pages/FunnelPage';
 import { WatchlistPage } from './pages/WatchlistPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { QuotaPage } from './pages/QuotaPage';
 
-const VALID_PAGES = ['overview', 'opend', 'funnel', 'watchlist', 'settings'];
+const VALID_PAGES = ['overview', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
@@ -128,6 +129,8 @@ export function App() {
         return <WatchlistPage dataPayload={dataPayload} />;
       case 'settings':
         return <SettingsPage />;
+      case 'quota':
+        return <QuotaPage />;
       case 'overview':
       default:
         return (

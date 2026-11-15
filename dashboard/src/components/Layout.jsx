@@ -28,6 +28,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
+import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import { sneatTokens } from '../theme';
 
 const SIDEBAR_WIDTH = 260;
@@ -37,6 +38,7 @@ export const navItems = [
   { id: 'opend', label: 'Pengurusan OpenD', shortLabel: 'OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
   { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
   { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
+  { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Penggunaan 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
   { id: 'settings', label: 'Tetapan Screener', shortLabel: 'Tetapan', subtitle: 'Parameter L0 & Had Sah', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
 ];
 

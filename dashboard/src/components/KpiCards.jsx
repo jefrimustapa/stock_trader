@@ -225,12 +225,13 @@ export function KpiCards({ statusData, dataPayload }) {
           </Card>
         </Grid>
 
-        {/* Card 4: Penjejak Kuota K-Line -> navigates to #/watchlist */}
+        {/* Card 4: Penjejak Kuota K-Line -> navigates to #/quota */}
         <Grid item xs={12} sm={6} md={3}>
           <Card
+            id="kpi-card-kline-quota"
             sx={cardActionSx}
-            onClick={() => { window.location.hash = '#/watchlist'; }}
-            title="Klik untuk ke paparan Watchlist Dwi-Lorong"
+            onClick={() => { window.location.hash = '#/quota'; }}
+            title="Klik untuk lihat perincian kuota K-Line 30-hari"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>

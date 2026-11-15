@@ -760,13 +760,28 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                   </Box>
                   <Divider />
 
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box
+                    id="overview-kline-quota-row"
+                    onClick={() => { window.location.hash = '#/quota'; }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      p: 0.5,
+                      borderRadius: 1,
+                      '&:hover': {
+                        backgroundColor: 'action.hover',
+                      },
+                    }}
+                    title="Klik untuk lihat perincian kuota K-line"
+                  >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
                         Enjin Kuota K-Line
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                        Baki {klineRemaining} kuota 30-hari
+                        Baki {klineRemaining} kuota 30-hari (Klik untuk perincian)
                       </Typography>
                     </Box>
                     <Chip

@@ -238,6 +238,8 @@ async function main() {
   const { OpendPage } = await bundleModule('src/pages/OpendPage.jsx');
   const { FunnelPage } = await bundleModule('src/pages/FunnelPage.jsx');
   const { WatchlistPage } = await bundleModule('src/pages/WatchlistPage.jsx');
+  const { QuotaPage } = await bundleModule('src/pages/QuotaPage.jsx');
+  const { KpiCards } = await bundleModule('src/components/KpiCards.jsx');
   const { FunnelStepper } = await bundleModule('src/components/FunnelStepper.jsx');
   const {
     formatPrice,
@@ -251,9 +253,9 @@ async function main() {
 
   check('Layout exports navItems array with navigation sections', () => {
     assert.ok(Array.isArray(navItems), 'navItems must be an array');
-    assert.ok(navItems.length >= 4, 'Must have at least 4 navigation sections');
+    assert.ok(navItems.length >= 5, 'Must have at least 5 navigation sections');
     const ids = navItems.map(n => n.id);
-    assert.ok(ids.includes('overview') && ids.includes('opend') && ids.includes('funnel') && ids.includes('watchlist'));
+    assert.ok(ids.includes('overview') && ids.includes('opend') && ids.includes('funnel') && ids.includes('watchlist') && ids.includes('quota'));
   });
 
   check('Each page module exports a valid React component function', () => {
@@ -261,6 +263,7 @@ async function main() {
     assert.strictEqual(typeof OpendPage, 'function', 'OpendPage must be a function component');
     assert.strictEqual(typeof FunnelPage, 'function', 'FunnelPage must be a function component');
     assert.strictEqual(typeof WatchlistPage, 'function', 'WatchlistPage must be a function component');
+    assert.strictEqual(typeof QuotaPage, 'function', 'QuotaPage must be a function component');
   });
 
   check('Sneat Theme tokens are correctly configured with purple palette', () => {
@@ -584,6 +587,28 @@ async function main() {
     assert.ok(html.includes('funnel-stage2-desc'), 'Must render funnel-stage2-desc ID even on error');
     assert.ok(html.includes('Harga &gt;= -') || html.includes('Harga >= -'), 'Must render fallback - in HTML');
     assert.ok(!html.includes('Harga &gt;= $10') && !html.includes('Harga >= $10'), 'Must NOT render old hardcoded $10 on error');
+  });
+
+  console.log('\n--- 8. QC Page 5: QuotaPage & Navigation Link Integrity (HOM-210) ---');
+  check('QuotaPage renders page container and header text', () => {
+    const html = renderToString(React.createElement(QuotaPage));
+    assert.ok(html.includes('quota-page'), 'Must have quota-page container');
+    assert.ok(html.includes('Penggunaan Kuota K-Line 30-Hari'), 'Must have page title');
+    assert.ok(html.includes('btn-refresh-quota'), 'Must have refresh button');
+    assert.ok(html.includes('kpi-quota-remaining'), 'Must render Baki Kuota KPI card');
+    assert.ok(html.includes('kpi-quota-used'), 'Must render Simbol Digunakan KPI card');
+    assert.ok(html.includes('kpi-quota-percent'), 'Must render Peratus Penggunaan KPI card');
+    assert.ok(html.includes('kpi-quota-status'), 'Must render Status Kesihatan KPI card');
+  });
+
+  check('KpiCards Card 4 navigates to #/quota (HOM-210 acceptance criteria)', () => {
+    const html = renderToString(React.createElement(KpiCards, {
+      statusData: mockStatusData,
+      dataPayload: mockDataPayload,
+    }));
+    assert.ok(html.includes('kpi-card-kline-quota'), 'Must render Card 4 with ID kpi-card-kline-quota');
+    assert.ok(html.includes('Klik untuk lihat perincian kuota K-Line 30-hari'), 'Card 4 title must indicate K-Line quota details');
+    assert.ok(!html.includes('Klik untuk ke paparan Watchlist Dwi-Lorong'), 'Card 4 must no longer link to Watchlist');
   });
 
   console.log('\n================================================================');
