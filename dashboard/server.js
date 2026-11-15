@@ -853,7 +853,12 @@ async function getMoomooOpenApiQuota(customBridgeUrl = null) {
         };
         return result;
     } catch (err) {
-        const errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        let errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        if (/ECONNREFUSED|Connection refused|not reachable|ENOTFOUND|EAI_AGAIN|connect/i.test(errMsg)) {
+            errMsg = 'Moomoo OpenD tidak dapat dihubungi';
+        } else if (/ETIMEDOUT|timeout/i.test(errMsg)) {
+            errMsg = 'Sambungan ke Moomoo OpenD tamat masa';
+        }
         return {
             status: 'UNAVAILABLE',
             connected: false,
@@ -880,7 +885,7 @@ app.get('/api/screener/kline-quota', authenticateDashboard, async (req, res) => 
     }
 });
 
-app.get('/api/data', authenticateDashboard, (req, res) => {
+app.get('/api/data', authenticateDashboard, async (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
 
@@ -899,10 +904,13 @@ app.get('/api/data', authenticateDashboard, (req, res) => {
         } catch (e) {}
     }
 
+    const moomooQuota = await getMoomooOpenApiQuota();
+
     res.json({
         user: req.authUser,
         watchlist,
         sentinel,
+        moomoo_quota: moomooQuota,
         timestamp: new Date().toISOString()
     });
 });

@@ -319,6 +319,8 @@ async function runTests() {
     check('moomoo_quota used_quota is null when unavailable (no fake values)', moomooQ?.used_quota === null);
     check('moomoo_quota remain_quota is null when unavailable (no fake 100 remaining)', moomooQ?.remain_quota === null);
     check('moomoo_quota connected is false', moomooQ?.connected === false);
+    check('moomoo_quota error is friendly and does not leak raw ECONNREFUSED (HOM-217)', !String(moomooQ?.error).includes('ECONNREFUSED'));
+    check('moomoo_quota error indicates OpenD unreachable friendly text (HOM-217)', String(moomooQ?.error).includes('Moomoo OpenD tidak dapat dihubungi'));
 
   } finally {
     if (serverProcess) {

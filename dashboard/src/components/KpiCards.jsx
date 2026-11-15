@@ -36,12 +36,18 @@ export function KpiCards({ statusData, dataPayload }) {
   const managedPositions = sentinelData.managed_positions || 0;
   const isSentinelActive = sentinelStatus === 'ACTIVE';
 
-  // 30-Day K-Line Quota KPI (Rekod Dalaman Screener, Anggaran)
-  const quota = watchlistData.quota_status;
-  const hasKlineData = Boolean(quota && typeof quota.kline_30d_remaining === 'number');
-  const klineUsed = hasKlineData ? quota.kline_30d_used : 0;
-  const klineRemaining = hasKlineData ? quota.kline_30d_remaining : '-';
-  const klinePercent = hasKlineData ? Math.min(100, Math.max(0, ((klineUsed || 0) / 100) * 100)) : 0;
+  // Real Moomoo OpenAPI K-Line Quota (HOM-217)
+  const moomooQuota = dataPayload?.moomoo_quota || watchlistData?.moomoo_quota;
+  const isMoomooConnected = Boolean(
+    moomooQuota &&
+    moomooQuota.status === 'HEALTHY' &&
+    moomooQuota.connected &&
+    typeof moomooQuota.remain_quota === 'number'
+  );
+  const klineRemaining = isMoomooConnected ? moomooQuota.remain_quota : '-';
+  const klineUsed = isMoomooConnected ? moomooQuota.used_quota : null;
+  const klineTotal = isMoomooConnected ? (moomooQuota.total_quota ?? 100) : 100;
+  const klinePercent = isMoomooConnected && klineTotal > 0 ? Math.min(100, Math.max(0, ((klineUsed || 0) / klineTotal) * 100)) : 0;
 
   const cardActionSx = {
     height: '100%',
@@ -232,7 +238,7 @@ export function KpiCards({ statusData, dataPayload }) {
             id="kpi-card-kline-quota"
             sx={cardActionSx}
             onClick={() => { window.location.hash = '#/quota'; }}
-            title="Klik untuk lihat perincian kuota K-Line 30-hari (rekod dalaman screener, anggaran)"
+            title="Klik untuk lihat perincian kuota K-Line Moomoo OpenAPI sebenar"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -242,54 +248,54 @@ export function KpiCards({ statusData, dataPayload }) {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: (hasKlineData && klinePercent > 80) ? sneatTokens.error.soft : sneatTokens.info.soft,
+                      backgroundColor: (isMoomooConnected && klinePercent > 80) ? sneatTokens.error.soft : sneatTokens.info.soft,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: (hasKlineData && klinePercent > 80) ? sneatTokens.error.main : sneatTokens.info.main,
+                      color: (isMoomooConnected && klinePercent > 80) ? sneatTokens.error.main : sneatTokens.info.main,
                     }}
                   >
                     <QueryStatsIcon sx={{ fontSize: 22 }} />
                   </Box>
                   <Chip
                     size="small"
-                    label={hasKlineData ? `${klineUsed} / 100 Direkod` : 'Tiada Data'}
+                    label={isMoomooConnected ? `${klineUsed} / ${klineTotal} Terpakai` : 'Tidak Tersedia'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: (hasKlineData && klinePercent > 80) ? sneatTokens.error.soft : sneatTokens.secondary.soft,
-                      color: (hasKlineData && klinePercent > 80) ? sneatTokens.error.main : 'text.secondary',
+                      backgroundColor: isMoomooConnected ? (klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.secondary.soft) : sneatTokens.error.soft,
+                      color: isMoomooConnected ? (klinePercent > 80 ? sneatTokens.error.main : 'text.secondary') : sneatTokens.error.main,
                     }}
                   />
                 </Box>
 
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kuota API K-Line (Rekod Dalaman Screener)
+                  Kuota API K-Line (Moomoo Sebenar)
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {hasKlineData ? `${klineRemaining} Baki` : '-'}
+                  {isMoomooConnected ? `${klineRemaining} Baki` : '-'}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {hasKlineData ? 'Anggaran Digunakan' : 'Rekod Screener'}
+                    Kadar Penggunaan
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {hasKlineData ? `${Math.round(klinePercent)}%` : 'Tiada data'}
+                    {isMoomooConnected ? `${Math.round(klinePercent)}%` : 'Tidak tersedia'}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={hasKlineData ? klinePercent : 0}
+                  value={isMoomooConnected ? klinePercent : 0}
                   sx={{
                     height: 5,
                     borderRadius: 3,
                     backgroundColor: theme => theme.palette.divider,
                     '& .MuiLinearProgress-bar': {
-                      backgroundColor: (hasKlineData && klinePercent > 80) ? sneatTokens.error.main : sneatTokens.info.main,
+                      backgroundColor: (isMoomooConnected && klinePercent > 80) ? sneatTokens.error.main : sneatTokens.info.main,
                       borderRadius: 3,
                     },
                   }}

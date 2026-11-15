@@ -65,12 +65,32 @@ export function QuotaPage({ initialQuotaData = null }) {
 
   const isDbMissing = Boolean(quotaData && quotaData.db_exists === false);
   const moomooQuota = quotaData?.moomoo_quota;
-  const isMoomooConnected = Boolean(moomooQuota && moomooQuota.status === 'HEALTHY' && moomooQuota.connected);
-  const totalQuota = quotaData?.total_quota ?? 100;
-  const usedQuota = quotaData?.used_quota ?? 0;
-  const remainingQuota = quotaData?.remaining_quota ?? (totalQuota - usedQuota);
-  const percentUsed = quotaData?.percent_used ?? Number(((usedQuota / totalQuota) * 100).toFixed(1));
+  const isMoomooConnected = Boolean(
+    moomooQuota &&
+    moomooQuota.status === 'HEALTHY' &&
+    moomooQuota.connected &&
+    typeof moomooQuota.remain_quota === 'number'
+  );
+  const realRemain = isMoomooConnected ? moomooQuota.remain_quota : null;
+  const realUsed = isMoomooConnected ? moomooQuota.used_quota : null;
+  const realTotal = isMoomooConnected ? (moomooQuota.total_quota ?? 100) : 100;
+  const realPercent = isMoomooConnected && realTotal > 0 ? Number(((realUsed / realTotal) * 100).toFixed(1)) : null;
   const rawSymbols = Array.isArray(quotaData?.symbols) ? quotaData.symbols : [];
+
+  const formatMoomooError = (rawErr) => {
+    if (!rawErr) return 'Moomoo OpenD tidak dapat dihubungi';
+    const str = String(rawErr);
+    if (/ECONNREFUSED|Connection refused|not reachable/i.test(str)) {
+      return 'Moomoo OpenD tidak dapat dihubungi';
+    }
+    if (/ETIMEDOUT|timeout/i.test(str)) {
+      return 'Sambungan ke Moomoo OpenD tamat masa';
+    }
+    if (/not authenticated|WAIT_LOGIN/i.test(str)) {
+      return 'OpenD gateway belum log masuk broker';
+    }
+    return str;
+  };
 
   const filteredSymbols = rawSymbols.filter((item) => {
     if (!searchQuery.trim()) return true;
@@ -98,12 +118,13 @@ export function QuotaPage({ initialQuotaData = null }) {
   };
 
   const getStatusColor = (status, percent) => {
-    if (status === 'CRITICAL' || percent >= 90) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'KRITIKAL' };
-    if (status === 'WARNING' || percent >= 75) return { bg: sneatTokens.warning.soft, text: sneatTokens.warning.main, label: 'AMARAN' };
+    if (!isMoomooConnected) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'TIDAK TERSEDIA' };
+    if (percent >= 90) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'KRITIKAL' };
+    if (percent >= 75) return { bg: sneatTokens.warning.soft, text: sneatTokens.warning.main, label: 'AMARAN' };
     return { bg: sneatTokens.success.soft, text: sneatTokens.success.main, label: 'SIHAT' };
   };
 
-  const statusBadge = getStatusColor(quotaData?.status, percentUsed);
+  const statusBadge = getStatusColor(quotaData?.status, realPercent ?? 0);
 
   return (
     <Box id="quota-page" sx={{ width: '100%', mb: 4 }}>
@@ -130,17 +151,17 @@ export function QuotaPage({ initialQuotaData = null }) {
             </Typography>
             <Chip
               size="small"
-              label={`Anggaran Had: ${totalQuota} Simbol`}
+              label={isMoomooConnected ? `Had Kuota: ${realTotal} Simbol` : 'Had Kuota: -'}
               sx={{
                 fontWeight: 700,
                 fontSize: '0.72rem',
-                backgroundColor: sneatTokens.primary.soft,
-                color: sneatTokens.primary.main,
+                backgroundColor: isMoomooConnected ? sneatTokens.primary.soft : sneatTokens.secondary.soft,
+                color: isMoomooConnected ? sneatTokens.primary.main : 'text.secondary',
               }}
             />
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, ml: 6 }}>
-            Kuota K-Line (rekod dalaman screener, anggaran). Mungkin berbeza daripada baki sebenar Moomoo.
+            Pemantauan baki dan penggunaan kuota K-Line Moomoo OpenAPI sebenar.
           </Typography>
         </Box>
 
@@ -178,7 +199,7 @@ export function QuotaPage({ initialQuotaData = null }) {
             <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
               Kuota Moomoo OpenAPI Sebenar:&nbsp;
             </Typography>
-            Gateway OpenD Aktif. Terpakai: <strong>{moomooQuota.used_quota ?? 0}</strong> / {moomooQuota.total_quota ?? 100} | Baki Sebenar: <strong>{moomooQuota.remain_quota ?? 100}</strong> / {moomooQuota.total_quota ?? 100} simbol.
+            Gateway OpenD Aktif. Terpakai: <strong>{realUsed}</strong> / {realTotal} | Baki Sebenar: <strong>{realRemain}</strong> / {realTotal} simbol.
           </Alert>
         ) : (
           <Alert
@@ -208,12 +229,12 @@ export function QuotaPage({ initialQuotaData = null }) {
                 color: sneatTokens.error.main,
               }}
             />
-            Baki Sebenar: <strong>-</strong> ({moomooQuota?.error || 'OpenD gateway belum disambungkan atau menunggu log masuk broker'}). Mengikut peraturan fail-closed, baki 100 palsu tidak dipaparkan.
+            Baki Sebenar: <strong>-</strong> ({formatMoomooError(moomooQuota?.error)}). Mengikut peraturan fail-closed, baki kuota tidak tersedia.
           </Alert>
         )
       ) : null}
 
-      {/* Info Disclaimer Banner */}
+      {/* Table Reference Note Banner */}
       <Alert
         severity="info"
         icon={<QueryStatsIcon sx={{ fontSize: 20 }} />}
@@ -227,9 +248,9 @@ export function QuotaPage({ initialQuotaData = null }) {
         }}
       >
         <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 600, display: 'inline' }}>
-          Nota Peringatan Rekod Kuota:&nbsp;
+          Maklumat Kuota &amp; Simbol:&nbsp;
         </Typography>
-        Angka kuota ini adalah rekod dalaman screener (anggaran simbol dikhaskan). Ia mungkin berbeza daripada penggunaan atau baki kuota sebenar dalam akaun Moomoo OpenAPI.
+        Kad ringkasan memaparkan kuota Moomoo OpenAPI sebenar. Jadual di bawah menyenaraikan simbol yang direkodkan oleh screener dalam pangkalan data tempatan (30-hari).
       </Alert>
 
       {error && (
@@ -248,7 +269,7 @@ export function QuotaPage({ initialQuotaData = null }) {
 
       {/* 4 Sneat KPI Summary Cards */}
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-        {/* Card 1: Baki Kuota */}
+        {/* Card 1: Baki Kuota Sebenar */}
         <Grid item xs={12} sm={6} md={3}>
           <Card id="kpi-quota-remaining" sx={{ height: '100%', borderRadius: 2.5, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
@@ -259,47 +280,47 @@ export function QuotaPage({ initialQuotaData = null }) {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: sneatTokens.info.soft,
+                      backgroundColor: isMoomooConnected ? sneatTokens.info.soft : sneatTokens.secondary.soft,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: sneatTokens.info.main,
+                      color: isMoomooConnected ? sneatTokens.info.main : 'text.secondary',
                     }}
                   >
                     <InventoryIcon sx={{ fontSize: 22 }} />
                   </Box>
                   <Chip
                     size="small"
-                    label={isDbMissing ? 'Belum Ada Data' : `${remainingQuota} Baki (Rekod)`}
+                    label={isMoomooConnected ? `${realRemain} Baki Sebenar` : 'Tidak Tersedia'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: sneatTokens.info.soft,
-                      color: sneatTokens.info.main,
+                      backgroundColor: isMoomooConnected ? sneatTokens.info.soft : sneatTokens.error.soft,
+                      color: isMoomooConnected ? sneatTokens.info.main : sneatTokens.error.main,
                     }}
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Baki Kuota Simbol (Anggaran)
+                  Baki Kuota Sebenar (Moomoo)
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {isDbMissing ? '-' : `${remainingQuota} / ${totalQuota}`}
+                  {isMoomooConnected ? `${realRemain} / ${realTotal}` : '-'}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isDbMissing ? 'Status Rekod' : 'Kapasiti Tersedia (Anggaran)'}
+                    Kapasiti Tersedia
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isDbMissing ? 'Tiada data' : `${100 - Math.round(percentUsed)}%`}
+                    {isMoomooConnected ? `${100 - Math.round(realPercent)}%` : 'Tidak tersedia'}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={isDbMissing ? 0 : Math.max(0, 100 - percentUsed)}
+                  value={isMoomooConnected ? Math.max(0, 100 - realPercent) : 0}
                   sx={{
                     height: 5,
                     borderRadius: 3,
@@ -315,7 +336,7 @@ export function QuotaPage({ initialQuotaData = null }) {
           </Card>
         </Grid>
 
-        {/* Card 2: Simbol Aktif Digunakan / Dikhaskan */}
+        {/* Card 2: Kuota Terpakai Moomoo */}
         <Grid item xs={12} sm={6} md={3}>
           <Card id="kpi-quota-used" sx={{ height: '100%', borderRadius: 2.5, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
@@ -326,32 +347,32 @@ export function QuotaPage({ initialQuotaData = null }) {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: sneatTokens.primary.soft,
+                      backgroundColor: isMoomooConnected ? sneatTokens.primary.soft : sneatTokens.secondary.soft,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: sneatTokens.primary.main,
+                      color: isMoomooConnected ? sneatTokens.primary.main : 'text.secondary',
                     }}
                   >
                     <PieChartIcon sx={{ fontSize: 22 }} />
                   </Box>
                   <Chip
                     size="small"
-                    label={isDbMissing ? 'Tiada Rekod' : `${usedQuota} / ${totalQuota} Direkod`}
+                    label={isMoomooConnected ? `${realUsed} / ${realTotal} Terpakai` : 'Tidak Tersedia'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: sneatTokens.primary.soft,
-                      color: sneatTokens.primary.main,
+                      backgroundColor: isMoomooConnected ? sneatTokens.primary.soft : sneatTokens.error.soft,
+                      color: isMoomooConnected ? sneatTokens.primary.main : sneatTokens.error.main,
                     }}
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Simbol Dikhaskan / Direkod
+                  Kuota Terpakai (Moomoo)
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {isDbMissing ? '-' : `${usedQuota} Simbol`}
+                  {isMoomooConnected ? `${realUsed} Simbol` : '-'}
                 </Typography>
               </Box>
 
@@ -361,18 +382,18 @@ export function QuotaPage({ initialQuotaData = null }) {
                     Tetingkap Bergolek 30-Hari
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Maks 100
+                    {isMoomooConnected ? `Maks ${realTotal}` : '-'}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={isDbMissing ? 0 : percentUsed}
+                  value={isMoomooConnected ? realPercent : 0}
                   sx={{
                     height: 5,
                     borderRadius: 3,
                     backgroundColor: (theme) => theme.palette.divider,
                     '& .MuiLinearProgress-bar': {
-                      backgroundColor: percentUsed > 80 ? sneatTokens.error.main : sneatTokens.primary.main,
+                      backgroundColor: realPercent > 80 ? sneatTokens.error.main : sneatTokens.primary.main,
                       borderRadius: 3,
                     },
                   }}
@@ -393,32 +414,32 @@ export function QuotaPage({ initialQuotaData = null }) {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: percentUsed > 80 ? sneatTokens.error.soft : sneatTokens.warning.soft,
+                      backgroundColor: isMoomooConnected ? (realPercent > 80 ? sneatTokens.error.soft : sneatTokens.warning.soft) : sneatTokens.secondary.soft,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: percentUsed > 80 ? sneatTokens.error.main : sneatTokens.warning.main,
+                      color: isMoomooConnected ? (realPercent > 80 ? sneatTokens.error.main : sneatTokens.warning.main) : 'text.secondary',
                     }}
                   >
                     <ShowChartIcon sx={{ fontSize: 22 }} />
                   </Box>
                   <Chip
                     size="small"
-                    label={isDbMissing ? '-' : `${percentUsed}%`}
+                    label={isMoomooConnected ? `${realPercent}%` : '-'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: percentUsed > 80 ? sneatTokens.error.soft : sneatTokens.warning.soft,
-                      color: percentUsed > 80 ? sneatTokens.error.main : sneatTokens.warning.main,
+                      backgroundColor: isMoomooConnected ? (realPercent > 80 ? sneatTokens.error.soft : sneatTokens.warning.soft) : sneatTokens.secondary.soft,
+                      color: isMoomooConnected ? (realPercent > 80 ? sneatTokens.error.main : sneatTokens.warning.main) : 'text.secondary',
                     }}
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kadar Penggunaan (Anggaran)
+                  Kadar Penggunaan Kuota
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {isDbMissing ? '-' : `${percentUsed}%`}
+                  {isMoomooConnected ? `${realPercent}%` : '-'}
                 </Typography>
               </Box>
 
@@ -428,18 +449,18 @@ export function QuotaPage({ initialQuotaData = null }) {
                     Had Amaran (75% / 90%)
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isDbMissing ? 'Tiada data' : (percentUsed >= 90 ? 'Tinggi' : (percentUsed >= 75 ? 'Sederhana' : 'Rendah'))}
+                    {isMoomooConnected ? (realPercent >= 90 ? 'Tinggi' : (realPercent >= 75 ? 'Sederhana' : 'Rendah')) : '-'}
                   </Typography>
                 </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={isDbMissing ? 0 : percentUsed}
+                  value={isMoomooConnected ? realPercent : 0}
                   sx={{
                     height: 5,
                     borderRadius: 3,
                     backgroundColor: (theme) => theme.palette.divider,
                     '& .MuiLinearProgress-bar': {
-                      backgroundColor: percentUsed > 80 ? sneatTokens.error.main : (percentUsed > 70 ? sneatTokens.warning.main : sneatTokens.success.main),
+                      backgroundColor: realPercent > 80 ? sneatTokens.error.main : (realPercent > 70 ? sneatTokens.warning.main : sneatTokens.success.main),
                       borderRadius: 3,
                     },
                   }}
@@ -449,7 +470,7 @@ export function QuotaPage({ initialQuotaData = null }) {
           </Card>
         </Grid>
 
-        {/* Card 4: Status Kesihatan Kuota */}
+        {/* Card 4: Status Kuota Moomoo */}
         <Grid item xs={12} sm={6} md={3}>
           <Card id="kpi-quota-status" sx={{ height: '100%', borderRadius: 2.5, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
@@ -460,18 +481,18 @@ export function QuotaPage({ initialQuotaData = null }) {
                       width: 42,
                       height: 42,
                       borderRadius: '8px',
-                      backgroundColor: isDbMissing ? sneatTokens.secondary.soft : statusBadge.bg,
+                      backgroundColor: statusBadge.bg,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: isDbMissing ? 'text.secondary' : statusBadge.text,
+                      color: statusBadge.text,
                     }}
                   >
-                    {isDbMissing ? (
-                      <InventoryIcon sx={{ fontSize: 22 }} />
-                    ) : percentUsed >= 90 ? (
+                    {!isMoomooConnected ? (
                       <ErrorOutlineIcon sx={{ fontSize: 22 }} />
-                    ) : percentUsed >= 75 ? (
+                    ) : realPercent >= 90 ? (
+                      <ErrorOutlineIcon sx={{ fontSize: 22 }} />
+                    ) : realPercent >= 75 ? (
                       <WarningAmberIcon sx={{ fontSize: 22 }} />
                     ) : (
                       <CheckCircleOutlineIcon sx={{ fontSize: 22 }} />
@@ -479,27 +500,27 @@ export function QuotaPage({ initialQuotaData = null }) {
                   </Box>
                   <Chip
                     size="small"
-                    label={isDbMissing ? 'TIADA DATA' : statusBadge.label}
+                    label={statusBadge.label}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
                       borderRadius: 1.5,
-                      backgroundColor: isDbMissing ? sneatTokens.secondary.soft : statusBadge.bg,
-                      color: isDbMissing ? 'text.secondary' : statusBadge.text,
+                      backgroundColor: statusBadge.bg,
+                      color: statusBadge.text,
                     }}
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Status Rekod Kuota
+                  Status Kuota Moomoo
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: isDbMissing ? 'text.secondary' : statusBadge.text }}>
-                  {isDbMissing ? 'TIADA REKOD' : statusBadge.label}
+                <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: statusBadge.text }}>
+                  {statusBadge.label}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Dikemas kini: {isDbMissing ? 'Belum dijana' : formatDate(quotaData?.as_of)} (Rekod Dalaman)
+                  {isMoomooConnected ? 'Status: Gateway OpenD Aktif' : 'Status: Gateway OpenD tidak tersedia'}
                 </Typography>
               </Box>
             </CardContent>
@@ -513,10 +534,10 @@ export function QuotaPage({ initialQuotaData = null }) {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Senarai Simbol Kuota K-Line (Rekod Dalaman)
+                Senarai Simbol Direkodkan (Rekod Dalaman Screener)
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Rekod simbol yang dikhaskan dalam tetingkap 30-hari (anggaran dalaman, mungkin berbeza daripada baki sebenar Moomoo)
+                Senarai simbol yang direkodkan oleh screener dalam pangkalan data tempatan (bukan kuota Moomoo). Tarikh luput bergolek 30-hari.
               </Typography>
             </Box>
 
@@ -541,7 +562,7 @@ export function QuotaPage({ initialQuotaData = null }) {
               />
               <Chip
                 size="small"
-                label={`${filteredSymbols.length} / ${rawSymbols.length} Simbol`}
+                label={`${filteredSymbols.length} / ${rawSymbols.length} Simbol Direkod`}
                 sx={{ fontWeight: 600, fontSize: '0.75rem', borderRadius: 1.5 }}
               />
             </Box>
@@ -558,20 +579,20 @@ export function QuotaPage({ initialQuotaData = null }) {
             <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
               <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Belum Ada Data Rekod Kuota
+                Belum Ada Data Rekod Simbol
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
-                Pangkalan data kuota K-line belum diwujudkan atau enjin screener belum memulakan rekod aktiviti simbol. Keadaan ini berbeza daripada situasi kapasiti penuh (100 / 100).
+                Pangkalan data kuota K-line belum diwujudkan atau enjin screener belum memulakan rekod aktiviti simbol.
               </Typography>
             </Box>
           ) : rawSymbols.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
               <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Kapasiti Kuota Penuh (100 / 100 Baki)
+                Tiada Simbol Direkodkan
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
-                Pangkalan data wujud tetapi tiada simbol aktif direkodkan dalam tetingkap 30-hari. Kapasiti kuota dalaman adalah 100% tersedia (0 simbol direkodkan).
+                Pangkalan data wujud tetapi tiada simbol aktif direkodkan dalam tetingkap 30-hari oleh enjin screener (0 simbol direkodkan).
               </Typography>
             </Box>
           ) : (

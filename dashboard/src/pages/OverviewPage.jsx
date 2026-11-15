@@ -38,11 +38,17 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
   const items = watchlist.watchlist || [];
   const marketStatus = watchlist.market_status || 'CLOSED';
   const isMarketOpen = String(marketStatus).toUpperCase() === 'OPEN';
-  const quota = watchlist.quota_status;
-  const hasKlineData = Boolean(quota && typeof quota.kline_30d_remaining === 'number');
-  const klineRemaining = hasKlineData ? quota.kline_30d_remaining : '-';
-  const klineUsed = hasKlineData ? quota.kline_30d_used : 0;
-  const klinePercent = hasKlineData ? Math.min(100, Math.max(0, ((klineUsed || 0) / 100) * 100)) : 0;
+  const moomooQuota = dataPayload?.moomoo_quota || watchlist?.moomoo_quota;
+  const isMoomooConnected = Boolean(
+    moomooQuota &&
+    moomooQuota.status === 'HEALTHY' &&
+    moomooQuota.connected &&
+    typeof moomooQuota.remain_quota === 'number'
+  );
+  const klineRemaining = isMoomooConnected ? moomooQuota.remain_quota : '-';
+  const klineUsed = isMoomooConnected ? moomooQuota.used_quota : null;
+  const klineTotal = isMoomooConnected ? (moomooQuota.total_quota ?? 100) : 100;
+  const klinePercent = isMoomooConnected && klineTotal > 0 ? Math.min(100, Math.max(0, ((klineUsed || 0) / klineTotal) * 100)) : 0;
 
   const momentumCount = items.filter(
     (i) => String(i.lane || '').toUpperCase() === 'MOMENTUM'
@@ -775,25 +781,25 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         backgroundColor: 'action.hover',
                       },
                     }}
-                    title="Klik untuk lihat perincian rekod kuota K-line (anggaran screener)"
+                    title="Klik untuk lihat perincian kuota K-line Moomoo sebenar"
                   >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                        Enjin Kuota K-Line (Rekod Dalaman)
+                        Kuota K-Line (Moomoo OpenAPI)
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                        {hasKlineData ? `Baki ${klineRemaining} kuota (anggaran screener)` : 'Tiada data kuota'} (Klik untuk perincian)
+                        {isMoomooConnected ? `Baki ${klineRemaining} kuota Moomoo sebenar (Klik untuk perincian)` : 'Moomoo OpenD tidak dapat dihubungi - kuota tidak tersedia (Klik untuk perincian)'}
                       </Typography>
                     </Box>
                     <Chip
                       size="small"
-                      label={hasKlineData ? `${Math.round(klinePercent)}% DIREKOD` : 'TIADA DATA'}
+                      label={isMoomooConnected ? `${klineRemaining} BAKI` : 'TIDAK TERSEDIA'}
                       sx={{
                         fontSize: '0.68rem',
                         fontWeight: 700,
                         borderRadius: 1,
-                        backgroundColor: hasKlineData ? (klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.secondary.soft) : 'action.disabledBackground',
-                        color: hasKlineData ? (klinePercent > 80 ? sneatTokens.error.main : 'text.primary') : 'text.disabled',
+                        backgroundColor: isMoomooConnected ? (klinePercent > 80 ? sneatTokens.error.soft : sneatTokens.success.soft) : sneatTokens.error.soft,
+                        color: isMoomooConnected ? (klinePercent > 80 ? sneatTokens.error.main : sneatTokens.success.main) : sneatTokens.error.main,
                       }}
                     />
                   </Box>

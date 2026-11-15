@@ -445,6 +445,7 @@ async function runPlaywrightSuite() {
     assertCheck('HOM-210 User Acceptance: Overview renders Card 4 K-Line Quota with ID #kpi-card-kline-quota', (await klineCard.count()) === 1);
     const cardText = await klineCard.innerText();
     assertCheck('HOM-210 User Acceptance: Card 4 displays remaining quota summary (e.g. Baki)', cardText.includes('Baki') && cardText.includes('Kuota API K-Line'));
+    assertCheck('HOM-217 User Acceptance: Card 4 does not contain label Anggaran', !cardText.includes('Anggaran'));
 
     // 2. User Acceptance Step 2: Click Card 4 -> Navigate to #/quota
     await klineCard.click();
@@ -459,6 +460,13 @@ async function runPlaywrightSuite() {
     assertCheck('HOM-210 User Acceptance: Simbol Digunakan KPI card rendered', (await quotaPage.locator('#kpi-quota-used').count()) === 1);
     assertCheck('HOM-210 User Acceptance: Peratus Penggunaan KPI card rendered', (await quotaPage.locator('#kpi-quota-percent').count()) === 1);
     assertCheck('HOM-210 User Acceptance: Status Kesihatan KPI card rendered', (await quotaPage.locator('#kpi-quota-status').count()) === 1);
+
+    const quotaPageText = await quotaContainer.innerText();
+    assertCheck('HOM-217 User Acceptance: QuotaPage does not contain label Anggaran', !quotaPageText.includes('Anggaran'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage KPI card displays Baki Kuota Sebenar (Moomoo)', quotaPageText.includes('Baki Kuota Sebenar (Moomoo)'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage summary does not display internal 93 / 100', !quotaPageText.includes('93 / 100'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage does not leak raw ECONNREFUSED', !quotaPageText.includes('ECONNREFUSED'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage table labeled clearly as Senarai Simbol Direkodkan', quotaPageText.includes('Senarai Simbol Direkodkan'));
 
     // HOM-213 Acceptance Step 3a: Real Moomoo OpenAPI Quota Banner Verification
     const hasMoomooBanner = (await quotaPage.locator('#banner-moomoo-quota-active, #banner-moomoo-quota-unavailable').count()) >= 1;

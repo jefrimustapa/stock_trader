@@ -107,6 +107,16 @@ const mockDataPayload = {
       kline_30d_used: 12,
       kline_30d_remaining: 88,
     },
+    moomoo_quota: {
+      status: 'HEALTHY',
+      connected: true,
+      opend_status: 'CONNECTED',
+      used_quota: 0,
+      remain_quota: 100,
+      total_quota: 100,
+      detail_list: [],
+      error: null,
+    },
     watchlist: [
       {
         symbol: 'NVDA',
@@ -605,33 +615,79 @@ async function main() {
     assert.ok(html.includes('kpi-quota-status'), 'Must render Status Kesihatan KPI card');
   });
 
-  check('KpiCards Card 4 navigates to #/quota (HOM-210 acceptance criteria)', () => {
+  check('KpiCards Card 4 navigates to #/quota and displays real Moomoo quota (HOM-210 & HOM-217)', () => {
     const html = renderToString(React.createElement(KpiCards, {
       statusData: mockStatusData,
       dataPayload: mockDataPayload,
     }));
     assert.ok(html.includes('kpi-card-kline-quota'), 'Must render Card 4 with ID kpi-card-kline-quota');
-    assert.ok(html.includes('Klik untuk lihat perincian kuota K-Line 30-hari'), 'Card 4 title must indicate K-Line quota details');
+    assert.ok(html.includes('Klik untuk lihat perincian kuota K-Line Moomoo OpenAPI sebenar'), 'Card 4 title must indicate Moomoo K-Line quota details');
     assert.ok(!html.includes('Klik untuk ke paparan Watchlist Dwi-Lorong'), 'Card 4 must no longer link to Watchlist');
-    assert.ok(html.includes('Kuota API K-Line (Rekod Dalaman Screener)'), 'Card 4 must display internal record label');
-    assert.ok(html.includes('Direkod'), 'Card 4 must indicate recorded quota rather than claim Moomoo usage');
+    assert.ok(html.includes('Kuota API K-Line (Moomoo Sebenar)'), 'Card 4 must display Moomoo real label');
+    assert.ok(html.includes('100 Baki'), 'Card 4 must display real Moomoo remaining quota (100 Baki)');
+    assert.ok(!html.includes('Anggaran'), 'Card 4 must NOT contain label Anggaran');
   });
 
-  check('KpiCards Card 4 handles missing quota_status without defaulting to 100 Baki (HOM-212 Scope B)', () => {
+  check('KpiCards Card 4 handles missing/unavailable moomoo_quota safely with fail-closed (HOM-217)', () => {
     const htmlMissingQuota = renderToString(React.createElement(KpiCards, {
       statusData: mockStatusData,
-      dataPayload: { watchlist: { quota_status: null } },
+      dataPayload: { watchlist: { quota_status: null }, moomoo_quota: { status: 'UNAVAILABLE', connected: false, remain_quota: null } },
     }));
-    assert.ok(!htmlMissingQuota.includes('100 Baki'), 'Must not claim 100 Baki when quota data is missing');
-    assert.ok(htmlMissingQuota.includes('Tiada Data') || htmlMissingQuota.includes('-'), 'Must display - / Tiada Data when quota is missing');
+    assert.ok(!htmlMissingQuota.includes('100 Baki'), 'Must not claim 100 Baki when quota data is unavailable');
+    assert.ok(htmlMissingQuota.includes('Tidak Tersedia'), 'Must display Tidak Tersedia when moomoo quota is unavailable');
+    assert.ok(htmlMissingQuota.includes('-'), 'Must display - when moomoo quota is unavailable');
+    assert.ok(!htmlMissingQuota.includes('Anggaran'), 'Must not fallback to Anggaran');
   });
 
-  check('QuotaPage renders disclaimer note and internal record subtitle (HOM-212 Scope A & C)', () => {
-    const html = renderToString(React.createElement(QuotaPage));
-    assert.ok(html.includes('Nota Peringatan Rekod Kuota'), 'Must render quota disclaimer alert');
-    assert.ok(html.includes('rekod dalaman screener, anggaran'), 'Must display internal record disclaimer');
-    assert.ok(html.includes('Mungkin berbeza daripada baki sebenar Moomoo'), 'Must warn that numbers may differ from actual Moomoo balance');
-    assert.ok(!html.includes('memegang 1 slot'), 'Must remove inaccurate 1 slot text');
+  check('QuotaPage renders real Moomoo quota without Anggaran labels and friendly error (HOM-217)', () => {
+    const mockMoomooHealthy = {
+      total_quota: 100,
+      used_quota: 7,
+      remaining_quota: 93,
+      percent_used: 7.0,
+      status: 'HEALTHY',
+      moomoo_quota: {
+        status: 'HEALTHY',
+        connected: true,
+        opend_status: 'CONNECTED',
+        used_quota: 0,
+        remain_quota: 100,
+        total_quota: 100,
+        detail_list: [],
+        error: null,
+      },
+      symbols: [],
+    };
+    const html = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockMoomooHealthy }));
+    assert.ok(html.includes('Baki Kuota Sebenar (Moomoo)'), 'Must render Baki Kuota Sebenar (Moomoo)');
+    assert.ok(html.includes('100 / 100'), 'Must render real Moomoo quota (100 / 100)');
+    assert.ok(html.includes('100 Baki Sebenar'), 'Must render real Moomoo remain chip');
+    assert.ok(!html.includes('Anggaran'), 'Must remove all Anggaran labels (HOM-217)');
+    assert.ok(!html.includes('93 / 100'), 'Must not display internal record 93 / 100 in KPI cards');
+
+    // Test unavailable fail-closed with friendly error
+    const mockMoomooUnavailable = {
+      total_quota: 100,
+      used_quota: 7,
+      remaining_quota: 93,
+      percent_used: 7.0,
+      status: 'HEALTHY',
+      moomoo_quota: {
+        status: 'UNAVAILABLE',
+        connected: false,
+        opend_status: 'DISCONNECTED',
+        used_quota: null,
+        remain_quota: null,
+        total_quota: null,
+        detail_list: [],
+        error: 'connect ECONNREFUSED 127.0.0.1:8000',
+      },
+      symbols: [],
+    };
+    const htmlUnavail = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockMoomooUnavailable }));
+    assert.ok(htmlUnavail.includes('Tidak Tersedia') || htmlUnavail.includes('TIDAK TERSEDIA'), 'Must show Tidak Tersedia when OpenD disconnected');
+    assert.ok(!htmlUnavail.includes('ECONNREFUSED'), 'Must sanitize raw ECONNREFUSED to friendly message');
+    assert.ok(htmlUnavail.includes('Moomoo OpenD tidak dapat dihubungi'), 'Must show friendly error text');
   });
 
   check('QuotaPage renders STATUS WATCHLIST table header (HOM-213 Acceptance Criteria 2)', () => {
