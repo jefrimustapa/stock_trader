@@ -701,11 +701,27 @@ app.get('/api/screener/config/audit', authenticateDashboard, (req, res) => {
 });
 
 // --- K-Line Quota Reader (node:sqlite) ---
-function getKlineQuotaData(customDbPath = null) {
+function getKlineQuotaData(customDbPath = null, customWatchlistPath = null) {
     const quotaDbPath = customDbPath || path.join(SHARED_DATA_DIR, 'quota_tracker.sqlite');
+    const watchlistFilePath = customWatchlistPath || path.join(SHARED_DATA_DIR, 'watchlist.json');
     const TOTAL_QUOTA = 100;
     const now = new Date();
     const nowMs = now.getTime();
+
+    let activeWatchlistSymbols = new Set();
+    if (fs.existsSync(watchlistFilePath)) {
+        try {
+            const rawWl = JSON.parse(fs.readFileSync(watchlistFilePath, 'utf8'));
+            const wlArr = Array.isArray(rawWl?.watchlist) ? rawWl.watchlist : [];
+            for (const item of wlArr) {
+                if (item && item.symbol) {
+                    activeWatchlistSymbols.add(String(item.symbol).trim().toUpperCase());
+                }
+            }
+        } catch (e) {
+            console.warn('[Dashboard] Could not parse watchlist.json for quota status:', e.message);
+        }
+    }
 
     if (!fs.existsSync(quotaDbPath)) {
         return {
@@ -755,13 +771,20 @@ function getKlineQuotaData(customDbPath = null) {
                 : 0;
             const isExpired = Number.isFinite(expMs) ? (diffMs <= 0) : true;
 
+            const cleanSym = String(row.symbol || '').trim().toUpperCase();
+            const symWithoutPrefix = cleanSym.replace(/^[A-Z]+\./, '');
+            const inWatchlist = activeWatchlistSymbols.has(cleanSym) ||
+                                activeWatchlistSymbols.has(symWithoutPrefix) ||
+                                Array.from(activeWatchlistSymbols).some(s => s.endsWith('.' + cleanSym) || cleanSym.endsWith('.' + s));
+
             return {
                 symbol: row.symbol,
                 first_requested_at: row.first_requested_at,
                 expires_at: row.expires_at,
                 request_count: Number(row.request_count) || 1,
                 days_remaining: daysRemaining,
-                status: isExpired ? 'EXPIRED' : 'ACTIVE'
+                status: isExpired ? 'EXPIRED' : 'ACTIVE',
+                in_watchlist: inWatchlist
             };
         });
 
@@ -796,10 +819,61 @@ function getKlineQuotaData(customDbPath = null) {
     }
 }
 
-app.get('/api/screener/kline-quota', authenticateDashboard, (req, res) => {
+let moomooQuotaCache = {
+    data: null,
+    cachedAt: 0
+};
+
+async function getMoomooOpenApiQuota(customBridgeUrl = null) {
+    const now = Date.now();
+    if (moomooQuotaCache.data && (now - moomooQuotaCache.cachedAt < 30000)) {
+        return moomooQuotaCache.data;
+    }
+    const targetUrl = customBridgeUrl || BRIDGE_URL;
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return {
+            status: 'UNAVAILABLE',
+            connected: false,
+            used_quota: null,
+            remain_quota: null,
+            total_quota: null,
+            detail_list: [],
+            error: 'Bridge service token not configured'
+        };
+    }
+    try {
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/screener/moomoo-quota`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 2500
+        });
+        const result = bridgeRes.data;
+        moomooQuotaCache = {
+            data: result,
+            cachedAt: now
+        };
+        return result;
+    } catch (err) {
+        const errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return {
+            status: 'UNAVAILABLE',
+            connected: false,
+            used_quota: null,
+            remain_quota: null,
+            total_quota: null,
+            detail_list: [],
+            error: errMsg
+        };
+    }
+}
+
+app.get('/api/screener/kline-quota', authenticateDashboard, async (req, res) => {
     try {
         const quotaData = getKlineQuotaData();
-        return res.json(quotaData);
+        const moomooQuota = await getMoomooOpenApiQuota();
+        return res.json({
+            ...quotaData,
+            moomoo_quota: moomooQuota
+        });
     } catch (err) {
         console.error('[Dashboard] Error fetching kline quota data:', err);
         return res.status(500).json({ error: 'Gagal membaca data kuota K-line: ' + err.message });
@@ -849,3 +923,6 @@ app.get("*", authenticateDashboard, (req, res) => {
 app.listen(port, () => {
     console.log(`[Dashboard] Trading Dashboard running on port ${port}`);
 });
+
+module.exports = { app, getKlineQuotaData, getMoomooOpenApiQuota };
+

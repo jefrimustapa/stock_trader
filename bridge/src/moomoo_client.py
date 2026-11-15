@@ -409,6 +409,113 @@ class MoomooClient:
             return 0
         return 0
 
+    def get_kline_quota(self) -> Dict[str, Any]:
+        """
+        Retrieves real Moomoo OpenAPI K-line quota using OpenQuoteContext.get_history_kl_quota(get_detail=True).
+        Strict fail-closed semantics:
+        - If OpenD is disconnected or unauthenticated, returns status UNAVAILABLE and null quotas.
+        - Never returns a fake 100 remaining.
+        - If call succeeds, returns status HEALTHY, connected True, used_quota, remain_quota, detail_list.
+        """
+        try:
+            with socket.create_connection((self.host, self.port), timeout=1.0):
+                pass
+        except Exception as e:
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": "DISCONNECTED",
+                "used_quota": None,
+                "remain_quota": None,
+                "total_quota": None,
+                "detail_list": [],
+                "error": f"OpenD daemon not reachable: {e}"
+            }
+
+        conn_status = self.get_connection_status()
+        if conn_status not in ("CONNECTED", "IDLE"):
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "used_quota": None,
+                "remain_quota": None,
+                "total_quota": None,
+                "detail_list": [],
+                "error": f"OpenD gateway is not authenticated (status: {conn_status})"
+            }
+
+        ctx = None
+        try:
+            from moomoo import OpenQuoteContext, SysConfig, RET_OK
+            if self.is_encrypt and SysConfig is not None:
+                try:
+                    from .config import BridgeConfig
+                    rsa_path = str(BridgeConfig.ensure_rsa_key())
+                    SysConfig.enable_proto_encrypt(True)
+                    SysConfig.set_init_rsa_file(rsa_path)
+                except Exception as rsa_err:
+                    logger.warning("RSA key initialization warning: %s", rsa_err)
+
+            ctx = OpenQuoteContext(
+                host=self.host,
+                port=self.port,
+                is_encrypt=self.is_encrypt
+            )
+            ret_code, quota_data = ctx.get_history_kl_quota(get_detail=True)
+            if ret_code == RET_OK and quota_data is not None:
+                used = int(quota_data[0]) if len(quota_data) > 0 else 0
+                remain = int(quota_data[1]) if len(quota_data) > 1 else 0
+                details = quota_data[2] if len(quota_data) > 2 else []
+                formatted_details = []
+                for item in details:
+                    if isinstance(item, dict):
+                        formatted_details.append(item)
+                    elif hasattr(item, '__dict__'):
+                        formatted_details.append(item.__dict__)
+                    else:
+                        formatted_details.append(str(item))
+
+                return {
+                    "status": "HEALTHY",
+                    "connected": True,
+                    "opend_status": "CONNECTED",
+                    "used_quota": used,
+                    "remain_quota": remain,
+                    "total_quota": used + remain,
+                    "detail_list": formatted_details,
+                    "error": None
+                }
+            else:
+                return {
+                    "status": "UNAVAILABLE",
+                    "connected": False,
+                    "opend_status": conn_status,
+                    "used_quota": None,
+                    "remain_quota": None,
+                    "total_quota": None,
+                    "detail_list": [],
+                    "error": f"OpenQuoteContext get_history_kl_quota returned {ret_code}: {quota_data}"
+                }
+        except Exception as e:
+            logger.error("Failed to fetch Moomoo K-line quota: %s", e)
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "used_quota": None,
+                "remain_quota": None,
+                "total_quota": None,
+                "detail_list": [],
+                "error": str(e)
+            }
+        finally:
+            if ctx is not None:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
+
     def close(self) -> None:
         self._connected = False
         self._last_status = "DISCONNECTED"

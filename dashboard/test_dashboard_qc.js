@@ -634,6 +634,31 @@ async function main() {
     assert.ok(!html.includes('memegang 1 slot'), 'Must remove inaccurate 1 slot text');
   });
 
+  check('QuotaPage renders STATUS WATCHLIST table header (HOM-213 Acceptance Criteria 2)', () => {
+    const mockQuotaDataWithSymbols = {
+      total_quota: 100,
+      used_quota: 1,
+      remaining_quota: 99,
+      percent_used: 1.0,
+      status: 'HEALTHY',
+      symbols: [
+        {
+          symbol: 'US.MGCLY',
+          first_requested_at: '2026-11-15T00:00:00Z',
+          expires_at: '2026-12-15T00:00:00Z',
+          days_remaining: 30,
+          request_count: 142,
+          status: 'ACTIVE',
+          in_watchlist: true,
+        },
+      ],
+    };
+    const html = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockQuotaDataWithSymbols }));
+    assert.ok(html.includes('STATUS WATCHLIST'), 'Must render STATUS WATCHLIST column header');
+    assert.ok(html.includes('DALAM WATCHLIST'), 'Must render DALAM WATCHLIST badge for active watchlist item');
+    assert.ok(!html.includes('memegang 1 slot'), 'Must not have inaccurate text');
+  });
+
   console.log('\n================================================================');
   console.log(`  QC Result: ${passedTests} / ${totalTests} checks passed (100% SUCCESS)`);
   console.log('================================================================\n');

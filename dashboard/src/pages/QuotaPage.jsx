@@ -33,9 +33,9 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import { sneatTokens } from '../theme';
 
-export function QuotaPage() {
-  const [quotaData, setQuotaData] = useState(null);
-  const [loading, setLoading] = useState(true);
+export function QuotaPage({ initialQuotaData = null }) {
+  const [quotaData, setQuotaData] = useState(initialQuotaData);
+  const [loading, setLoading] = useState(!initialQuotaData);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -58,10 +58,14 @@ export function QuotaPage() {
   }, []);
 
   useEffect(() => {
-    fetchQuotaData();
-  }, [fetchQuotaData]);
+    if (!initialQuotaData) {
+      fetchQuotaData();
+    }
+  }, [fetchQuotaData, initialQuotaData]);
 
   const isDbMissing = Boolean(quotaData && quotaData.db_exists === false);
+  const moomooQuota = quotaData?.moomoo_quota;
+  const isMoomooConnected = Boolean(moomooQuota && moomooQuota.status === 'HEALTHY' && moomooQuota.connected);
   const totalQuota = quotaData?.total_quota ?? 100;
   const usedQuota = quotaData?.used_quota ?? 0;
   const remainingQuota = quotaData?.remaining_quota ?? (totalQuota - usedQuota);
@@ -154,6 +158,60 @@ export function QuotaPage() {
           </Button>
         </Box>
       </Box>
+
+      {/* Real Moomoo OpenAPI Quota Banner */}
+      {moomooQuota ? (
+        isMoomooConnected ? (
+          <Alert
+            id="banner-moomoo-quota-active"
+            severity="success"
+            icon={<CheckCircleOutlineIcon sx={{ fontSize: 20 }} />}
+            sx={{
+              mb: 2,
+              borderRadius: 2,
+              fontSize: '0.82rem',
+              backgroundColor: sneatTokens.success.soft,
+              color: 'text.primary',
+              '& .MuiAlert-icon': { color: sneatTokens.success.main },
+            }}
+          >
+            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
+              Kuota Moomoo OpenAPI Sebenar:&nbsp;
+            </Typography>
+            Gateway OpenD Aktif. Terpakai: <strong>{moomooQuota.used_quota ?? 0}</strong> / {moomooQuota.total_quota ?? 100} | Baki Sebenar: <strong>{moomooQuota.remain_quota ?? 100}</strong> / {moomooQuota.total_quota ?? 100} simbol.
+          </Alert>
+        ) : (
+          <Alert
+            id="banner-moomoo-quota-unavailable"
+            severity="warning"
+            icon={<WarningAmberIcon sx={{ fontSize: 20 }} />}
+            sx={{
+              mb: 2,
+              borderRadius: 2,
+              fontSize: '0.82rem',
+              backgroundColor: sneatTokens.warning.soft,
+              color: 'text.primary',
+              '& .MuiAlert-icon': { color: sneatTokens.warning.main },
+            }}
+          >
+            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
+              Kuota Moomoo OpenAPI Sebenar:&nbsp;
+            </Typography>
+            <Chip
+              size="small"
+              label="TIDAK TERSEDIA"
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.68rem',
+                mr: 1,
+                backgroundColor: sneatTokens.error.soft,
+                color: sneatTokens.error.main,
+              }}
+            />
+            Baki Sebenar: <strong>-</strong> ({moomooQuota?.error || 'OpenD gateway belum disambungkan atau menunggu log masuk broker'}). Mengikut peraturan fail-closed, baki 100 palsu tidak dipaparkan.
+          </Alert>
+        )
+      ) : null}
 
       {/* Info Disclaimer Banner */}
       <Alert
@@ -535,12 +593,13 @@ export function QuotaPage() {
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>TARIKH LUPUT (+30 HARI)</TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>BAKI HARI</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>KEKERAPAN PANGGILAN</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>STATUS</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>STATUS WATCHLIST</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredSymbols.map((row) => {
                     const isExpired = row.status === 'EXPIRED' || row.days_remaining <= 0;
+                    const isInWatchlist = Boolean(row.in_watchlist);
                     return (
                       <TableRow
                         key={row.symbol}
@@ -603,14 +662,14 @@ export function QuotaPage() {
                         </TableCell>
                         <TableCell align="center" sx={{ py: 1.5 }}>
                           <Chip
-                            label={row.status || 'ACTIVE'}
+                            label={isInWatchlist ? 'DALAM WATCHLIST' : 'TERKELUAR'}
                             size="small"
                             sx={{
                               fontWeight: 700,
                               fontSize: '0.7rem',
                               borderRadius: 1.5,
-                              backgroundColor: isExpired ? sneatTokens.secondary.soft : sneatTokens.success.soft,
-                              color: isExpired ? 'text.secondary' : sneatTokens.success.main,
+                              backgroundColor: isInWatchlist ? sneatTokens.success.soft : sneatTokens.secondary.soft,
+                              color: isInWatchlist ? sneatTokens.success.main : 'text.secondary',
                             }}
                           />
                         </TableCell>

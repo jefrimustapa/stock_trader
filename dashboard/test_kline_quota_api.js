@@ -282,6 +282,44 @@ async function runTests() {
     const zeroSym = resZero.data?.symbols?.find(s => s.symbol === 'US.ZERO');
     check('Mutant M5 (Zero diff boundary): Exactly elapsed time marked EXPIRED', zeroSym?.status === 'EXPIRED');
 
+    // -------------------------------------------------------------
+    // 8. BVA Watchlist Status Matching (HOM-213 Acceptance Criteria 2)
+    // -------------------------------------------------------------
+    console.log('\n--- 8. BVA Test: Watchlist Status Matching (in_watchlist: boolean) ---');
+    initQuotaDb(quotaDbPath, sampleSymbols);
+    const watchlistFile = path.join(TEST_SHARED_DATA_DIR, 'watchlist.json');
+    fs.writeFileSync(watchlistFile, JSON.stringify({
+      generated_at: now.toISOString(),
+      watchlist: [
+        { symbol: 'US.MGCLY', price: 15.5 },
+        { symbol: 'US.VVVV', price: 22.0 },
+      ],
+    }));
+
+    const resWl = await makeRequest('/api/screener/kline-quota', 'GET', authHeader);
+    const mgclyWl = resWl.data?.symbols?.find(s => s.symbol === 'US.MGCLY');
+    const oncWl = resWl.data?.symbols?.find(s => s.symbol === 'US.ONC');
+    check('Active watchlist symbol US.MGCLY has in_watchlist: true', mgclyWl?.in_watchlist === true);
+    check('Dropped symbol US.ONC has in_watchlist: false', oncWl?.in_watchlist === false);
+
+    // Missing watchlist file fail-safe test
+    fs.unlinkSync(watchlistFile);
+    const resNoWl = await makeRequest('/api/screener/kline-quota', 'GET', authHeader);
+    const mgclyNoWl = resNoWl.data?.symbols?.find(s => s.symbol === 'US.MGCLY');
+    check('Missing watchlist.json defaults safely to in_watchlist: false without error', mgclyNoWl?.in_watchlist === false);
+
+    // -------------------------------------------------------------
+    // 9. Moomoo OpenAPI Quota Integration & Fail-Closed Semantics (HOM-213 Acceptance Criteria 1)
+    // -------------------------------------------------------------
+    console.log('\n--- 9. Integration Test: Moomoo OpenAPI Quota Fail-Closed Handling ---');
+    check('API response contains moomoo_quota object', Boolean(resWl.data?.moomoo_quota));
+    // Since mock bridge is not listening on test port, moomoo_quota must fail-closed to UNAVAILABLE
+    const moomooQ = resWl.data?.moomoo_quota;
+    check('moomoo_quota status is UNAVAILABLE when bridge is unreachable', moomooQ?.status === 'UNAVAILABLE');
+    check('moomoo_quota used_quota is null when unavailable (no fake values)', moomooQ?.used_quota === null);
+    check('moomoo_quota remain_quota is null when unavailable (no fake 100 remaining)', moomooQ?.remain_quota === null);
+    check('moomoo_quota connected is false', moomooQ?.connected === false);
+
   } finally {
     if (serverProcess) {
       serverProcess.kill('SIGTERM');

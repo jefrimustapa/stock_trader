@@ -460,9 +460,16 @@ async function runPlaywrightSuite() {
     assertCheck('HOM-210 User Acceptance: Peratus Penggunaan KPI card rendered', (await quotaPage.locator('#kpi-quota-percent').count()) === 1);
     assertCheck('HOM-210 User Acceptance: Status Kesihatan KPI card rendered', (await quotaPage.locator('#kpi-quota-status').count()) === 1);
 
-    // 4. User Acceptance Step 4: Data Table of Active Symbols
+    // HOM-213 Acceptance Step 3a: Real Moomoo OpenAPI Quota Banner Verification
+    const hasMoomooBanner = (await quotaPage.locator('#banner-moomoo-quota-active, #banner-moomoo-quota-unavailable').count()) >= 1;
+    assertCheck('HOM-213 User Acceptance: Real Moomoo OpenAPI Quota banner rendered', hasMoomooBanner);
+
+    // 4. User Acceptance Step 4: Data Table of Active Symbols & STATUS WATCHLIST
     const quotaTable = quotaPage.locator('#table-kline-quota');
     assertCheck('HOM-210 User Acceptance: K-Line quota data table rendered', (await quotaTable.count()) === 1);
+    const tableHeaderText = await quotaTable.locator('thead').innerText();
+    assertCheck('HOM-213 User Acceptance: Table contains STATUS WATCHLIST column header', tableHeaderText.includes('STATUS WATCHLIST'));
+    assertCheck('HOM-213 User Acceptance: Table displays Watchlist status chips (DALAM WATCHLIST / TERKELUAR)', (await quotaPage.locator(':text("DALAM WATCHLIST"), :text("TERKELUAR")').count()) >= 1);
     const mgclyRow = quotaPage.locator('text=US.MGCLY').first();
     assertCheck('HOM-210 User Acceptance: Table displays active symbol US.MGCLY', (await mgclyRow.count()) === 1);
     assertCheck('HOM-210 User Acceptance: Table displays 30-day countdown badge', (await quotaPage.locator('text=Hari Lagi').count()) >= 1);
