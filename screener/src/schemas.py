@@ -20,9 +20,9 @@ class WatchlistStock(BaseModel):
     """Schema for individual stock candidate in watchlist."""
     symbol: str = Field(..., description="Moomoo formatted ticker symbol e.g. US.NVDA")
     name: str = Field(..., description="Company name")
-    price: float = Field(..., ge=5.0, description="Current market price (must be >= $5.00)")
+    price: float = Field(..., ge=1.0, description="Current market price (must be >= $1.00)")
     change_pct: float = Field(..., description="Daily price change percentage")
-    adv_20: float = Field(..., ge=1_000_000, description="20-day Average Daily Volume")
+    adv_20: float = Field(..., ge=50_000, description="20-day Average Daily Volume")
     rs_spy: float = Field(..., description="Relative strength compared to SPY index")
     rvol_15m: float = Field(..., ge=0.0, description="15-minute Relative Volume (dry volume allowed for SETUP)")
     lane: str = Field(..., description="Screening lane: MOMENTUM or SETUP")

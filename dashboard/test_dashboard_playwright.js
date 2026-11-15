@@ -207,6 +207,49 @@ async function runPlaywrightSuite() {
     assertCheck('Mobile Funnel: Final candidate count badge rendered', (await finalWatchlistBadge.count()) >= 1);
     await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '04_mobile_funnel.png'), fullPage: true });
 
+    // 7. Settings Screener Page & BVA User Acceptance Scenario (HOM-189 / HOM-190)
+    console.log('\n--- Scenario A.7: Settings Page & Hard Safety Floor Verification ---');
+    await mobilePage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await mobilePage.waitForTimeout(400);
+
+    const settingsTitle = mobilePage.locator('text=Tetapan Parameter Screener');
+    assertCheck('Mobile Settings: Page header rendered', (await settingsTitle.count()) >= 1);
+
+    const minPriceInput = mobilePage.locator('#inputMinPrice');
+    assertCheck('Mobile Settings: min_price input field present', (await minPriceInput.count()) === 1);
+
+    // Test BVA Rejection: User types $0.99 (< $1.00 hard safety floor)
+    await minPriceInput.fill('0.99');
+    await mobilePage.waitForTimeout(200);
+    const saveBtn = mobilePage.locator('#btnSaveConfig');
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+
+    const errorAlert = mobilePage.locator('#configAlertError');
+    assertCheck('Mobile Settings BVA: Error alert displayed for price $0.99', (await errorAlert.count()) >= 1);
+    const errorText = await errorAlert.innerText();
+    assertCheck('Mobile Settings BVA: Error text mentions $1.00 safety floor', errorText.includes('$1.00'));
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_mobile_settings_bva_error.png'), fullPage: true });
+
+    // Test User Acceptance Scenario: User sets $5.00 and clicks Save
+    const chip5 = mobilePage.locator('#chipPrice5');
+    if ((await chip5.count()) > 0) {
+      await chip5.click();
+    } else {
+      await minPriceInput.fill('5.00');
+    }
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(500);
+
+    const successAlert = mobilePage.locator('#configAlertSuccess');
+    assertCheck('Mobile Settings Acceptance: Success alert displayed for price $5.00', (await successAlert.count()) >= 1);
+
+    const displayMinPrice = mobilePage.locator('#displayMinPrice');
+    const displayedText = await displayMinPrice.innerText();
+    assertCheck('Mobile Settings Acceptance: Status card displays $5.00', displayedText.includes('5.00'));
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '06_mobile_settings_success.png'), fullPage: true });
+
     assertCheck('Mobile Session: Clean console with zero errors', consoleErrors.length === 0);
     await mobileContext.close();
 
@@ -234,7 +277,13 @@ async function runPlaywrightSuite() {
     const desktopDrawer = desktopPage.locator('.MuiDrawer-docked');
     assertCheck('Desktop Layout: Permanent docked sidebar visible', (await desktopDrawer.count()) === 1);
 
-    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_desktop_overview.png'), fullPage: true });
+    // Desktop Settings Navigation
+    await desktopPage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(400);
+    const desktopSettingsTitle = desktopPage.locator('text=Tetapan Parameter Screener');
+    assertCheck('Desktop Settings: Page loaded in desktop view', (await desktopSettingsTitle.count()) >= 1);
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '07_desktop_settings.png'), fullPage: true });
+
     await desktopContext.close();
 
   } finally {

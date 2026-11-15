@@ -7,8 +7,9 @@ import { OverviewPage } from './pages/OverviewPage';
 import { OpendPage } from './pages/OpendPage';
 import { FunnelPage } from './pages/FunnelPage';
 import { WatchlistPage } from './pages/WatchlistPage';
+import { SettingsPage } from './pages/SettingsPage';
 
-const VALID_PAGES = ['overview', 'opend', 'funnel', 'watchlist'];
+const VALID_PAGES = ['overview', 'opend', 'funnel', 'watchlist', 'settings'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
@@ -94,6 +95,8 @@ export function App() {
         return <FunnelPage dataPayload={dataPayload} />;
       case 'watchlist':
         return <WatchlistPage dataPayload={dataPayload} />;
+      case 'settings':
+        return <SettingsPage />;
       case 'overview':
       default:
         return (

@@ -125,6 +125,93 @@ class TestScreenerSchema(unittest.TestCase):
             self.assertIsNotNone(warning)
             self.assertIn("belum log masuk", warning)
 
+    def test_dynamic_config_loading_from_sqlite(self):
+        """
+        HOM-190 SDLC 3: Ujian bacaan dinamik tetapan dari fail SQLite dan penguatkuasaan had keselamatan ($1.00).
+        """
+        import sqlite3
+        from screener.src.config import ScreenerConfig
+
+        test_db = Path(self.temp_dir) / "screener_config.sqlite"
+        conn = sqlite3.connect(str(test_db))
+        conn.execute("""
+            CREATE TABLE screener_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                min_price REAL NOT NULL,
+                min_market_cap REAL NOT NULL,
+                min_volume REAL NOT NULL,
+                min_rvol REAL NOT NULL,
+                max_rvol REAL NOT NULL,
+                updated_at TEXT NOT NULL,
+                updated_by TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            INSERT INTO screener_config VALUES (1, 5.0, 500000000.0, 500000.0, 1.2, 18.0, '2026-11-15T10:00:00Z', 'jefri')
+        """)
+        conn.commit()
+        conn.close()
+
+        orig_db = ScreenerConfig.CONFIG_DB_PATH
+        orig_p = ScreenerConfig.CLOUD_MIN_PRICE
+        orig_hp = ScreenerConfig.CLOUD_HARD_MIN_PRICE
+        orig_cap = ScreenerConfig.CLOUD_MIN_MARKET_CAP
+        orig_hcap = ScreenerConfig.CLOUD_HARD_MIN_MARKET_CAP
+        orig_adv = ScreenerConfig.CLOUD_MIN_ADV20
+        orig_rvol = ScreenerConfig.MOM_MIN_RVOL
+
+        try:
+            ScreenerConfig.CONFIG_DB_PATH = test_db
+            cfg = ScreenerConfig.load_active_config()
+            self.assertEqual(ScreenerConfig.CLOUD_MIN_PRICE, 5.0)
+            self.assertEqual(ScreenerConfig.CLOUD_HARD_MIN_PRICE, 5.0)
+            self.assertEqual(ScreenerConfig.CLOUD_MIN_MARKET_CAP, 500000000.0)
+            self.assertEqual(ScreenerConfig.CLOUD_MIN_ADV20, 500000.0)
+            self.assertEqual(ScreenerConfig.MOM_MIN_RVOL, 1.2)
+            self.assertEqual(cfg["min_price"], 5.0)
+        finally:
+            ScreenerConfig.CONFIG_DB_PATH = orig_db
+            ScreenerConfig.CLOUD_MIN_PRICE = orig_p
+            ScreenerConfig.CLOUD_HARD_MIN_PRICE = orig_hp
+            ScreenerConfig.CLOUD_MIN_MARKET_CAP = orig_cap
+            ScreenerConfig.CLOUD_HARD_MIN_MARKET_CAP = orig_hcap
+            ScreenerConfig.CLOUD_MIN_ADV20 = orig_adv
+            ScreenerConfig.MOM_MIN_RVOL = orig_rvol
+
+    def test_watchlist_stock_schema_allows_one_dollar_and_above(self):
+        """
+        HOM-190: WatchlistStock mesti membenarkan harga serendah $1.00 dan ADV20 serendah 50,000 unit.
+        """
+        from screener.src.schemas import WatchlistStock
+        from pydantic import ValidationError
+
+        # Sah: $1.00 dan ADV 50,000
+        stock_valid = WatchlistStock(
+            symbol="US.VALID1",
+            name="Valid Stock $1",
+            price=1.00,
+            change_pct=2.5,
+            adv_20=50_000,
+            rs_spy=1.2,
+            rvol_15m=1.5,
+            lane="MOMENTUM",
+            lane_score=75.0
+        )
+        self.assertEqual(stock_valid.price, 1.00)
+
+        # Tidak sah: $0.99 (bawah had keselamatan $1.00)
+        with self.assertRaises(ValidationError):
+            WatchlistStock(
+                symbol="US.INVALID",
+                name="Below $1",
+                price=0.99,
+                change_pct=2.5,
+                adv_20=50_000,
+                rs_spy=1.2,
+                rvol_15m=1.5,
+                lane="MOMENTUM",
+                lane_score=75.0
+            )
 
 
 if __name__ == "__main__":

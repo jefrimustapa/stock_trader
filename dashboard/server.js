@@ -439,6 +439,231 @@ app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
     }
 });
 
+// --- Screener Configuration Engine (node:sqlite) ---
+const { DatabaseSync } = require('node:sqlite');
+
+const SCREENER_CONFIG_LIMITS = {
+    min_price: { min: 1.0, max: 10000.0 },
+    min_market_cap: { min: 10000000.0, max: 10000000000000.0 }, // $10M to $10T
+    min_volume: { min: 50000.0, max: 1000000000.0 },            // 50k to 1B
+    min_rvol: { min: 0.0, max: 50.0 },
+    max_rvol: { min: 0.1, max: 100.0 }
+};
+
+let screenerDbInstance = null;
+
+function getScreenerDb() {
+    if (!screenerDbInstance) {
+        if (!fs.existsSync(SHARED_DATA_DIR)) {
+            fs.mkdirSync(SHARED_DATA_DIR, { recursive: true });
+        }
+        const dbPath = path.join(SHARED_DATA_DIR, 'screener_config.sqlite');
+        screenerDbInstance = new DatabaseSync(dbPath);
+        screenerDbInstance.exec('PRAGMA journal_mode = WAL;');
+        screenerDbInstance.exec(`
+            CREATE TABLE IF NOT EXISTS screener_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                min_price REAL NOT NULL CHECK (min_price >= 1.0),
+                min_market_cap REAL NOT NULL CHECK (min_market_cap >= 10000000.0),
+                min_volume REAL NOT NULL CHECK (min_volume >= 50000.0),
+                min_rvol REAL NOT NULL CHECK (min_rvol >= 0.0),
+                max_rvol REAL NOT NULL CHECK (max_rvol >= min_rvol),
+                updated_at TEXT NOT NULL,
+                updated_by TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS screener_config_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                user TEXT NOT NULL,
+                action TEXT NOT NULL,
+                previous_values TEXT,
+                new_values TEXT NOT NULL
+            );
+        `);
+
+        const row = screenerDbInstance.prepare('SELECT * FROM screener_config WHERE id = 1').get();
+        if (!row) {
+            const initStmt = screenerDbInstance.prepare(`
+                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, updated_at, updated_by)
+                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, ?, 'system')
+            `);
+            initStmt.run(new Date().toISOString());
+        }
+    }
+    return screenerDbInstance;
+}
+
+app.get('/api/screener/config', authenticateDashboard, (req, res) => {
+    try {
+        const db = getScreenerDb();
+        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, updated_at, updated_by FROM screener_config WHERE id = 1').get();
+        if (!row) {
+            return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
+        }
+        return res.json({
+            config: {
+                min_price: Number(row.min_price),
+                min_market_cap: Number(row.min_market_cap),
+                min_volume: Number(row.min_volume),
+                min_rvol: Number(row.min_rvol),
+                max_rvol: Number(row.max_rvol)
+            },
+            limits: SCREENER_CONFIG_LIMITS,
+            updated_at: row.updated_at,
+            updated_by: row.updated_by
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error fetching screener config:', err);
+        return res.status(500).json({ error: 'Gagal membaca konfigurasi screener: ' + err.message });
+    }
+});
+
+app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
+    try {
+        const body = req.body || {};
+        const db = getScreenerDb();
+        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol FROM screener_config WHERE id = 1').get();
+        if (!current) {
+            return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
+        }
+
+        let newMinPrice = current.min_price;
+        let newMinMarketCap = current.min_market_cap;
+        let newMinVolume = current.min_volume;
+        let newMinRvol = current.min_rvol;
+        let newMaxRvol = current.max_rvol;
+
+        if (body.min_price !== undefined) {
+            const val = Number(body.min_price);
+            if (!Number.isFinite(val)) {
+                return res.status(400).json({ error: 'Harga minimum mestilah nombor yang sah.' });
+            }
+            if (val < SCREENER_CONFIG_LIMITS.min_price.min) {
+                return res.status(400).json({ error: 'Harga minimum tidak boleh kurang daripada $1.00 (Had Keselamatan).' });
+            }
+            if (val > SCREENER_CONFIG_LIMITS.min_price.max) {
+                return res.status(400).json({ error: `Harga minimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.min_price.max.toLocaleString()}.` });
+            }
+            newMinPrice = val;
+        }
+
+        if (body.min_market_cap !== undefined) {
+            const val = Number(body.min_market_cap);
+            if (!Number.isFinite(val)) {
+                return res.status(400).json({ error: 'Permodalan pasaran minimum mestilah nombor yang sah.' });
+            }
+            if (val < SCREENER_CONFIG_LIMITS.min_market_cap.min) {
+                return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh kurang daripada $${SCREENER_CONFIG_LIMITS.min_market_cap.min.toLocaleString()}.` });
+            }
+            if (val > SCREENER_CONFIG_LIMITS.min_market_cap.max) {
+                return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.min_market_cap.max.toLocaleString()}.` });
+            }
+            newMinMarketCap = val;
+        }
+
+        if (body.min_volume !== undefined) {
+            const val = Number(body.min_volume);
+            if (!Number.isFinite(val)) {
+                return res.status(400).json({ error: 'Volum minimum mestilah nombor yang sah.' });
+            }
+            if (val < SCREENER_CONFIG_LIMITS.min_volume.min) {
+                return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh kurang daripada ${SCREENER_CONFIG_LIMITS.min_volume.min.toLocaleString()} saham.` });
+            }
+            if (val > SCREENER_CONFIG_LIMITS.min_volume.max) {
+                return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh melebihi ${SCREENER_CONFIG_LIMITS.min_volume.max.toLocaleString()} saham.` });
+            }
+            newMinVolume = val;
+        }
+
+        if (body.min_rvol !== undefined) {
+            const val = Number(body.min_rvol);
+            if (!Number.isFinite(val)) {
+                return res.status(400).json({ error: 'RVOL minimum mestilah nombor yang sah.' });
+            }
+            if (val < SCREENER_CONFIG_LIMITS.min_rvol.min || val > SCREENER_CONFIG_LIMITS.min_rvol.max) {
+                return res.status(400).json({ error: `RVOL minimum mestilah antara ${SCREENER_CONFIG_LIMITS.min_rvol.min} dan ${SCREENER_CONFIG_LIMITS.min_rvol.max}.` });
+            }
+            newMinRvol = val;
+        }
+
+        if (body.max_rvol !== undefined) {
+            const val = Number(body.max_rvol);
+            if (!Number.isFinite(val)) {
+                return res.status(400).json({ error: 'RVOL maksimum mestilah nombor yang sah.' });
+            }
+            if (val < SCREENER_CONFIG_LIMITS.max_rvol.min || val > SCREENER_CONFIG_LIMITS.max_rvol.max) {
+                return res.status(400).json({ error: `RVOL maksimum mestilah antara ${SCREENER_CONFIG_LIMITS.max_rvol.min} dan ${SCREENER_CONFIG_LIMITS.max_rvol.max}.` });
+            }
+            newMaxRvol = val;
+        }
+
+        // Cross-field validation: min_rvol <= max_rvol
+        if (newMinRvol > newMaxRvol) {
+            return res.status(400).json({ error: 'RVOL minimum tidak boleh melebihi RVOL maksimum.' });
+        }
+
+        const now = new Date().toISOString();
+        const user = String(req.authUser || 'anonymous').replace(/[\r\n]/g, '').slice(0, 100);
+
+        const prevValues = JSON.stringify({
+            min_price: current.min_price,
+            min_market_cap: current.min_market_cap,
+            min_volume: current.min_volume,
+            min_rvol: current.min_rvol,
+            max_rvol: current.max_rvol
+        });
+
+        const newValues = JSON.stringify({
+            min_price: newMinPrice,
+            min_market_cap: newMinMarketCap,
+            min_volume: newMinVolume,
+            min_rvol: newMinRvol,
+            max_rvol: newMaxRvol
+        });
+
+        const updateStmt = db.prepare(`
+            UPDATE screener_config
+            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, updated_at = ?, updated_by = ?
+            WHERE id = 1
+        `);
+        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, now, user);
+
+        const auditStmt = db.prepare(`
+            INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
+            VALUES (?, ?, 'UPDATE_CONFIG', ?, ?)
+        `);
+        auditStmt.run(now, user, prevValues, newValues);
+
+        return res.json({
+            message: 'Konfigurasi screener berjaya dikemas kini',
+            config: {
+                min_price: newMinPrice,
+                min_market_cap: newMinMarketCap,
+                min_volume: newMinVolume,
+                min_rvol: newMinRvol,
+                max_rvol: newMaxRvol
+            },
+            limits: SCREENER_CONFIG_LIMITS,
+            updated_at: now,
+            updated_by: user
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error updating screener config:', err);
+        return res.status(500).json({ error: 'Gagal mengemas kini konfigurasi screener: ' + err.message });
+    }
+});
+
+app.get('/api/screener/config/audit', authenticateDashboard, (req, res) => {
+    try {
+        const db = getScreenerDb();
+        const rows = db.prepare('SELECT id, timestamp, user, action, previous_values, new_values FROM screener_config_audit ORDER BY id DESC LIMIT 20').all();
+        return res.json({ audit: rows || [] });
+    } catch (err) {
+        console.error('[Dashboard] Error fetching screener config audit:', err);
+        return res.status(500).json({ error: 'Gagal membaca log audit: ' + err.message });
+    }
+});
+
 app.get('/api/data', authenticateDashboard, (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
