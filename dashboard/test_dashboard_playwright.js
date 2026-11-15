@@ -466,37 +466,104 @@ async function runPlaywrightSuite() {
     assertCheck('HOM-217 User Acceptance: QuotaPage KPI card displays Baki Kuota Sebenar (Moomoo)', quotaPageText.includes('Baki Kuota Sebenar (Moomoo)'));
     assertCheck('HOM-217 User Acceptance: QuotaPage summary does not display internal 93 / 100', !quotaPageText.includes('93 / 100'));
     assertCheck('HOM-217 User Acceptance: QuotaPage does not leak raw ECONNREFUSED', !quotaPageText.includes('ECONNREFUSED'));
-    assertCheck('HOM-217 User Acceptance: QuotaPage table labeled clearly as Senarai Simbol Direkodkan', quotaPageText.includes('Senarai Simbol Direkodkan'));
+    assertCheck('HOM-246 User Acceptance: QuotaPage table card labeled clearly as Senarai Kaunter Ditarik (Moomoo OpenAPI)', quotaPageText.includes('Senarai Kaunter Ditarik'));
+    assertCheck('HOM-246 User Acceptance: Kekerapan Panggilan column is completely removed', !quotaPageText.includes('Kekerapan Panggilan') && !quotaPageText.includes('KEKERAPAN PANGGILAN'));
 
     // HOM-239 User Acceptance: Real Moomoo OpenAPI green banner removed, unavailable banner preserved for error state
     const activeGreenBannerCount = await quotaPage.locator('#banner-moomoo-quota-active').count();
     assertCheck('HOM-239 User Acceptance: Green banner-moomoo-quota-active is removed', activeGreenBannerCount === 0);
 
-    // 4. User Acceptance Step 4: Data Table of Active Symbols & STATUS WATCHLIST
-    const quotaTable = quotaPage.locator('#table-kline-quota');
-    assertCheck('HOM-210 User Acceptance: K-Line quota data table rendered', (await quotaTable.count()) === 1);
-    const tableHeaderText = await quotaTable.locator('thead').innerText();
-    assertCheck('HOM-213 User Acceptance: Table contains STATUS WATCHLIST column header', tableHeaderText.includes('STATUS WATCHLIST'));
-    assertCheck('HOM-213 User Acceptance: Table displays Watchlist status chips (DALAM WATCHLIST / TERKELUAR)', (await quotaPage.locator(':text("DALAM WATCHLIST"), :text("TERKELUAR")').count()) >= 1);
-    const mgclyRow = quotaPage.locator('text=US.MGCLY').first();
-    assertCheck('HOM-210 User Acceptance: Table displays active symbol US.MGCLY', (await mgclyRow.count()) === 1);
-    assertCheck('HOM-210 User Acceptance: Table displays 30-day countdown badge', (await quotaPage.locator('text=Hari Lagi').count()) >= 1);
+    // 4. User Acceptance Step 4: Live Environment Zero-Usage Acceptance (HOM-246 AC1)
+    const emptyBox = quotaPage.locator('#quota-table-empty');
+    assertCheck('HOM-246 User Acceptance: Empty state rendered when 0 Moomoo quota used', (await emptyBox.count()) === 1);
+    assertCheck('HOM-246 User Acceptance: Empty state text states Tiada Kaunter Ditarik (0 Simbol)', (await emptyBox.innerText()).includes('Tiada Kaunter Ditarik (0 Simbol)'));
+    assertCheck('HOM-246 User Acceptance: Does not show internal screener SQLite records (0x / 180x call count is 0)', (await quotaPage.locator(':text("180x"), :text("142x")').count()) === 0);
 
-    // 5. User Acceptance Step 5: Search & Filter Functionality
+    // Desktop Screenshot of 0-usage state
+    await quotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '12_desktop_kline_quota_page_empty.png'), fullPage: true });
+
+    // 5. User Acceptance Step 5: Active Moomoo Counters Table & Search Acceptance (HOM-246)
+    console.log('\n--- Scenario D.1b: Active Moomoo Counters Table Acceptance (HOM-246) ---');
+    await quotaPage.route('**/api/screener/kline-quota', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          total_quota: 100,
+          used_quota: 2,
+          remaining_quota: 98,
+          percent_used: 2.0,
+          status: 'HEALTHY',
+          moomoo_quota: {
+            status: 'HEALTHY',
+            connected: true,
+            opend_status: 'CONNECTED',
+            used_quota: 2,
+            remain_quota: 98,
+            total_quota: 100,
+            detail_list: [
+              {
+                symbol: 'MY.1155',
+                code: 'MY.1155',
+                name: 'MAYBANK',
+                request_time: '2026-11-15 10:00:00',
+                expires_at: '2026-12-15T10:00:00.000Z',
+                days_remaining: 30,
+                status: 'ACTIVE',
+                in_watchlist: true,
+              },
+              {
+                symbol: 'US.AAPL',
+                code: 'US.AAPL',
+                name: 'Apple Inc',
+                request_time: '2026-11-14 09:30:00',
+                expires_at: '2026-12-14T09:30:00.000Z',
+                days_remaining: 29,
+                status: 'ACTIVE',
+                in_watchlist: false,
+              },
+            ],
+            error: null,
+          },
+          symbols: [],
+        }),
+      });
+    });
+
+    const refreshBtn = quotaPage.locator('#btn-refresh-quota');
+    await refreshBtn.click();
+    await quotaPage.waitForTimeout(500);
+
+    const quotaTable = quotaPage.locator('#table-kline-quota');
+    assertCheck('HOM-246 User Acceptance: K-Line quota data table rendered when counters exist', (await quotaTable.count()) === 1);
+    const tableHeaderText = await quotaTable.locator('thead').innerText();
+    assertCheck('HOM-246 User Acceptance: Table contains STATUS WATCHLIST column header', tableHeaderText.includes('STATUS WATCHLIST'));
+    assertCheck('HOM-246 User Acceptance: Table contains MASA DITARIK column header', tableHeaderText.includes('MASA DITARIK'));
+    assertCheck('HOM-246 User Acceptance: Table contains TARIKH LUPUT (+30 HARI) column header', tableHeaderText.includes('TARIKH LUPUT'));
+    assertCheck('HOM-246 User Acceptance: Table does NOT contain KEKERAPAN PANGGILAN column', !tableHeaderText.includes('KEKERAPAN PANGGILAN'));
+    assertCheck('HOM-246 User Acceptance: Table displays Watchlist status chips (DALAM WATCHLIST / TERKELUAR)', (await quotaPage.locator(':text("DALAM WATCHLIST"), :text("TERKELUAR")').count()) >= 1);
+    const maybankRow = quotaPage.locator('text=MY.1155').first();
+    assertCheck('HOM-246 User Acceptance: Table displays active Moomoo counter MY.1155', (await maybankRow.count()) === 1);
+    assertCheck('HOM-246 User Acceptance: Table displays 30-day countdown badge', (await quotaPage.locator('text=Hari Lagi').count()) >= 1);
+
+    // Search filter
     const searchInput = quotaPage.locator('#input-search-quota-symbol');
-    assertCheck('HOM-210 User Acceptance: Symbol search filter input rendered', (await searchInput.count()) === 1);
-    await searchInput.fill('MGCLY');
+    assertCheck('HOM-246 User Acceptance: Counter search filter input rendered', (await searchInput.count()) === 1);
+    await searchInput.fill('1155');
     await quotaPage.waitForTimeout(300);
     const visibleRows = quotaPage.locator('#table-kline-quota tbody tr');
-    assertCheck('HOM-210 User Acceptance: Search isolates matching symbol US.MGCLY', (await visibleRows.count()) === 1);
+    assertCheck('HOM-246 User Acceptance: Search isolates matching counter MY.1155', (await visibleRows.count()) === 1);
 
     // Clear search
     await searchInput.fill('');
     await quotaPage.waitForTimeout(300);
-    assertCheck('HOM-210 User Acceptance: Clearing search restores full symbol list (>= 7 symbols)', (await visibleRows.count()) >= 7);
+    assertCheck('HOM-246 User Acceptance: Clearing search restores full counter list (2 counters)', (await visibleRows.count()) === 2);
 
-    // Desktop Screenshot
+    // Desktop Screenshot with counters
     await quotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '12_desktop_kline_quota_page.png'), fullPage: true });
+
+    // Clean up route
+    await quotaPage.unroute('**/api/screener/kline-quota');
 
     // 6. Mobile Viewport Verification
     console.log('\n--- Scenario D.2: Mobile Viewport Quota Page Verification (390 x 844) ---');
@@ -519,7 +586,7 @@ async function runPlaywrightSuite() {
       return document.documentElement.scrollWidth > window.innerWidth;
     });
     assertCheck('HOM-210 Mobile Acceptance: No horizontal page overflow on #/quota mobile', !mobileHasHorizontalOverflow);
-    assertCheck('HOM-210 Mobile Acceptance: Quota table present on mobile', (await mobileQuotaPage.locator('#table-kline-quota').count()) === 1);
+    assertCheck('HOM-246 Mobile Acceptance: Quota empty state or table present on mobile', (await mobileQuotaPage.locator('#quota-table-empty, #table-kline-quota').count()) >= 1);
     await mobileQuotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '13_mobile_kline_quota_page.png'), fullPage: true });
 
     await mobileQuotaContext.close();

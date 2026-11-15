@@ -700,15 +700,10 @@ app.get('/api/screener/config/audit', authenticateDashboard, (req, res) => {
     }
 });
 
-// --- K-Line Quota Reader (node:sqlite) ---
-function getKlineQuotaData(customDbPath = null, customWatchlistPath = null) {
-    const quotaDbPath = customDbPath || path.join(SHARED_DATA_DIR, 'quota_tracker.sqlite');
+// --- K-Line Quota Reader (node:sqlite) & Moomoo Quota Normalizer ---
+function getActiveWatchlistSymbols(customWatchlistPath = null) {
     const watchlistFilePath = customWatchlistPath || path.join(SHARED_DATA_DIR, 'watchlist.json');
-    const TOTAL_QUOTA = 100;
-    const now = new Date();
-    const nowMs = now.getTime();
-
-    let activeWatchlistSymbols = new Set();
+    const activeWatchlistSymbols = new Set();
     if (fs.existsSync(watchlistFilePath)) {
         try {
             const rawWl = JSON.parse(fs.readFileSync(watchlistFilePath, 'utf8'));
@@ -722,6 +717,55 @@ function getKlineQuotaData(customDbPath = null, customWatchlistPath = null) {
             console.warn('[Dashboard] Could not parse watchlist.json for quota status:', e.message);
         }
     }
+    return activeWatchlistSymbols;
+}
+
+function enrichMoomooDetailList(detailList, activeWatchlistSymbols, referenceTime = new Date()) {
+    if (!Array.isArray(detailList)) return [];
+    const nowMs = referenceTime.getTime();
+    return detailList.map(item => {
+        const rawCode = (item && (item.code || item.symbol)) ? String(item.code || item.symbol) : '';
+        const cleanSym = rawCode.trim().toUpperCase();
+        const symWithoutPrefix = cleanSym.replace(/^[A-Z]+\./, '');
+        const inWatchlist = activeWatchlistSymbols.has(cleanSym) ||
+                            activeWatchlistSymbols.has(symWithoutPrefix) ||
+                            Array.from(activeWatchlistSymbols).some(s => s.endsWith('.' + cleanSym) || cleanSym.endsWith('.' + s));
+
+        let expiresAt = null;
+        let daysRemaining = null;
+        let isExpired = false;
+
+        const reqTime = item && item.request_time ? String(item.request_time) : null;
+        if (reqTime) {
+            const reqDate = new Date(reqTime);
+            if (!isNaN(reqDate.getTime())) {
+                const expDate = new Date(reqDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+                expiresAt = expDate.toISOString();
+                const diffMs = expDate.getTime() - nowMs;
+                daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                isExpired = diffMs <= 0;
+            }
+        }
+
+        return {
+            symbol: cleanSym,
+            code: cleanSym,
+            name: (item && item.name) ? item.name : 'N/A',
+            request_time: reqTime,
+            expires_at: expiresAt,
+            days_remaining: daysRemaining,
+            in_watchlist: inWatchlist,
+            status: isExpired ? 'EXPIRED' : 'ACTIVE'
+        };
+    });
+}
+
+function getKlineQuotaData(customDbPath = null, customWatchlistPath = null) {
+    const quotaDbPath = customDbPath || path.join(SHARED_DATA_DIR, 'quota_tracker.sqlite');
+    const TOTAL_QUOTA = 100;
+    const now = new Date();
+    const nowMs = now.getTime();
+    const activeWatchlistSymbols = getActiveWatchlistSymbols(customWatchlistPath);
 
     if (!fs.existsSync(quotaDbPath)) {
         return {
@@ -875,9 +919,20 @@ app.get('/api/screener/kline-quota', authenticateDashboard, async (req, res) => 
     try {
         const quotaData = getKlineQuotaData();
         const moomooQuota = await getMoomooOpenApiQuota();
+        const activeWatchlistSymbols = getActiveWatchlistSymbols();
+
+        let enrichedMoomooQuota = { ...moomooQuota };
+        if (moomooQuota && moomooQuota.connected && Array.isArray(moomooQuota.detail_list)) {
+            enrichedMoomooQuota.detail_list = enrichMoomooDetailList(moomooQuota.detail_list, activeWatchlistSymbols);
+        } else {
+            enrichedMoomooQuota.detail_list = [];
+        }
+
         return res.json({
             ...quotaData,
-            moomoo_quota: moomooQuota
+            moomoo_quota: enrichedMoomooQuota,
+            moomoo_counters: enrichedMoomooQuota.detail_list,
+            opend_connected: Boolean(moomooQuota && moomooQuota.connected)
         });
     } catch (err) {
         console.error('[Dashboard] Error fetching kline quota data:', err);
@@ -928,9 +983,17 @@ app.get("*", authenticateDashboard, (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`[Dashboard] Trading Dashboard running on port ${port}`);
-});
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`[Dashboard] Trading Dashboard running on port ${port}`);
+    });
+}
 
-module.exports = { app, getKlineQuotaData, getMoomooOpenApiQuota };
+module.exports = {
+    app,
+    getKlineQuotaData,
+    getMoomooOpenApiQuota,
+    getActiveWatchlistSymbols,
+    enrichMoomooDetailList
+};
 

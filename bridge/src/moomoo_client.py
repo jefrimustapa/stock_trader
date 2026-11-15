@@ -470,11 +470,17 @@ class MoomooClient:
                 formatted_details = []
                 for item in details:
                     if isinstance(item, dict):
-                        formatted_details.append(item)
+                        d = dict(item)
+                        if "code" in d and "symbol" not in d:
+                            d["symbol"] = d["code"]
+                        formatted_details.append(d)
                     elif hasattr(item, '__dict__'):
-                        formatted_details.append(item.__dict__)
+                        d = dict(item.__dict__)
+                        if "code" in d and "symbol" not in d:
+                            d["symbol"] = d["code"]
+                        formatted_details.append(d)
                     else:
-                        formatted_details.append(str(item))
+                        formatted_details.append({"code": str(item), "symbol": str(item), "name": "N/A", "request_time": None})
 
                 return {
                     "status": "HEALTHY",

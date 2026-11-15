@@ -665,6 +665,8 @@ async function main() {
     assert.ok(!html.includes('Anggaran'), 'Must remove all Anggaran labels (HOM-217)');
     assert.ok(!html.includes('93 / 100'), 'Must not display internal record 93 / 100 in KPI cards');
     assert.ok(!html.includes('banner-moomoo-quota-active'), 'Must remove green banner-moomoo-quota-active on healthy connection (HOM-239)');
+    assert.ok(html.includes('Tiada Kaunter Ditarik (0 Simbol)'), 'Must render clear empty state when used quota is 0 (HOM-246 AC1)');
+    assert.ok(!html.includes('KEKERAPAN PANGGILAN'), 'Must not display Kekerapan Panggilan column (HOM-246 AC3)');
 
     // Test unavailable fail-closed with friendly error
     const mockMoomooUnavailable = {
@@ -691,30 +693,48 @@ async function main() {
     assert.ok(!htmlUnavail.includes('banner-moomoo-quota-active'), 'Must never show banner-moomoo-quota-active when unavailable');
     assert.ok(!htmlUnavail.includes('ECONNREFUSED'), 'Must sanitize raw ECONNREFUSED to friendly message');
     assert.ok(htmlUnavail.includes('Moomoo OpenD tidak dapat dihubungi'), 'Must show friendly error text');
+    assert.ok(htmlUnavail.includes('Data Kaunter Moomoo Tidak Tersedia'), 'Must show unavailable counter container (HOM-246 AC2)');
   });
 
-  check('QuotaPage renders STATUS WATCHLIST table header (HOM-213 Acceptance Criteria 2)', () => {
-    const mockQuotaDataWithSymbols = {
+  check('QuotaPage renders real Moomoo counters, STATUS WATCHLIST, and removes KEKERAPAN PANGGILAN (HOM-246)', () => {
+    const mockQuotaDataWithMoomooCounters = {
       total_quota: 100,
       used_quota: 1,
       remaining_quota: 99,
       percent_used: 1.0,
       status: 'HEALTHY',
-      symbols: [
-        {
-          symbol: 'US.MGCLY',
-          first_requested_at: '2026-11-15T00:00:00Z',
-          expires_at: '2026-12-15T00:00:00Z',
-          days_remaining: 30,
-          request_count: 142,
-          status: 'ACTIVE',
-          in_watchlist: true,
-        },
-      ],
+      moomoo_quota: {
+        status: 'HEALTHY',
+        connected: true,
+        opend_status: 'CONNECTED',
+        used_quota: 1,
+        remain_quota: 99,
+        total_quota: 100,
+        detail_list: [
+          {
+            symbol: 'MY.1155',
+            code: 'MY.1155',
+            name: 'MAYBANK',
+            request_time: '2026-11-15 10:00:00',
+            expires_at: '2026-12-15T10:00:00.000Z',
+            days_remaining: 30,
+            status: 'ACTIVE',
+            in_watchlist: true,
+          },
+        ],
+        error: null,
+      },
+      symbols: [],
     };
-    const html = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockQuotaDataWithSymbols }));
+    const html = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockQuotaDataWithMoomooCounters }));
+    assert.ok(html.includes('table-kline-quota'), 'Must render table-kline-quota when counters exist');
     assert.ok(html.includes('STATUS WATCHLIST'), 'Must render STATUS WATCHLIST column header');
     assert.ok(html.includes('DALAM WATCHLIST'), 'Must render DALAM WATCHLIST badge for active watchlist item');
+    assert.ok(html.includes('MY.1155'), 'Must render Moomoo counter MY.1155');
+    assert.ok(html.includes('MAYBANK'), 'Must render Moomoo counter name MAYBANK');
+    assert.ok(html.includes('MASA DITARIK'), 'Must render MASA DITARIK column header');
+    assert.ok(html.includes('TARIKH LUPUT (+30 HARI)'), 'Must render TARIKH LUPUT column header');
+    assert.ok(!html.includes('KEKERAPAN PANGGILAN'), 'Must NOT render KEKERAPAN PANGGILAN column header (HOM-246 AC3)');
     assert.ok(!html.includes('memegang 1 slot'), 'Must not have inaccurate text');
   });
 

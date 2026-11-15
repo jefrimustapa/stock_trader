@@ -15,6 +15,8 @@ console.log('================================================================');
 console.log('  K-Line Quota Backend API, BVA & Mutation Test Suite (HOM-210)  ');
 console.log('================================================================\n');
 
+process.env.AUTHENTIK_CLIENT_ID = process.env.AUTHENTIK_CLIENT_ID || 'test-client-id';
+
 const TEST_PORT = 3899;
 const TEST_SHARED_DATA_DIR = path.join(__dirname, 'test_shared_quota_' + Date.now());
 const TEST_SERVICE_TOKEN = 'test-token-hom-210';
@@ -321,6 +323,54 @@ async function runTests() {
     check('moomoo_quota connected is false', moomooQ?.connected === false);
     check('moomoo_quota error is friendly and does not leak raw ECONNREFUSED (HOM-217)', !String(moomooQ?.error).includes('ECONNREFUSED'));
     check('moomoo_quota error indicates OpenD unreachable friendly text (HOM-217)', String(moomooQ?.error).includes('Moomoo OpenD tidak dapat dihubungi'));
+    check('API response contains moomoo_counters array', Array.isArray(resWl.data?.moomoo_counters));
+    check('opend_connected is false when bridge unavailable', resWl.data?.opend_connected === false);
+
+    // -------------------------------------------------------------
+    // 10. Moomoo OpenAPI Counter Enrichment & BVA Test Suite (HOM-246)
+    // -------------------------------------------------------------
+    console.log('\n--- 10. Moomoo Detail List Normalization & BVA (HOM-246) ---');
+    const { enrichMoomooDetailList } = require('./server.js');
+    const mockWatchlistSet = new Set(['MY.1155', 'AAPL', 'US.MSFT']);
+    const fixedNow = new Date('2026-11-15T12:00:00Z');
+
+    // BVA 1: Empty detail_list (0 counters)
+    const enriched0 = enrichMoomooDetailList([], mockWatchlistSet, fixedNow);
+    check('HOM-246 BVA [0]: Empty detail list returns empty array', Array.isArray(enriched0) && enriched0.length === 0);
+
+    // BVA 2: Single counter (1 counter) with active future date
+    const sample1 = [
+      { code: 'MY.1155', name: 'MAYBANK', request_time: '2026-11-15T00:00:00Z' }
+    ];
+    const enriched1 = enrichMoomooDetailList(sample1, mockWatchlistSet, fixedNow);
+    check('HOM-246 BVA [1]: Returns 1 enriched counter', enriched1.length === 1);
+    check('HOM-246 BVA [1]: Symbol is MY.1155', enriched1[0].symbol === 'MY.1155');
+    check('HOM-246 BVA [1]: Name is MAYBANK', enriched1[0].name === 'MAYBANK');
+    check('HOM-246 BVA [1]: in_watchlist is true for MY.1155', enriched1[0].in_watchlist === true);
+    check('HOM-246 BVA [1]: Status is ACTIVE', enriched1[0].status === 'ACTIVE');
+    check('HOM-246 BVA [1]: Days remaining is 30', enriched1[0].days_remaining === 30);
+    check('HOM-246 BVA [1]: Expires at is +30 days (2026-12-15T00:00:00.000Z)', enriched1[0].expires_at === '2026-12-15T00:00:00.000Z');
+
+    // BVA 3: Expired counter (past date > 30 days)
+    const sampleExpired = [
+      { code: 'US.OLD', name: 'OLD CORP', request_time: '2026-10-01T00:00:00Z' }
+    ];
+    const enrichedExpired = enrichMoomooDetailList(sampleExpired, mockWatchlistSet, fixedNow);
+    check('HOM-246 BVA [Expired]: Status transitions to EXPIRED', enrichedExpired[0].status === 'EXPIRED');
+    check('HOM-246 BVA [Expired]: Days remaining clamped to 0', enrichedExpired[0].days_remaining === 0);
+    check('HOM-246 BVA [Expired]: in_watchlist is false for US.OLD', enrichedExpired[0].in_watchlist === false);
+
+    // BVA 4: Multiple counters (Many) with mixed watchlist statuses
+    const sampleMany = [
+      { code: 'US.AAPL', name: 'Apple Inc', request_time: '2026-11-10T00:00:00Z' },
+      { code: 'US.MSFT', name: 'Microsoft', request_time: '2026-11-12T00:00:00Z' },
+      { code: 'MY.5183', name: 'PETCHEM', request_time: '2026-11-14T00:00:00Z' },
+    ];
+    const enrichedMany = enrichMoomooDetailList(sampleMany, mockWatchlistSet, fixedNow);
+    check('HOM-246 BVA [Many]: Returns all 3 counters', enrichedMany.length === 3);
+    check('HOM-246 BVA [Many]: US.AAPL in_watchlist is true', enrichedMany[0].in_watchlist === true);
+    check('HOM-246 BVA [Many]: US.MSFT in_watchlist is true', enrichedMany[1].in_watchlist === true);
+    check('HOM-246 BVA [Many]: MY.5183 in_watchlist is false (not in watchlist)', enrichedMany[2].in_watchlist === false);
 
   } finally {
     if (serverProcess) {

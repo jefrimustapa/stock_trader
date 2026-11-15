@@ -75,7 +75,13 @@ export function QuotaPage({ initialQuotaData = null }) {
   const realUsed = isMoomooConnected ? moomooQuota.used_quota : null;
   const realTotal = isMoomooConnected ? (moomooQuota.total_quota ?? 100) : 100;
   const realPercent = isMoomooConnected && realTotal > 0 ? Number(((realUsed / realTotal) * 100).toFixed(1)) : null;
-  const rawSymbols = Array.isArray(quotaData?.symbols) ? quotaData.symbols : [];
+
+  // Real Moomoo OpenAPI counter list (fail-closed: empty when OpenD unavailable)
+  const rawCounters = isMoomooConnected
+    ? (Array.isArray(moomooQuota?.detail_list)
+        ? moomooQuota.detail_list
+        : (Array.isArray(quotaData?.moomoo_counters) ? quotaData.moomoo_counters : []))
+    : [];
 
   const formatMoomooError = (rawErr) => {
     if (!rawErr) return 'Moomoo OpenD tidak dapat dihubungi';
@@ -92,10 +98,12 @@ export function QuotaPage({ initialQuotaData = null }) {
     return str;
   };
 
-  const filteredSymbols = rawSymbols.filter((item) => {
+  const filteredCounters = rawCounters.filter((item) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.trim().toUpperCase();
-    return (item.symbol || '').toUpperCase().includes(q);
+    const sym = (item.symbol || item.code || '').toUpperCase();
+    const name = (item.name || '').toUpperCase();
+    return sym.includes(q) || name.includes(q);
   });
 
   const formatDate = (isoStr) => {
@@ -227,9 +235,9 @@ export function QuotaPage({ initialQuotaData = null }) {
         }}
       >
         <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 600, display: 'inline' }}>
-          Maklumat Kuota &amp; Simbol:&nbsp;
+          Maklumat Kuota &amp; Kaunter:&nbsp;
         </Typography>
-        Kad ringkasan memaparkan kuota Moomoo OpenAPI sebenar. Jadual di bawah menyenaraikan simbol yang direkodkan oleh screener dalam pangkalan data tempatan (30-hari).
+        Kad ringkasan dan jadual di bawah menyenaraikan kaunter sebenar yang ditarik K-line sejarahnya dari Moomoo OpenAPI (tetingkap bergolek 30-hari).
       </Alert>
 
       {error && (
@@ -513,10 +521,10 @@ export function QuotaPage({ initialQuotaData = null }) {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Senarai Simbol Direkodkan (Rekod Dalaman Screener)
+                Senarai Kaunter Ditarik (Moomoo OpenAPI)
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Senarai simbol yang direkodkan oleh screener dalam pangkalan data tempatan (bukan kuota Moomoo). Tarikh luput bergolek 30-hari.
+                Senarai kaunter yang ditarik K-line sejarahnya dari Moomoo OpenAPI (tetingkap bergolek 30-hari).
               </Typography>
             </Box>
 
@@ -524,8 +532,9 @@ export function QuotaPage({ initialQuotaData = null }) {
               <TextField
                 id="input-search-quota-symbol"
                 size="small"
-                placeholder="Cari simbol (cth: MGCLY)..."
+                placeholder="Cari kaunter (cth: MY.1155)..."
                 value={searchQuery}
+                disabled={!isMoomooConnected}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 InputProps={{
                   startAdornment: (
@@ -540,9 +549,16 @@ export function QuotaPage({ initialQuotaData = null }) {
                 }}
               />
               <Chip
+                id="chip-quota-counter-count"
                 size="small"
-                label={`${filteredSymbols.length} / ${rawSymbols.length} Simbol Direkod`}
-                sx={{ fontWeight: 600, fontSize: '0.75rem', borderRadius: 1.5 }}
+                label={isMoomooConnected ? `${filteredCounters.length} / ${rawCounters.length} Kaunter Ditarik` : 'Tidak Tersedia'}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                  borderRadius: 1.5,
+                  backgroundColor: isMoomooConnected ? sneatTokens.primary.soft : sneatTokens.secondary.soft,
+                  color: isMoomooConnected ? sneatTokens.primary.main : 'text.secondary',
+                }}
               />
             </Box>
           </Box>
@@ -554,24 +570,43 @@ export function QuotaPage({ initialQuotaData = null }) {
                 Memuatkan rekod kuota K-line...
               </Typography>
             </Box>
-          ) : isDbMissing ? (
-            <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
-              <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
-              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Belum Ada Data Rekod Simbol
+          ) : !isMoomooConnected ? (
+            <Box
+              id="quota-opend-unavailable"
+              sx={{
+                p: 4,
+                textAlign: 'center',
+                border: '1px dashed',
+                borderColor: sneatTokens.error.main,
+                borderRadius: 2,
+                backgroundColor: sneatTokens.error.soft,
+              }}
+            >
+              <ErrorOutlineIcon sx={{ fontSize: 48, color: sneatTokens.error.main, mb: 1 }} />
+              <Typography variant="body1" sx={{ fontWeight: 700, color: sneatTokens.error.main }}>
+                Data Kaunter Moomoo Tidak Tersedia
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
-                Pangkalan data kuota K-line belum diwujudkan atau enjin screener belum memulakan rekod aktiviti simbol.
+                Sambungan ke gateway Moomoo OpenD tidak aktif ({formatMoomooError(moomooQuota?.error)}). Senarai kaunter K-line dari Moomoo OpenAPI tidak dapat dimuatkan (bukan senarai kosong palsu).
               </Typography>
             </Box>
-          ) : rawSymbols.length === 0 ? (
-            <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+          ) : rawCounters.length === 0 ? (
+            <Box
+              id="quota-table-empty"
+              sx={{
+                p: 4,
+                textAlign: 'center',
+                border: '1px dashed',
+                borderColor: 'divider',
+                borderRadius: 2,
+              }}
+            >
               <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
               <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Tiada Simbol Direkodkan
+                Tiada Kaunter Ditarik (0 Simbol)
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
-                Pangkalan data wujud tetapi tiada simbol aktif direkodkan dalam tetingkap 30-hari oleh enjin screener (0 simbol direkodkan).
+                Tiada K-line sejarah ditarik daripada Moomoo OpenAPI dalam tetingkap 30-hari ini (0 / {realTotal} kuota terpakai).
               </Typography>
             </Box>
           ) : (
@@ -589,20 +624,20 @@ export function QuotaPage({ initialQuotaData = null }) {
                 <TableHead sx={{ backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#2b2c40' : '#f5f5f9' }}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>SIMBOL</TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>MULA DIKIRA (1ST REQUEST)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>MASA DITARIK</TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>TARIKH LUPUT (+30 HARI)</TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>BAKI HARI</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>KEKERAPAN PANGGILAN</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>STATUS WATCHLIST</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredSymbols.map((row) => {
-                    const isExpired = row.status === 'EXPIRED' || row.days_remaining <= 0;
+                  {filteredCounters.map((row) => {
+                    const isExpired = row.status === 'EXPIRED' || (row.days_remaining !== null && row.days_remaining <= 0);
                     const isInWatchlist = Boolean(row.in_watchlist);
+                    const sym = row.symbol || row.code || '-';
                     return (
                       <TableRow
-                        key={row.symbol}
+                        key={sym + (row.request_time || '')}
                         hover
                         sx={{
                           '&:last-child td, &:last-child th': { border: 0 },
@@ -612,7 +647,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                         <TableCell component="th" scope="row" sx={{ py: 1.5 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Chip
-                              label={row.symbol}
+                              label={sym}
                               size="small"
                               sx={{
                                 fontWeight: 700,
@@ -622,43 +657,52 @@ export function QuotaPage({ initialQuotaData = null }) {
                                 color: isExpired ? 'text.secondary' : sneatTokens.primary.main,
                               }}
                             />
+                            {row.name && row.name !== 'N/A' && (
+                              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                                {row.name}
+                              </Typography>
+                            )}
                           </Box>
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.5 }}>
-                          <Tooltip title={`UTC: ${row.first_requested_at}`} arrow>
-                            <span>{formatDate(row.first_requested_at)}</span>
-                          </Tooltip>
+                          {row.request_time ? (
+                            <Tooltip title={`Masa Ditarik: ${row.request_time}`} arrow>
+                              <span>{formatDate(row.request_time)}</span>
+                            </Tooltip>
+                          ) : (
+                            '-'
+                          )}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.5 }}>
-                          <Tooltip title={`UTC: ${row.expires_at}`} arrow>
-                            <span>{formatDate(row.expires_at)}</span>
-                          </Tooltip>
+                          {row.expires_at ? (
+                            <Tooltip title={`Tarikh Luput: ${row.expires_at}`} arrow>
+                              <span>{formatDate(row.expires_at)}</span>
+                            </Tooltip>
+                          ) : (
+                            '-'
+                          )}
                         </TableCell>
                         <TableCell sx={{ py: 1.5 }}>
-                          <Chip
-                            icon={<ScheduleIcon sx={{ fontSize: '14px !important' }} />}
-                            label={isExpired ? 'Luput' : `${row.days_remaining} Hari Lagi`}
-                            size="small"
-                            sx={{
-                              fontWeight: 600,
-                              fontSize: '0.72rem',
-                              borderRadius: 1.5,
-                              backgroundColor: isExpired
-                                ? sneatTokens.secondary.soft
-                                : (row.days_remaining <= 3 ? sneatTokens.warning.soft : sneatTokens.info.soft),
-                              color: isExpired
-                                ? 'text.secondary'
-                                : (row.days_remaining <= 3 ? sneatTokens.warning.main : sneatTokens.info.main),
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600, fontSize: '0.8rem', py: 1.5 }}>
-                          <Chip
-                            label={`${row.request_count}x`}
-                            size="small"
-                            variant="outlined"
-                            sx={{ fontSize: '0.72rem', borderRadius: 1, borderColor: 'divider' }}
-                          />
+                          {row.days_remaining !== null && row.days_remaining !== undefined ? (
+                            <Chip
+                              icon={<ScheduleIcon sx={{ fontSize: '14px !important' }} />}
+                              label={isExpired ? 'Luput' : `${row.days_remaining} Hari Lagi`}
+                              size="small"
+                              sx={{
+                                fontWeight: 600,
+                                fontSize: '0.72rem',
+                                borderRadius: 1.5,
+                                backgroundColor: isExpired
+                                  ? sneatTokens.secondary.soft
+                                  : (row.days_remaining <= 3 ? sneatTokens.warning.soft : sneatTokens.info.soft),
+                                color: isExpired
+                                  ? 'text.secondary'
+                                  : (row.days_remaining <= 3 ? sneatTokens.warning.main : sneatTokens.info.main),
+                              }}
+                            />
+                          ) : (
+                            '-'
+                          )}
                         </TableCell>
                         <TableCell align="center" sx={{ py: 1.5 }}>
                           <Chip
