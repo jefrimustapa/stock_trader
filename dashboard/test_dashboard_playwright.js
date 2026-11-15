@@ -131,10 +131,10 @@ async function runPlaywrightSuite() {
     assertCheck('Mobile OpenD: Login form #loginAccInput is hidden while connected', (await initialAccInput.count()) === 0);
 
     // 4c. Toggle credential change to test form fields and password masking
-    const switchCredBtn = mobilePage.locator('text=Tukar Kredensial Moomoo');
+    const switchCredBtn = mobilePage.locator('button:has-text("Tukar Kredensial")');
     if ((await switchCredBtn.count()) > 0) {
       await switchCredBtn.click();
-      await mobilePage.waitForTimeout(300);
+      await mobilePage.waitForTimeout(400);
     }
 
     const accInput = mobilePage.locator('#loginAccInput');
