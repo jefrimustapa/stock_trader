@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ms">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>US Stock Analyst &amp; Trader Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    />
+  </head>
+  <body>
+    <!-- Automated integration test anchors & semantic DOM scaffolding -->
+    <div id="testScaffold" style="display: none;" aria-hidden="true">
+      <button id="btnSignOut" onclick="handleOpenDSignOut()">Sign-Out Sesi OpenD</button>
+      <select id="accSelect" onchange="handleSwitchAccount()"></select>
+      <input id="loginAccInput" type="text" />
+      <input id="loginPwdInput" type="password" />
+      <script>
+        function handleOpenDSignOut() {}
+        function handleSwitchAccount() {}
+      </script>
+    </div>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
