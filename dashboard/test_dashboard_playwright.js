@@ -185,6 +185,11 @@ async function runPlaywrightSuite() {
     await mobilePage.waitForTimeout(500);
     assertCheck('Mobile Navigation: Navigated to #/watchlist', mobilePage.url().includes('#/watchlist'));
 
+    // Check that table rows are rendered with live candidates
+    const tableRows = mobilePage.locator('tbody tr');
+    const rowCount = await tableRows.count();
+    assertCheck('Mobile Watchlist: Table contains active stock candidates', rowCount > 0);
+
     const setupTab = mobilePage.locator('button[role="tab"]').filter({ hasText: 'Setup' });
     if ((await setupTab.count()) > 0) {
       await setupTab.click();
@@ -198,6 +203,8 @@ async function runPlaywrightSuite() {
     await mobilePage.waitForTimeout(400);
     const funnelCards = mobilePage.locator('text=Cloud Universe');
     assertCheck('Mobile Funnel: 5-stage screening pipeline rendered', (await funnelCards.count()) >= 1);
+    const finalWatchlistBadge = mobilePage.locator('text=Calon Akhir');
+    assertCheck('Mobile Funnel: Final candidate count badge rendered', (await finalWatchlistBadge.count()) >= 1);
     await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '04_mobile_funnel.png'), fullPage: true });
 
     assertCheck('Mobile Session: Clean console with zero errors', consoleErrors.length === 0);

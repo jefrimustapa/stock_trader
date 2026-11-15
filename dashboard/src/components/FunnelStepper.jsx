@@ -15,19 +15,25 @@ import { sneatTokens } from '../theme';
 
 export function FunnelStepper({ dataPayload }) {
   const watchlist = dataPayload?.watchlist || {};
-  const funnel = watchlist.funnel || {
-    stage1_universe: 8520,
-    stage2_quality: 1420,
-    stage3_dual_lane: 48,
-    stage4_kline: 10,
-    stage5_final: (watchlist.watchlist || []).length || 8,
-  };
+  const funnel = watchlist.funnel || {};
+
+  const rawWatchlist = Array.isArray(watchlist)
+    ? watchlist
+    : (Array.isArray(watchlist.watchlist) ? watchlist.watchlist : (watchlist.items || []));
+
+  const stage1Count = funnel.cloud_raw_returned ?? funnel.stage1_universe ?? (watchlist.total_screened_cloud || 0);
+  const stage2Count = funnel.stage0_quality_passed ?? funnel.stage2_quality ?? (watchlist.stage1_passed || 0);
+  const stage3Count = (funnel.lane_momentum_candidates !== undefined || funnel.lane_setup_candidates !== undefined)
+    ? ((funnel.lane_momentum_candidates || 0) + (funnel.lane_setup_candidates || 0))
+    : (funnel.stage3_dual_lane ?? watchlist.stage2_passed ?? 0);
+  const stage4Count = funnel.kline_analyzed_count ?? funnel.stage4_kline ?? 0;
+  const stage5Count = funnel.final_watchlist_count ?? rawWatchlist.length;
 
   const steps = [
     {
       stage: 'Peringkat 1',
       title: 'Cloud Universe',
-      count: funnel.stage1_universe || 8500,
+      count: stage1Count,
       unit: 'Kaunter',
       desc: 'Semua saham US aktif di Moomoo',
       color: sneatTokens.secondary.main,
@@ -36,7 +42,7 @@ export function FunnelStepper({ dataPayload }) {
     {
       stage: 'Peringkat 2',
       title: 'Kualiti Stage 0',
-      count: funnel.stage2_quality || 1400,
+      count: stage2Count,
       unit: 'Kaunter',
       desc: 'Harga >= $10, Cap >= $1B, ADV >= 1M',
       color: sneatTokens.info.main,
@@ -45,7 +51,7 @@ export function FunnelStepper({ dataPayload }) {
     {
       stage: 'Peringkat 3',
       title: 'Dwi-Lorong',
-      count: funnel.stage3_dual_lane || 45,
+      count: stage3Count,
       unit: 'Calon',
       desc: 'Momentum & Setup RS vs SPY',
       color: sneatTokens.warning.main,
@@ -54,7 +60,7 @@ export function FunnelStepper({ dataPayload }) {
     {
       stage: 'Peringkat 4',
       title: 'Enriched K-Line',
-      count: funnel.stage4_kline || 10,
+      count: stage4Count,
       unit: 'Teratas',
       desc: 'Kuota API 3-5 kaunter per lorong',
       color: sneatTokens.primary.main,
@@ -63,7 +69,7 @@ export function FunnelStepper({ dataPayload }) {
     {
       stage: 'Peringkat 5',
       title: 'Watchlist Akhir',
-      count: funnel.stage5_final || (watchlist.watchlist || []).length || 6,
+      count: stage5Count,
       unit: 'Saham Terpilih',
       desc: 'Sedia untuk eksekusi Tariq & Nawwar',
       color: sneatTokens.success.main,
@@ -102,33 +108,34 @@ export function FunnelStepper({ dataPayload }) {
                         size="small"
                         label={step.stage}
                         sx={{
+                          fontSize: '0.65rem',
                           fontWeight: 700,
-                          fontSize: '0.68rem',
-                          backgroundColor: `${step.color}25`,
+                          backgroundColor: 'background.paper',
                           color: step.color,
                         }}
                       />
                       {idx === steps.length - 1 && (
-                        <CheckCircleIcon sx={{ fontSize: 18, color: step.color }} />
+                        <CheckCircleIcon sx={{ color: sneatTokens.success.main, fontSize: 18 }} />
                       )}
                     </Box>
 
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: step.color, mt: 0.5 }}>
-                      {step.title}
-                    </Typography>
-
                     <Box sx={{ my: 1 }}>
-                      <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary' }}>
-                        {Number(step.count).toLocaleString()}
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: step.color }}>
+                        {step.count.toLocaleString()}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                         {step.unit}
                       </Typography>
                     </Box>
 
-                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.72rem', mt: 0.5 }}>
-                      {step.desc}
-                    </Typography>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                        {step.title}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                        {step.desc}
+                      </Typography>
+                    </Box>
                   </Paper>
                 </Grid>
               </React.Fragment>

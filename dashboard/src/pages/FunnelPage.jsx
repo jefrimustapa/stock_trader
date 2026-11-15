@@ -18,16 +18,15 @@ import { FunnelStepper } from '../components/FunnelStepper';
 
 export function FunnelPage({ dataPayload }) {
   const watchlist = dataPayload?.watchlist || {};
-  const funnel = watchlist.funnel || {
-    stage1_universe: 8520,
-    stage2_quality: 1420,
-    stage3_dual_lane: 48,
-    stage4_kline: 10,
-    stage5_final: (watchlist.watchlist || []).length || 8,
-  };
+  const funnel = watchlist.funnel || {};
 
-  const finalCount = funnel.stage5_final || (watchlist.watchlist || []).length || 8;
-  const conversionPct = ((finalCount / (funnel.stage1_universe || 8500)) * 100).toFixed(2);
+  const rawWatchlist = Array.isArray(watchlist)
+    ? watchlist
+    : (Array.isArray(watchlist.watchlist) ? watchlist.watchlist : (watchlist.items || []));
+
+  const finalCount = funnel.final_watchlist_count ?? rawWatchlist.length;
+  const universeCount = funnel.cloud_raw_returned ?? funnel.stage1_universe ?? (watchlist.total_screened_cloud || 0);
+  const conversionPct = universeCount > 0 ? ((finalCount / universeCount) * 100).toFixed(2) : '0.00';
 
   return (
     <Box id="page-funnel" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 3 } }}>
@@ -98,11 +97,11 @@ export function FunnelPage({ dataPayload }) {
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.secondary.main, display: 'block' }}>
                 STAGE 1
               </Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Cloud Universe
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 1 }}>
-                Semua instrumen ekuiti pasaran US yang aktif dan didagangkan di bursa NYSE &amp; NASDAQ.
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                Saringan peringkat awan mentah Moomoo mengambil beribu-ribu simbol aktif untuk penapisan permulaan.
               </Typography>
             </Box>
           </Grid>
@@ -112,11 +111,11 @@ export function FunnelPage({ dataPayload }) {
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.info.main, display: 'block' }}>
                 STAGE 2
               </Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Kualiti Stage 0
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 1 }}>
-                Harga &gt;= $10, Permodalan Pasaran &gt;= $1B, dan ADV20 &gt;= 1J unit saham untuk keselamatan likuiditi.
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                Penyingkiran saham sen, modal terhad, dan volum nipis (Harga &gt;= $10, Nilai Pasaran &gt;= $1B, ADV &gt;= 1M).
               </Typography>
             </Box>
           </Grid>
@@ -126,11 +125,11 @@ export function FunnelPage({ dataPayload }) {
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.warning.main, display: 'block' }}>
                 STAGE 3
               </Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                Pengelasan Dwi-Lorong
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                Dwi-Lorong
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 1 }}>
-                Pemisahan calon kepada lorong MOMENTUM (RS vs SPY kuat) dan SETUP (fasa konsolidasi dasar).
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                Pengasingan berasaskan logik kuantitatif: Momentum (trend agresif &amp; RVOL tinggi) atau Setup (konsolidasi rapi &amp; hampiran 52W).
               </Typography>
             </Box>
           </Grid>
@@ -140,11 +139,11 @@ export function FunnelPage({ dataPayload }) {
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.primary.main, display: 'block' }}>
                 STAGE 4
               </Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Enriched K-Line
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 1 }}>
-                Penggunaan kuota 3-5 kaunter teratas bagi setiap lorong untuk muat turun carta bar terperinci.
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                Pengambilan data lilin K-line berketepatan tinggi bagi 3-5 calon teratas setiap lorong bagi mengoptimumkan kuota API.
               </Typography>
             </Box>
           </Grid>
@@ -154,11 +153,11 @@ export function FunnelPage({ dataPayload }) {
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.success.main, display: 'block' }}>
                 STAGE 5
               </Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Watchlist Akhir
               </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 1 }}>
-                Senarai muktamad diserahkan kepada agen Tariq (Technical) &amp; Nawwar (Fundamental).
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                Senarai kaunter bersedia untuk diproses oleh agen Tariq (analisis teknikal) dan Nawwar (analisis asas).
               </Typography>
             </Box>
           </Grid>

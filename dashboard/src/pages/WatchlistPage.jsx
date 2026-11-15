@@ -17,7 +17,9 @@ import { WatchlistTable } from '../components/WatchlistTable';
 
 export function WatchlistPage({ dataPayload }) {
   const watchlist = dataPayload?.watchlist || {};
-  const items = watchlist.watchlist || [];
+  const items = Array.isArray(watchlist)
+    ? watchlist
+    : (Array.isArray(watchlist.watchlist) ? watchlist.watchlist : (watchlist.items || []));
   const marketStatus = watchlist.market_status || 'CLOSED';
   const isMarketOpen = String(marketStatus).toUpperCase() === 'OPEN';
   const isLive = watchlist.is_live || false;

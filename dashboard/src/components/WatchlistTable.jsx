@@ -26,7 +26,9 @@ export function WatchlistTable({ dataPayload }) {
   const [laneFilter, setLaneFilter] = useState('ALL');
 
   const watchlistData = dataPayload?.watchlist || {};
-  const rawItems = watchlistData.watchlist || [];
+  const rawItems = Array.isArray(watchlistData)
+    ? watchlistData
+    : (Array.isArray(watchlistData.watchlist) ? watchlistData.watchlist : (watchlistData.items || []));
 
   const marketStatus = watchlistData.market_status || 'CLOSED';
   const isLive = watchlistData.is_live || false;
@@ -146,6 +148,8 @@ export function WatchlistTable({ dataPayload }) {
                     const isMomentum = String(row.lane || '').toUpperCase() === 'MOMENTUM';
                     const changeVal = Number(row.change_pct || row.change || 0);
                     const isPositive = changeVal >= 0;
+                    const advVal = row.adv_20 ?? row.adv20 ?? row.adv;
+                    const dist52w = row.setup_metrics?.dist_to_52w_high_pct ?? row.dist_to_52w_high_pct;
 
                     return (
                       <TableRow key={row.symbol || idx} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
@@ -189,22 +193,22 @@ export function WatchlistTable({ dataPayload }) {
                         </TableCell>
                         <TableCell align="right">
                           <Typography variant="body2">
-                            {row.adv20 ? `${(row.adv20 / 1000000).toFixed(1)}M` : (row.adv20_m ? `${row.adv20_m}M` : '-')}
+                            {advVal !== undefined && advVal !== null ? `${(Number(advVal) / 1000000).toFixed(1)}M` : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
                           <Typography variant="body2" sx={{ fontWeight: 600, color: row.rs_spy > 1 ? sneatTokens.success.main : 'inherit' }}>
-                            {row.rs_spy !== undefined ? Number(row.rs_spy).toFixed(2) : '-'}
+                            {row.rs_spy !== undefined && row.rs_spy !== null ? Number(row.rs_spy).toFixed(2) : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
                           <Typography variant="body2">
-                            {row.rvol_15m !== undefined ? `${Number(row.rvol_15m).toFixed(1)}x` : '-'}
+                            {row.rvol_15m !== undefined && row.rvol_15m !== null ? `${Number(row.rvol_15m).toFixed(2)}x` : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
                           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            {row.dist_to_52w_high_pct !== undefined ? `${Number(row.dist_to_52w_high_pct).toFixed(1)}%` : '-'}
+                            {dist52w !== undefined && dist52w !== null ? `${Number(dist52w).toFixed(1)}%` : '-'}
                           </Typography>
                         </TableCell>
                       </TableRow>
