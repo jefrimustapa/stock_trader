@@ -190,3 +190,24 @@ def switch_trading_account(
         "message": msg,
         "account_info": client.get_account_info()
     }
+
+
+@router.get("/orders")
+def get_orders_history(caller: str = Depends(authenticate_request)):
+    """
+    Returns list of orders and paper trading history (combining processed_orders
+    and OpenD queries).
+    """
+    client = get_moomoo_client()
+    opend_orders = client.query_orders()
+    from ..agent_pipeline import get_agent_pipeline
+    pipeline = get_agent_pipeline()
+    paper_orders = pipeline.get_paper_orders(limit=50)
+
+    return {
+        "opend_status": client.get_connection_status(),
+        "env": client.trd_env,
+        "broker_orders": opend_orders,
+        "paper_orders": paper_orders
+    }
+

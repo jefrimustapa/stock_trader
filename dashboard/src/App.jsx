@@ -9,8 +9,9 @@ import { FunnelPage } from './pages/FunnelPage';
 import { WatchlistPage } from './pages/WatchlistPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { QuotaPage } from './pages/QuotaPage';
+import { AgentsPage } from './pages/AgentsPage';
 
-const VALID_PAGES = ['overview', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
+const VALID_PAGES = ['overview', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
@@ -114,6 +115,8 @@ export function App() {
 
   const renderCurrentPage = () => {
     switch (currentPage) {
+      case 'agents':
+        return <AgentsPage />;
       case 'opend':
         return <OpendPage statusData={statusData} onRefresh={fetchDashboardData} />;
       case 'funnel':

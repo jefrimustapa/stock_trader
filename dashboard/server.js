@@ -1099,6 +1099,69 @@ app.get('/api/data', authenticateDashboard, async (req, res) => {
     });
 });
 
+// Agent Coordination & Paper Trading Simulation Proxy Endpoints (HOM-291)
+app.get('/api/agents/activity', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const limit = req.query.limit || 10;
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/agents/activity`, {
+            params: { limit },
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching agent activity from bridge:', err.message);
+        return res.status(err.response?.status || 502).json({
+            error: 'Gagal menghubungi pelayan Bridge untuk aktiviti ejen: ' + (err.response?.data?.detail || err.message)
+        });
+    }
+});
+
+app.post('/api/agents/simulate-run', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.post(`${targetUrl}/api/v1/agents/simulate-run`, req.body || {}, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Service-Token': BRIDGE_SERVICE_TOKEN
+            },
+            timeout: 15000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error triggering agent simulation run:', err.message);
+        return res.status(err.response?.status || 502).json({
+            error: 'Gagal mencetuskan kitaran simulasi saluran paip: ' + (err.response?.data?.detail || err.message)
+        });
+    }
+});
+
+app.get('/api/trade/orders', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/trade/orders`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching trade orders from bridge:', err.message);
+        return res.status(err.response?.status || 502).json({
+            error: 'Gagal mendapatkan rekod pesanan daripada Bridge: ' + (err.response?.data?.detail || err.message)
+        });
+    }
+});
+
 const distDir = path.join(__dirname, "dist");
 app.use(express.static(distDir, { index: false }));
 app.use("/assets", express.static(path.join(distDir, "assets")));

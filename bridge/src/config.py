@@ -25,6 +25,7 @@ class BridgeConfig:
     EQUITY_BASELINE_DB: Path = SHARED_DATA_DIR / "equity_baseline.sqlite"
     WATCHLIST_PATH: Path = SHARED_DATA_DIR / "watchlist.json"
     SENTINEL_STATUS_PATH: Path = SHARED_DATA_DIR / "sentinel_status.json"
+    AGENT_ACTIVITY_DB: Path = SHARED_DATA_DIR / "agent_activity.sqlite"
 
     # OpenD Session Data & Container Management
     OPEND_SESSION_DATA_DIR: Path = Path(os.getenv("OPEND_SESSION_DATA_DIR", "/opend_session_data"))
