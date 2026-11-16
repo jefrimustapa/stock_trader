@@ -9,7 +9,11 @@ const path = require('path');
 const fs = require('fs');
 
 const TARGET_URL = process.env.TEST_URL || 'http://stock_trading_dashboard:3000';
-const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN || 'secure-svc-token-test-2026';
+const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN;
+if (!SERVICE_TOKEN) {
+  console.error('Fatal Configuration Error: BRIDGE_SERVICE_TOKEN environment variable is required.');
+  process.exit(1);
+}
 const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || path.join(__dirname, 'playwright_screenshots');
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {

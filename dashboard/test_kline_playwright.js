@@ -9,7 +9,11 @@ const fs = require('fs');
 const path = require('path');
 
 const TARGET_URL = process.env.TEST_URL || 'http://stock_trading_dashboard:3000';
-const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN || 'secure-svc-token-test-2026';
+const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN;
+if (!SERVICE_TOKEN) {
+  console.error('Fatal Configuration Error: BRIDGE_SERVICE_TOKEN environment variable is required.');
+  process.exit(1);
+}
 const QA_DIR = '/qa';
 
 if (!fs.existsSync(QA_DIR)) {

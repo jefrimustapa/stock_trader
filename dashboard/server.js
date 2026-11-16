@@ -9,6 +9,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(express.text({ type: ['text/plain', 'text/*'] }));
 app.use(express.urlencoded({ extended: true }));
 
 const SHARED_DATA_DIR = process.env.SHARED_DATA_DIR || '/app/shared_data';
@@ -1021,7 +1022,11 @@ app.get('/api/kline', authenticateDashboard, async (req, res) => {
 
 app.post('/api/kline/release', authenticateDashboard, async (req, res) => {
     try {
-        const { symbol, interval } = req.body || {};
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) {}
+        }
+        const { symbol, interval } = body || {};
         if (!symbol || typeof symbol !== 'string') {
             return res.status(400).json({ error: 'Parameter symbol diperlukan' });
         }
@@ -1033,12 +1038,34 @@ app.post('/api/kline/release', authenticateDashboard, async (req, res) => {
             symbol,
             interval: interval || 'day'
         }, {
-            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Service-Token': BRIDGE_SERVICE_TOKEN
+            },
             timeout: 4000
         });
         return res.json(bridgeRes.data);
     } catch (err) {
         return res.status(200).json({ status: 'OK', released: req.body?.symbol, error: err.message });
+    }
+});
+
+app.get('/api/kline/subscriptions', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/kline/subscriptions`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 4000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching kline subscriptions from bridge:', err.message);
+        return res.status(502).json({
+            error: 'Gagal menghubungi pelayan Bridge K-line: ' + (err.response?.data?.error || err.message)
+        });
     }
 });
 

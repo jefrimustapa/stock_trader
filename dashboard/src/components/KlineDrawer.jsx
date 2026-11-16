@@ -152,6 +152,14 @@ export function KlineDrawer({ open, onClose, stock }) {
 
   useEffect(() => {
     if (open && symbol) {
+      // Release previous active subscription when switching timeframe or symbol
+      if (
+        activeSubRef.current.symbol &&
+        (activeSubRef.current.symbol !== symbol || activeSubRef.current.interval !== interval)
+      ) {
+        releaseActiveSubscription(activeSubRef.current.symbol, activeSubRef.current.interval);
+        activeSubRef.current = { symbol: null, interval: null };
+      }
       fetchKline(symbol, interval);
     } else if (!open && activeSubRef.current.symbol) {
       // Release subscription when drawer closes
@@ -159,8 +167,50 @@ export function KlineDrawer({ open, onClose, stock }) {
       activeSubRef.current = { symbol: null, interval: null };
       setKlineData(null);
       setErrorMsg(null);
+      setInterval('day');
     }
   }, [open, symbol, interval]);
+
+  // Cleanup subscription on unmount
+  useEffect(() => {
+    return () => {
+      if (activeSubRef.current.symbol) {
+        releaseActiveSubscription(activeSubRef.current.symbol, activeSubRef.current.interval);
+        activeSubRef.current = { symbol: null, interval: null };
+      }
+    };
+  }, []);
+
+  // Handle tab close / reload / pagehide via sendBeacon / keepalive fetch
+  useEffect(() => {
+    const handleUnload = () => {
+      const cur = activeSubRef.current;
+      if (cur && cur.symbol) {
+        const payload = JSON.stringify({
+          symbol: cur.symbol,
+          interval: cur.interval || 'day',
+        });
+        if (navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon('/api/kline/release', blob);
+        } else {
+          fetch('/api/kline/release', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true,
+          }).catch(() => {});
+        }
+      }
+    };
+
+    window.addEventListener('pagehide', handleUnload);
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, []);
 
   // Handle drawer close
   const handleClose = () => {
@@ -168,6 +218,9 @@ export function KlineDrawer({ open, onClose, stock }) {
       releaseActiveSubscription(activeSubRef.current.symbol, activeSubRef.current.interval);
       activeSubRef.current = { symbol: null, interval: null };
     }
+    setKlineData(null);
+    setErrorMsg(null);
+    setInterval('day');
     onClose();
   };
 

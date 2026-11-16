@@ -131,11 +131,22 @@ class SubscriptionManager:
         """
         Called by periodic background worker to clean up pending unsubscriptions.
         Only unbinds if hold duration >= 65s (grace period over 60s OpenD minimum).
+        Also reaps orphaned subscriptions where ref_count > 0 but last_accessed >= 300s (5 minutes).
         """
         with self.lock:
             now = time.time()
             to_remove = []
             for key, entry in self.subscriptions.items():
+                # Server-side orphan reaper: mark abandoned subscriptions as pending_unsub
+                if not entry["pending_unsub"] and (now - entry.get("last_accessed", entry["subscribed_at"])) >= 300.0:
+                    logger.warning(
+                        "Reaping orphaned subscription %s (idle for %.1fs with ref_count %d)",
+                        key, now - entry.get("last_accessed", entry["subscribed_at"]), entry["ref_count"]
+                    )
+                    entry["ref_count"] = 0
+                    entry["pending_unsub"] = True
+                    entry["release_time"] = now
+
                 if entry["pending_unsub"] and (now - entry["subscribed_at"]) >= 65.0:
                     to_remove.append((key, entry))
 

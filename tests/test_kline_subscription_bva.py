@@ -212,6 +212,51 @@ class TestKlineSubscriptionBVA(unittest.TestCase):
         self.assertTrue(res["connected"])
         self.assertIn("OTC", res["error"])
 
+    def test_orphan_subscription_reaper_sdlc8(self):
+        """
+        SDLC Step 8: Orphan subscription reaper test (HOM-265).
+        Subscriptions with ref_count > 0 that have not been accessed for >= 300s
+        must be detected as orphaned and reaped by cleanup_expired_subscriptions().
+        """
+        self.client._connected = True
+        self.client._last_status = "CONNECTED"
+        dummy_ctx = DummyQuoteContext()
+        self.client._quote_ctx = dummy_ctx
+
+        now = time.time()
+        # An orphaned subscription from an abandoned tab (never called release)
+        self.mgr.subscriptions["US.ORPHAN:day"] = {
+            "symbol": "US.ORPHAN",
+            "interval": "day",
+            "subtype": "K_DAY",
+            "kltype": "K_DAY",
+            "subscribed_at": now - 400.0,
+            "last_accessed": now - 350.0, # Abandoned 350s ago (> 300s threshold)
+            "ref_count": 3,
+            "pending_unsub": False,
+            "release_time": None
+        }
+
+        # An active subscription accessed recently
+        self.mgr.subscriptions["US.ACTIVE:day"] = {
+            "symbol": "US.ACTIVE",
+            "interval": "day",
+            "subtype": "K_DAY",
+            "kltype": "K_DAY",
+            "subscribed_at": now - 200.0,
+            "last_accessed": now - 30.0, # Active 30s ago (< 300s)
+            "ref_count": 1,
+            "pending_unsub": False,
+            "release_time": None
+        }
+
+        evicted = self.mgr.cleanup_expired_subscriptions()
+        self.assertEqual(evicted, 1)
+        self.assertNotIn("US.ORPHAN:day", self.mgr.subscriptions)
+        self.assertIn("US.ACTIVE:day", self.mgr.subscriptions)
+        self.assertEqual(len(dummy_ctx.unsubscribed), 1)
+        self.assertEqual(dummy_ctx.unsubscribed[0][0], "US.ORPHAN")
+
 
 if __name__ == "__main__":
     unittest.main()
