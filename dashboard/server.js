@@ -33,8 +33,8 @@ const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
 const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
 
-// Fail-fast startup validation: AUTHENTIK_CLIENT_ID is mandatory
-if (!AUTHENTIK_CLIENT_ID) {
+// Fail-fast startup validation: AUTHENTIK_CLIENT_ID is mandatory unless disabled for beta testing
+if (!AUTHENTIK_CLIENT_ID && process.env.DISABLE_AUTHENTIK_AUTH !== 'true') {
     console.error('[Dashboard Error] FATAL: Missing AUTHENTIK_CLIENT_ID environment variable. Authentik Client ID must be configured.');
     process.exit(1);
 }
@@ -93,6 +93,11 @@ function escapeHtml(unsafe) {
 
 // Origin Authentication Middleware: Authentik JWT Assertion & Service Token
 async function authenticateDashboard(req, res, next) {
+    // 0. Check if Authentik authentication is explicitly disabled for beta testing environment
+    if (process.env.DISABLE_AUTHENTIK_AUTH === 'true') {
+        req.authUser = 'beta-tester';
+        return next();
+    }
     // 1. Check internal service token using timing-safe comparison (Header or Cookie)
     let serviceToken = req.headers['x-service-token'];
     if (!serviceToken && req.headers.cookie) {
@@ -273,7 +278,10 @@ app.get('/logout', (req, res) => {
     // Note (HOM-154): "cookies" directive must NOT be included as it purges all cookies for .julietmike.net
     res.setHeader('Clear-Site-Data', '"cache", "storage"');
 
-    // 4. Redirect to Authentik SSO invalidation URL (HOM-156)
+    // 4. Redirect to Authentik SSO invalidation URL (HOM-156) or root for beta
+    if (process.env.DISABLE_AUTHENTIK_AUTH === 'true') {
+        return res.redirect(302, '/');
+    }
     res.redirect(302, AUTHENTIK_LOGOUT_URL);
 });
 
@@ -448,7 +456,8 @@ const SCREENER_CONFIG_LIMITS = {
     min_market_cap: { min: 10000000.0, max: 10000000000000.0 }, // $10M to $10T
     min_volume: { min: 50000.0, max: 1000000000.0 },            // 50k to 1B
     min_rvol: { min: 0.0, max: 50.0 },
-    max_rvol: { min: 0.1, max: 100.0 }
+    max_rvol: { min: 0.1, max: 100.0 },
+    max_candidates_per_lane: { min: 1, max: 20 }
 };
 
 let screenerDbInstance = null;
@@ -469,6 +478,7 @@ function getScreenerDb() {
                 min_volume REAL NOT NULL CHECK (min_volume >= 50000.0),
                 min_rvol REAL NOT NULL CHECK (min_rvol >= 0.0),
                 max_rvol REAL NOT NULL CHECK (max_rvol >= min_rvol),
+                max_candidates_per_lane INTEGER NOT NULL DEFAULT 5 CHECK (max_candidates_per_lane >= 1 AND max_candidates_per_lane <= 20),
                 updated_at TEXT NOT NULL,
                 updated_by TEXT NOT NULL
             );
@@ -482,11 +492,18 @@ function getScreenerDb() {
             );
         `);
 
+        // Migration check: ensure max_candidates_per_lane exists in screener_config
+        const tableCols = screenerDbInstance.prepare("PRAGMA table_info(screener_config)").all();
+        const hasMaxCandidatesPerLane = tableCols.some(col => col.name === 'max_candidates_per_lane');
+        if (!hasMaxCandidatesPerLane) {
+            screenerDbInstance.exec('ALTER TABLE screener_config ADD COLUMN max_candidates_per_lane INTEGER NOT NULL DEFAULT 5 CHECK (max_candidates_per_lane >= 1 AND max_candidates_per_lane <= 20);');
+        }
+
         const row = screenerDbInstance.prepare('SELECT * FROM screener_config WHERE id = 1').get();
         if (!row) {
             const initStmt = screenerDbInstance.prepare(`
-                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, updated_at, updated_by)
-                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, ?, 'system')
+                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, updated_at, updated_by)
+                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, 5, ?, 'system')
             `);
             initStmt.run(new Date().toISOString());
         }
@@ -497,7 +514,7 @@ function getScreenerDb() {
 app.get('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
         const db = getScreenerDb();
-        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, updated_at, updated_by FROM screener_config WHERE id = 1').get();
+        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, updated_at, updated_by FROM screener_config WHERE id = 1').get();
         if (!row) {
             return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
         }
@@ -507,7 +524,8 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
                 min_market_cap: Number(row.min_market_cap),
                 min_volume: Number(row.min_volume),
                 min_rvol: Number(row.min_rvol),
-                max_rvol: Number(row.max_rvol)
+                max_rvol: Number(row.max_rvol),
+                max_candidates_per_lane: Number(row.max_candidates_per_lane ?? 5)
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: row.updated_at,
@@ -533,6 +551,20 @@ function parseStrictNumericField(val, fieldName) {
     return { value: num };
 }
 
+function parseStrictIntegerField(val, fieldName) {
+    if (typeof val !== 'number' && typeof val !== 'string') {
+        return { error: `${fieldName} mestilah nombor bulat (integer) yang sah.` };
+    }
+    if (typeof val === 'string' && val.trim() === '') {
+        return { error: `${fieldName} tidak boleh kosong.` };
+    }
+    const num = Number(val);
+    if (!Number.isFinite(num) || !Number.isInteger(num)) {
+        return { error: `${fieldName} mestilah nombor bulat (integer) yang sah.` };
+    }
+    return { value: num };
+}
+
 app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
         if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
@@ -540,7 +572,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
         const body = req.body;
         const db = getScreenerDb();
-        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol FROM screener_config WHERE id = 1').get();
+        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane FROM screener_config WHERE id = 1').get();
         if (!current) {
             return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
         }
@@ -550,6 +582,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         let newMinVolume = current.min_volume;
         let newMinRvol = current.min_rvol;
         let newMaxRvol = current.max_rvol;
+        let newMaxCandidatesPerLane = current.max_candidates_per_lane ?? 5;
 
         if (body.min_price !== undefined) {
             const parsed = parseStrictNumericField(body.min_price, 'Harga minimum');
@@ -615,12 +648,25 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             return res.status(400).json({ error: 'RVOL minimum tidak boleh melebihi RVOL maksimum.' });
         }
 
+        if (body.max_candidates_per_lane !== undefined) {
+            const parsed = parseStrictIntegerField(body.max_candidates_per_lane, 'Had calon per lorong');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (val < SCREENER_CONFIG_LIMITS.max_candidates_per_lane.min || val > SCREENER_CONFIG_LIMITS.max_candidates_per_lane.max) {
+                return res.status(400).json({
+                    error: `Had calon per lorong mestilah antara ${SCREENER_CONFIG_LIMITS.max_candidates_per_lane.min} dan ${SCREENER_CONFIG_LIMITS.max_candidates_per_lane.max} kaunter (Had Kuota Moomoo OpenAPI).`
+                });
+            }
+            newMaxCandidatesPerLane = val;
+        }
+
         const hasChanges = (
             newMinPrice !== current.min_price ||
             newMinMarketCap !== current.min_market_cap ||
             newMinVolume !== current.min_volume ||
             newMinRvol !== current.min_rvol ||
-            newMaxRvol !== current.max_rvol
+            newMaxRvol !== current.max_rvol ||
+            newMaxCandidatesPerLane !== (current.max_candidates_per_lane ?? 5)
         );
 
         if (!hasChanges) {
@@ -631,7 +677,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                     min_market_cap: current.min_market_cap,
                     min_volume: current.min_volume,
                     min_rvol: current.min_rvol,
-                    max_rvol: current.max_rvol
+                    max_rvol: current.max_rvol,
+                    max_candidates_per_lane: current.max_candidates_per_lane ?? 5
                 },
                 limits: SCREENER_CONFIG_LIMITS,
                 updated_at: current.updated_at,
@@ -647,7 +694,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             min_market_cap: current.min_market_cap,
             min_volume: current.min_volume,
             min_rvol: current.min_rvol,
-            max_rvol: current.max_rvol
+            max_rvol: current.max_rvol,
+            max_candidates_per_lane: current.max_candidates_per_lane ?? 5
         });
 
         const newValues = JSON.stringify({
@@ -655,15 +703,16 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             min_market_cap: newMinMarketCap,
             min_volume: newMinVolume,
             min_rvol: newMinRvol,
-            max_rvol: newMaxRvol
+            max_rvol: newMaxRvol,
+            max_candidates_per_lane: newMaxCandidatesPerLane
         });
 
         const updateStmt = db.prepare(`
             UPDATE screener_config
-            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, updated_at = ?, updated_by = ?
+            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, updated_at = ?, updated_by = ?
             WHERE id = 1
         `);
-        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, now, user);
+        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, now, user);
 
         const auditStmt = db.prepare(`
             INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
@@ -678,7 +727,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                 min_market_cap: newMinMarketCap,
                 min_volume: newMinVolume,
                 min_rvol: newMinRvol,
-                max_rvol: newMaxRvol
+                max_rvol: newMaxRvol,
+                max_candidates_per_lane: newMaxCandidatesPerLane
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: now,

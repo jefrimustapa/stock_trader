@@ -26,6 +26,7 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SpeedIcon from '@mui/icons-material/Speed';
+import LayersIcon from '@mui/icons-material/Layers';
 import { sneatTokens } from '../theme';
 
 const DEFAULT_CONFIG = {
@@ -34,6 +35,7 @@ const DEFAULT_CONFIG = {
   min_volume: 1000000.0,
   min_rvol: 0.50,
   max_rvol: 20.00,
+  max_candidates_per_lane: 5,
 };
 
 export function SettingsPage() {
@@ -138,6 +140,15 @@ export function SettingsPage() {
       }
     }
 
+    if (field === 'max_candidates_per_lane') {
+      if (!Number.isInteger(num)) {
+        return 'Had calon per lorong mestilah nombor bulat (integer).';
+      }
+      if (num < 1 || num > 20) {
+        return 'Had calon per lorong mestilah antara 1 dan 20 kaunter (Had Kuota Moomoo OpenAPI).';
+      }
+    }
+
     return null;
   };
 
@@ -170,6 +181,10 @@ export function SettingsPage() {
     }));
   };
 
+  const handlePresetLane = (val) => {
+    handleFieldChange('max_candidates_per_lane', val);
+  };
+
   const handleResetDefaults = () => {
     setConfig(DEFAULT_CONFIG);
     setErrors({});
@@ -195,7 +210,7 @@ export function SettingsPage() {
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      setErrorMsg(newErrors.min_price || newErrors.rvol_cross || 'Sila betulkan nilai yang tidak sah sebelum menyimpan.');
+      setErrorMsg(newErrors.min_price || newErrors.max_candidates_per_lane || newErrors.rvol_cross || 'Sila betulkan nilai yang tidak sah sebelum menyimpan.');
       return;
     }
 
@@ -212,6 +227,7 @@ export function SettingsPage() {
           min_volume: Number(config.min_volume),
           min_rvol: Number(config.min_rvol),
           max_rvol: Number(config.max_rvol),
+          max_candidates_per_lane: Number(config.max_candidates_per_lane),
         }),
       });
 
@@ -694,6 +710,81 @@ export function SettingsPage() {
                 </CardContent>
               </Card>
 
+              {/* Field 5: Max Candidates Per Lane (MAX_CANDIDATES_PER_LANE) */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: '8px',
+                          backgroundColor: sneatTokens.primary.soft,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: sneatTokens.primary.main,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <LayersIcon sx={{ fontSize: 24 }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
+                          Had Calon Per Lorong L0 (MAX_CANDIDATES_PER_LANE)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                          Had siling calon Stage 3 K-line enrichment bagi lorong MOMENTUM &amp; SETUP
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={`Semasa: ${config.max_candidates_per_lane ?? 5} kaunter/lorong`}
+                      sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
+                    />
+                  </Box>
+
+                  <TextField
+                    id="inputMaxCandidatesPerLane"
+                    name="max_candidates_per_lane"
+                    fullWidth
+                    size="small"
+                    type="number"
+                    value={config.max_candidates_per_lane ?? 5}
+                    onChange={(e) => handleFieldChange('max_candidates_per_lane', e.target.value)}
+                    error={Boolean(errors.max_candidates_per_lane)}
+                    helperText={errors.max_candidates_per_lane || 'Perlindungan kuota Moomoo OpenAPI (100 simbol / 30 hari rolling). Dual-lane: 2 x had = maks calon per imbasan. Julat sah: 1 hingga 20 kaunter.'}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>kaunter / lorong</InputAdornment>,
+                      inputProps: { min: 1, max: 20, step: 1 },
+                    }}
+                  />
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
+                      Preset Lorong:
+                    </Typography>
+                    {[
+                      { label: 'Konservatif (3 kaunter / 6 maks)', val: 3 },
+                      { label: 'Lalai (5 kaunter / 10 maks)', val: 5 },
+                      { label: 'Agresif (10 kaunter / 20 maks)', val: 10 },
+                    ].map((p) => (
+                      <Chip
+                        key={p.label}
+                        label={p.label}
+                        size="small"
+                        clickable
+                        variant="outlined"
+                        onClick={() => handlePresetLane(p.val)}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, borderRadius: 1.5 }}
+                      />
+                    ))}
+                  </Box>
+                </CardContent>
+              </Card>
+
               {/* Form Action Controls Card */}
               <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, backgroundColor: 'background.paper' }}>
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -847,6 +938,24 @@ export function SettingsPage() {
                       </Typography>
                     </Box>
 
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        backgroundColor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                        Calon Per Lorong:
+                      </Typography>
+                      <Typography id="displayMaxCandidatesPerLane" variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                        {originalConfig.max_candidates_per_lane ?? 5} kaunter
+                      </Typography>
+                    </Box>
+
                     <Divider sx={{ my: 0.5 }} />
 
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
@@ -865,6 +974,28 @@ export function SettingsPage() {
                       />
                     </Box>
                   </Box>
+                </CardContent>
+              </Card>
+
+              {/* Moomoo Quota Safety Notice */}
+              <Card
+                sx={{
+                  border: '1px solid',
+                  borderColor: sneatTokens.primary.main,
+                  borderRadius: 2.5,
+                  backgroundColor: sneatTokens.primary.soft,
+                }}
+              >
+                <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
+                    <InfoOutlinedIcon sx={{ color: sneatTokens.primary.main, fontSize: 22 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.primary.main }}>
+                      Kuota K-line Moomoo OpenAPI (100 / 30 Hari)
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
+                    Broker Moomoo mengehadkan K-line sejarah kepada <strong>100 simbol unik / 30 hari rolling</strong>. Had siling maksimum 20 kaunter per lorong (40 calon dwilorong) memastikan bajet kuota harian (~4-5 simbol baharu) terlindung daripada keletihan mendadak.
+                  </Typography>
                 </CardContent>
               </Card>
 
@@ -950,7 +1081,7 @@ export function SettingsPage() {
                               </Typography>
                             </Box>
                             <Typography variant="caption" sx={{ color: 'text.primary', display: 'block', lineHeight: 1.4 }}>
-                              Harga: ${parsedNew.min_price} | Cap: {formatCurrency(parsedNew.min_market_cap)} | Vol: {Number(parsedNew.min_volume || 0).toLocaleString()} | RVOL: {parsedNew.min_rvol}-{parsedNew.max_rvol}
+                              Harga: ${parsedNew.min_price} | Cap: {formatCurrency(parsedNew.min_market_cap)} | Vol: {Number(parsedNew.min_volume || 0).toLocaleString()} | RVOL: {parsedNew.min_rvol}-{parsedNew.max_rvol} | Lorong: {parsedNew.max_candidates_per_lane || 5}
                             </Typography>
                           </Box>
                         );
