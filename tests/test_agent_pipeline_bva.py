@@ -328,6 +328,30 @@ class TestAgentPipelineBVA(unittest.TestCase):
         mutant_zero = -100.0 + 50.0  # -50.0 != 0.0
         self.assertNotEqual(norm_zero, mutant_zero, "Mutant 5 killed: Normalization offset must be strictly (raw + 100) / 2")
 
+    def test_nawwar_news_url_and_headline_generation(self):
+        """HOM-302: Nawwar evaluation generates direct Yahoo Finance news hyperlink and headline."""
+        cand = {"symbol": "US.NVDA", "change_pct": 2.5}
+        res = self.pipeline.evaluate_nawwar_sentiment(cand)
+        self.assertIn("news_url", res)
+        self.assertIn("news_headline", res)
+        self.assertEqual(res["news_url"], "https://finance.yahoo.com/quote/NVDA/news/")
+        self.assertIn("NVDA", res["news_headline"])
+
+    def test_buying_power_limit_enforcement_haziq_sizing(self):
+        """HOM-302: Haziq sizes position according to Effective Equity (min(broker_equity, max_buying_power))."""
+        cand = {"symbol": "US.MSFT", "price": 400.0, "setup_metrics": {"atr_14_pct": 2.0}}
+        tariq = {"s_tech": 80.0}
+        nawwar = {"s_sent_norm": 90.0}
+
+        # Suppose broker has $10,000,000 equity, but max_buying_power limit is $50,000
+        effective_equity = 50000.0
+        res = self.pipeline.evaluate_haziq_synthesis(cand, tariq, nawwar, effective_equity)
+        self.assertTrue(res["passed"])
+        # Sizing: max 20% of 50k = $10k cap -> at $400/share max 25 shares
+        # Risk: 1.5% of 50k = $750 risk capital
+        self.assertLessEqual(res["position_value"], 10000.0 + 1.0)
+        self.assertEqual(res["account_equity_used"], 50000.0)
+
 
 if __name__ == "__main__":
     unittest.main()

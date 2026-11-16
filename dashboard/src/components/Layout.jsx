@@ -37,11 +37,10 @@ const SIDEBAR_WIDTH = 260;
 export const navItems = [
   { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
   { id: 'agents', label: 'Aktiviti Ejen', shortLabel: 'Ejen', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
-  { id: 'opend', label: 'Pengurusan OpenD', shortLabel: 'OpenD', subtitle: 'Akaun & Kredensial', icon: <TuneIcon sx={{ fontSize: 20 }} /> },
   { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
   { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
   { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Rekod 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
-  { id: 'settings', label: 'Tetapan Screener', shortLabel: 'Tetapan', subtitle: 'Parameter L0 & Had Sah', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
+  { id: 'settings', label: 'Tetapan & Gerbang', shortLabel: 'Tetapan', subtitle: 'Parameter L0 & OpenD', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export function Layout({
@@ -183,29 +182,6 @@ export function Layout({
           );
         })}
       </List>
-
-      {/* Security Status Box at Footer */}
-      <Box sx={{ p: 2 }}>
-        <Paper
-          elevation={0}
-          sx={{
-            p: 1.5,
-            borderRadius: '8px',
-            backgroundColor: theme.palette.mode === 'dark' ? '#323249' : '#F5F5F9',
-            border: `1px solid ${theme.palette.divider}`,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <SecurityIcon sx={{ fontSize: 16, color: sneatTokens.success.main }} />
-            <Typography variant="caption" sx={{ fontWeight: 600 }}>
-              Authentik RS256 Active
-            </Typography>
-          </Box>
-          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
-            Forward-Auth Protected
-          </Typography>
-        </Paper>
-      </Box>
     </Box>
   );
 

@@ -67,12 +67,12 @@ export function KpiCards({ statusData, dataPayload }) {
   return (
     <Box id="overview">
       <Grid container spacing={2.5}>
-        {/* Card 1: OpenD Gateway -> navigates to #/opend */}
-        <Grid item xs={12} sm={6} md={3}>
+        {/* Card 1: OpenD Gateway -> navigates to #/settings?tab=opend */}
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={cardActionSx}
-            onClick={() => { window.location.hash = '#/opend'; }}
-            title="Klik untuk ke halaman Pengurusan OpenD"
+            onClick={() => { window.location.hash = '#/settings?tab=opend'; }}
+            title="Klik untuk ke halaman Tetapan & Pengurusan Gerbang OpenD"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -122,12 +122,12 @@ export function KpiCards({ statusData, dataPayload }) {
           </Card>
         </Grid>
 
-        {/* Card 2: Baki Akaun & Ekuiti -> navigates to #/opend */}
-        <Grid item xs={12} sm={6} md={3}>
+        {/* Card 2: Baki Akaun & Ekuiti -> navigates to #/settings */}
+        <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={cardActionSx}
-            onClick={() => { window.location.hash = '#/opend'; }}
-            title="Klik untuk ke halaman Pengurusan OpenD & Akaun"
+            onClick={() => { window.location.hash = '#/settings'; }}
+            title="Klik untuk ke halaman Tetapan & Akaun"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -177,63 +177,8 @@ export function KpiCards({ statusData, dataPayload }) {
           </Card>
         </Grid>
 
-        {/* Card 3: Sentinel L4 Engine -> navigates to #/funnel */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Card
-            sx={cardActionSx}
-            onClick={() => { window.location.hash = '#/funnel'; }}
-            title="Klik untuk ke paparan Corong Saringan & Sentinel"
-          >
-            <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Box
-                    sx={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: '8px',
-                      backgroundColor: isSentinelActive ? sneatTokens.success.soft : sneatTokens.secondary.soft,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: isSentinelActive ? sneatTokens.success.main : sneatTokens.secondary.main,
-                    }}
-                  >
-                    <ShieldIcon sx={{ fontSize: 22 }} />
-                  </Box>
-                  <Chip
-                    size="small"
-                    label={`${managedPositions} Posisi`}
-                    sx={{
-                      fontWeight: 600,
-                      fontSize: '0.7rem',
-                      borderRadius: 1.5,
-                      backgroundColor: sneatTokens.info.soft,
-                      color: sneatTokens.info.main,
-                    }}
-                  />
-                </Box>
-
-                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Pengawasan Sentinel L4
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isSentinelActive ? sneatTokens.success.main : 'text.primary' }}>
-                  {sentinelStatus}
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                  Circuit Breaker &amp; Risk Guard
-                </Typography>
-                <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Card 4: Penjejak Kuota K-Line -> navigates to #/quota */}
-        <Grid item xs={12} sm={6} md={3}>
+        {/* Card 3: Penjejak Kuota K-Line -> navigates to #/quota */}
+        <Grid item xs={12} sm={12} md={4}>
           <Card
             id="kpi-card-kline-quota"
             sx={cardActionSx}

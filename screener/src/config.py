@@ -34,6 +34,7 @@ class ScreenerConfig:
     DEFAULT_MOM_MIN_RVOL: float = float(os.getenv("MOM_MIN_RVOL", "1.30"))
     DEFAULT_MOM_MAX_RVOL: float = float(os.getenv("MOM_MAX_RVOL", "20.00"))
     DEFAULT_MAX_CANDIDATES_PER_LANE: int = int(os.getenv("MAX_CANDIDATES_PER_LANE", "5"))
+    DEFAULT_MAX_BUYING_POWER: float = float(os.getenv("MAX_BUYING_POWER", "100000.0"))
 
     # Stage 0: Coarse Cloud Screening parameters
     CLOUD_MIN_PRICE: float = DEFAULT_CLOUD_MIN_PRICE
@@ -60,6 +61,7 @@ class ScreenerConfig:
 
     # K-line Enrichment & Quota Budgeting
     MAX_CANDIDATES_PER_LANE: int = DEFAULT_MAX_CANDIDATES_PER_LANE
+    MAX_BUYING_POWER: float = DEFAULT_MAX_BUYING_POWER
     MAX_NEW_SYMBOLS_PER_DAY: int = int(os.getenv("MAX_NEW_SYMBOLS_PER_DAY", "4"))
 
     @classmethod
@@ -80,6 +82,7 @@ class ScreenerConfig:
         cls.MOM_MIN_RVOL = cls.DEFAULT_MOM_MIN_RVOL
         cls.MOM_MAX_RVOL = cls.DEFAULT_MOM_MAX_RVOL
         cls.MAX_CANDIDATES_PER_LANE = cls.DEFAULT_MAX_CANDIDATES_PER_LANE
+        cls.MAX_BUYING_POWER = cls.DEFAULT_MAX_BUYING_POWER
 
     @classmethod
     def load_active_config(cls) -> dict:
@@ -100,6 +103,7 @@ class ScreenerConfig:
                 "min_rvol": cls.MOM_MIN_RVOL,
                 "max_rvol": cls.MOM_MAX_RVOL,
                 "max_candidates_per_lane": cls.MAX_CANDIDATES_PER_LANE,
+                "max_buying_power": cls.MAX_BUYING_POWER,
             }
 
         try:
@@ -140,6 +144,16 @@ class ScreenerConfig:
                             logger.warning("max_candidates_per_lane %s out of bounds [1, 20], keeping %s", max_lane, cls.MAX_CANDIDATES_PER_LANE)
                     except (ValueError, TypeError) as e:
                         logger.warning("Invalid max_candidates_per_lane in db: %s", e)
+
+                if "max_buying_power" in row.keys() and row["max_buying_power"] is not None:
+                    try:
+                        max_bp = float(row["max_buying_power"])
+                        if max_bp >= 500.0:
+                            cls.MAX_BUYING_POWER = max_bp
+                        else:
+                            logger.warning("max_buying_power %s below floor 500.0, keeping %s", max_bp, cls.MAX_BUYING_POWER)
+                    except (ValueError, TypeError) as e:
+                        logger.warning("Invalid max_buying_power in db: %s", e)
             else:
                 cls.reset_to_defaults()
 
@@ -154,5 +168,6 @@ class ScreenerConfig:
             "min_rvol": cls.MOM_MIN_RVOL,
             "max_rvol": cls.MOM_MAX_RVOL,
             "max_candidates_per_lane": cls.MAX_CANDIDATES_PER_LANE,
+            "max_buying_power": cls.MAX_BUYING_POWER,
         }
 

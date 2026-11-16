@@ -274,6 +274,28 @@ async function runTests() {
         const verifyGet = await makeRequest('/api/screener/config', 'GET', authHeader);
         check('Persistence: GET /api/screener/config confirms max_candidates_per_lane is 8', verifyGet.data.config.max_candidates_per_lane === 8);
 
+        // Test 6d: BVA max_buying_power (499.99 vs 500.00 vs 50,000 vs >100M) (HOM-302)
+        console.log('\n--- 6d. BVA: max_buying_power ($499.99 vs $500.00 vs $50,000) (HOM-302) ---');
+        const bvaBpBelow = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_buying_power: 499.99 });
+        check('BVA: max_buying_power $499.99 rejected with HTTP 400', bvaBpBelow.statusCode === 400);
+
+        const bvaBpNeg = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_buying_power: -100.0 });
+        check('BVA: Negative max_buying_power rejected with HTTP 400', bvaBpNeg.statusCode === 400);
+
+        const bvaBpOver = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_buying_power: 100000001.0 });
+        check('BVA: max_buying_power > $100M rejected with HTTP 400', bvaBpOver.statusCode === 400);
+
+        const bvaBpMin = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_buying_power: 500.0 });
+        check('BVA: Exact floor $500.00 accepted with HTTP 200', bvaBpMin.statusCode === 200);
+        check('BVA: Config updated max_buying_power to 500.0', bvaBpMin.data.config.max_buying_power === 500.0);
+
+        const bvaBpTarget = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_buying_power: 50000.0 });
+        check('BVA: Target buying power ($50,000) accepted with HTTP 200', bvaBpTarget.statusCode === 200);
+        check('BVA: Config updated max_buying_power to 50000.0', bvaBpTarget.data.config.max_buying_power === 50000.0);
+
+        const verifyBpGet = await makeRequest('/api/screener/config', 'GET', authHeader);
+        check('Persistence: GET /api/screener/config confirms max_buying_power is 50000.0', verifyBpGet.data.config.max_buying_power === 50000.0);
+
         // Test 7: Audit Trail & Data Integrity
         console.log('\n--- 7. Audit Trail & SQLite Persistence Verification ---');
         const auditRes = await makeRequest('/api/screener/config/audit', 'GET', authHeader);

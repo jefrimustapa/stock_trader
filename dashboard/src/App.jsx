@@ -21,7 +21,14 @@ export function App() {
   const getPageFromHash = () => {
     if (typeof window === 'undefined') return 'overview';
     const cleanHash = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
-    return VALID_PAGES.includes(cleanHash) ? cleanHash : 'overview';
+    if (cleanHash === 'opend' || cleanHash.startsWith('opend')) {
+      if (typeof window !== 'undefined') {
+        window.location.hash = '#/settings?tab=opend';
+      }
+      return 'settings';
+    }
+    const pageOnly = cleanHash.split('?')[0];
+    return VALID_PAGES.includes(pageOnly) ? pageOnly : 'overview';
   };
 
   const [currentPage, setCurrentPage] = useState(getPageFromHash);
@@ -40,11 +47,19 @@ export function App() {
     }
   };
 
-  const navigateTo = (pageId) => {
-    if (VALID_PAGES.includes(pageId)) {
-      setCurrentPage(pageId);
+  const navigateTo = (pageId, tab) => {
+    if (pageId === 'opend') {
+      setCurrentPage('settings');
       if (typeof window !== 'undefined') {
-        window.location.hash = `#/${pageId}`;
+        window.location.hash = '#/settings?tab=opend';
+      }
+      return;
+    }
+    const pageOnly = pageId ? pageId.split('?')[0] : 'overview';
+    if (VALID_PAGES.includes(pageOnly)) {
+      setCurrentPage(pageOnly);
+      if (typeof window !== 'undefined') {
+        window.location.hash = tab ? `#/${pageOnly}?tab=${tab}` : `#/${pageOnly}`;
       }
     }
   };
@@ -131,7 +146,7 @@ export function App() {
       case 'watchlist':
         return <WatchlistPage dataPayload={dataPayload} />;
       case 'settings':
-        return <SettingsPage />;
+        return <SettingsPage statusData={statusData} onRefresh={fetchDashboardData} />;
       case 'quota':
         return <QuotaPage />;
       case 'overview':
