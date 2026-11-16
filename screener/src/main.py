@@ -33,6 +33,8 @@ try:
         CumulativeProperty,
         SimpleField,
         ScrMarket,
+        Market,
+        SecurityType,
         SysConfig,
         RET_OK
     )
@@ -59,6 +61,8 @@ except ImportError:
     CumulativeProperty = None
     SimpleField = None
     ScrMarket = None
+    Market = None
+    SecurityType = None
     SysConfig = None
     RET_OK = 0
     ContextStatus = None
@@ -107,6 +111,77 @@ def determine_market_status(dt: Optional[datetime] = None) -> Tuple[str, bool]:
     return "PRE_POST", False
 
 
+class FetchMarketUniverseResult(tuple):
+    """
+    5-tuple result for backward compatibility with unpack syntax:
+    stocks, spy_change_pct, source, warning, skipped_count = fetch_market_universe(...)
+    Also provides attributes, including otc_filtered_count.
+    """
+    def __new__(cls, stocks, spy_change_pct, source, warning, skipped_count, otc_filtered_count=0):
+        instance = super().__new__(cls, (stocks, spy_change_pct, source, warning, skipped_count))
+        instance.stocks = stocks
+        instance.spy_change_pct = spy_change_pct
+        instance.source = source
+        instance.warning = warning
+        instance.skipped_count = skipped_count
+        instance.otc_filtered_count = otc_filtered_count
+        return instance
+
+
+_EXCHANGE_CACHE: Dict[str, str] = {}
+_EXCHANGE_CACHE_TIME: float = 0.0
+
+
+def clear_exchange_cache() -> None:
+    """Clears the in-memory US exchange mapping cache."""
+    global _EXCHANGE_CACHE, _EXCHANGE_CACHE_TIME
+    _EXCHANGE_CACHE = {}
+    _EXCHANGE_CACHE_TIME = 0.0
+
+
+def get_us_exchange_mapping(quote_ctx: Any, force_refresh: bool = False) -> Dict[str, str]:
+    """
+    Fetches and caches the exchange mapping for US stocks via quote_ctx.get_stock_basicinfo(Market.US, SecurityType.STOCK).
+    Returns a dict mapping symbol (e.g. 'US.AAPL' and 'AAPL') to its exchange_type (e.g. 'US_NASDAQ', 'US_NYSE', 'US_AMEX', 'US_PINK').
+    Uses in-memory cache with TTL (default ScreenerConfig.EXCHANGE_CACHE_TTL_SECONDS).
+    Fail-closed: if API fails and cache is empty, returns empty dict.
+    """
+    global _EXCHANGE_CACHE, _EXCHANGE_CACHE_TIME
+    now = time.time()
+    if not force_refresh and _EXCHANGE_CACHE and (now - _EXCHANGE_CACHE_TIME < ScreenerConfig.EXCHANGE_CACHE_TTL_SECONDS):
+        return _EXCHANGE_CACHE
+
+    if quote_ctx is None or Market is None or SecurityType is None or RET_OK is None:
+        return _EXCHANGE_CACHE
+
+    try:
+        ret, data = quote_ctx.get_stock_basicinfo(Market.US, SecurityType.STOCK)
+        if ret == RET_OK and data is not None:
+            mapping: Dict[str, str] = {}
+            if hasattr(data, "iterrows"):
+                for _, row in data.iterrows():
+                    code = row.get("code")
+                    exch = row.get("exchange_type")
+                    if code and exch:
+                        code_str = str(code).strip()
+                        exch_str = str(exch).strip()
+                        mapping[code_str] = exch_str
+                        if not code_str.startswith("US."):
+                            mapping[f"US.{code_str}"] = exch_str
+                        else:
+                            mapping[code_str.replace("US.", "")] = exch_str
+            _EXCHANGE_CACHE = mapping
+            _EXCHANGE_CACHE_TIME = now
+            logger.info("Successfully refreshed US exchange mapping (%d symbols indexed)", len(_EXCHANGE_CACHE))
+            return _EXCHANGE_CACHE
+        else:
+            logger.warning("Failed to fetch US stock basic info: ret=%s data=%s", ret, data)
+            return _EXCHANGE_CACHE
+    except Exception as e:
+        logger.warning("Exception fetching US stock basic info: %s", e)
+        return _EXCHANGE_CACHE
+
+
 def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], float, str, Optional[str], int]:
     """
     Connects to OpenD OpenQuoteContext on port 11111.
@@ -119,7 +194,7 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
     """
     if OpenQuoteContext is None or StockScreenRequest is None or SimpleProperty is None:
         logger.warning("Moomoo OpenAPI SDK not imported; OpenD unavailable.")
-        return [], 0.0, "OPEND_UNAVAILABLE", "Moomoo OpenAPI SDK tidak dipasang.", 0
+        return FetchMarketUniverseResult([], 0.0, "OPEND_UNAVAILABLE", "Moomoo OpenAPI SDK tidak dipasang.", 0, 0)
 
     quote_ctx = None
     try:
@@ -138,7 +213,7 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
             quote_ctx = OpenQuoteContext(host=host, port=port, is_encrypt=is_encrypt)
         except Exception as conn_err:
             logger.info("OpenQuoteContext connection failed (%s); marking OPEND_UNAVAILABLE.", conn_err)
-            return [], 0.0, "OPEND_UNAVAILABLE", f"Sambungan OpenQuoteContext gagal ({conn_err}).", 0
+            return FetchMarketUniverseResult([], 0.0, "OPEND_UNAVAILABLE", f"Sambungan OpenQuoteContext gagal ({conn_err}).", 0, 0)
 
         is_ready = False
         if quote_ctx is not None and hasattr(quote_ctx, "_status") and ContextStatus is not None:
@@ -146,7 +221,12 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
 
         if not is_ready:
             logger.info("OpenQuoteContext not authenticated (OpenD login pending); marking OPEND_UNAVAILABLE.")
-            return [], 0.0, "OPEND_UNAVAILABLE", "OpenD gateway belum log masuk (menunggu kredensial broker).", 0
+            return FetchMarketUniverseResult([], 0.0, "OPEND_UNAVAILABLE", "OpenD gateway belum log masuk (menunggu kredensial broker).", 0, 0)
+
+        # 1a. Query / Cache US Exchange Mapping for OTC filtering
+        exchange_mapping = get_us_exchange_mapping(quote_ctx)
+        if not exchange_mapping:
+            logger.warning("US exchange mapping is empty; OTC filter will operate in fail-closed mode.")
 
         # 1. Query benchmark SPY snapshot for Relative Strength
         spy_change_pct = 0.0
@@ -196,6 +276,7 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
         if ret_screen == RET_OK and screen_data is not None:
             stocks: List[Dict[str, Any]] = []
             skipped_count = 0
+            otc_filtered_count = 0
             missing_breakdown: Dict[str, int] = {}
             raw_count = 0
 
@@ -210,6 +291,13 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
                     symbol = str(code).strip()
                     if not symbol.startswith("US."):
                         symbol = f"US.{symbol}"
+
+                    # OTC Filter: ensure symbol belongs to allowed exchanges (NYSE, NASDAQ, AMEX)
+                    exchange = exchange_mapping.get(symbol) or exchange_mapping.get(code)
+                    if exchange not in ScreenerConfig.ALLOWED_EXCHANGES:
+                        otc_filtered_count += 1
+                        logger.debug("Filtered OTC/unapproved stock %s (exchange=%s)", symbol, exchange)
+                        continue
 
                     cur_price = row.get("cur_price") if "cur_price" in row else row.get("price")
                     market_val = row.get("market_val") if "market_val" in row else row.get("market_cap")
@@ -252,7 +340,8 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
                         "change_pct": round(chg_f, 2),
                         "rvol_15m": round(rvol_f, 2),
                         "price_to_52w_high": dist_52w_f,
-                        "dist_52w": dist_52w_f
+                        "dist_52w": dist_52w_f,
+                        "exchange": exchange
                     })
             elif isinstance(screen_data, (tuple, list)) and len(screen_data) >= 3:
                 data_list = screen_data[2]
@@ -320,6 +409,13 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
                     if not symbol.startswith("US."):
                         symbol = f"US.{symbol}"
 
+                    # OTC Filter: ensure symbol belongs to allowed exchanges (NYSE, NASDAQ, AMEX)
+                    exchange = exchange_mapping.get(symbol) or exchange_mapping.get(code)
+                    if exchange not in ScreenerConfig.ALLOWED_EXCHANGES:
+                        otc_filtered_count += 1
+                        logger.debug("Filtered OTC/unapproved stock %s (exchange=%s)", symbol, exchange)
+                        continue
+
                     stocks.append({
                         "symbol": symbol,
                         "name": str(name or symbol),
@@ -329,20 +425,21 @@ def fetch_market_universe(host: str, port: int) -> Tuple[List[Dict[str, Any]], f
                         "change_pct": round(chg_f, 2),
                         "rvol_15m": round(rvol_f, 2),
                         "price_to_52w_high": dist_52w_f,
-                        "dist_52w": dist_52w_f
+                        "dist_52w": dist_52w_f,
+                        "exchange": exchange
                     })
 
             logger.info(
-                "Cloud Screening raw: %d returned. Valid: %d. Skipped incomplete: %d (reasons: %s)",
-                raw_count, len(stocks), skipped_count, missing_breakdown
+                "Cloud Screening raw: %d returned. Valid (Main Exchanges): %d. OTC filtered: %d. Skipped incomplete: %d (reasons: %s)",
+                raw_count, len(stocks), otc_filtered_count, skipped_count, missing_breakdown
             )
-            return stocks, spy_change_pct, "REAL", None, skipped_count
+            return FetchMarketUniverseResult(stocks, spy_change_pct, "REAL", None, skipped_count, otc_filtered_count)
         else:
             logger.warning("Moomoo OpenD cloud screening returned ret_code=%s; marking OPEND_UNAVAILABLE.", ret_screen)
-            return [], spy_change_pct, "OPEND_UNAVAILABLE", f"OpenD Cloud Screening memulangkan ralat ({ret_screen}: {screen_data}).", 0
+            return FetchMarketUniverseResult([], spy_change_pct, "OPEND_UNAVAILABLE", f"OpenD Cloud Screening memulangkan ralat ({ret_screen}: {screen_data}).", 0, 0)
     except Exception as e:
         logger.warning("Error fetching market universe from OpenD at %s:%d: %s.", host, port, e)
-        return [], 0.0, "OPEND_UNAVAILABLE", f"Ralat komunikasi OpenD: {e}", 0
+        return FetchMarketUniverseResult([], 0.0, "OPEND_UNAVAILABLE", f"Ralat komunikasi OpenD: {e}", 0, 0)
     finally:
         if quote_ctx is not None:
             try:
@@ -388,10 +485,12 @@ def main():
             market_status, is_live = determine_market_status()
             logger.info("Current market session: %s (is_live=%s)", market_status, is_live)
 
-            stocks, spy_change_pct, source, warning, skipped_count = fetch_market_universe(
+            fetch_res = fetch_market_universe(
                 host=ScreenerConfig.OPEND_HOST,
                 port=ScreenerConfig.OPEND_PORT
             )
+            stocks, spy_change_pct, source, warning, skipped_count = fetch_res
+            otc_filtered_count = getattr(fetch_res, "otc_filtered_count", 0)
 
             output = screener.process_and_save(
                 raw_stocks=stocks,
@@ -400,13 +499,15 @@ def main():
                 is_live=is_live,
                 source=source,
                 warning=warning,
-                cloud_skipped_count=skipped_count
+                cloud_skipped_count=skipped_count,
+                otc_filtered_count=otc_filtered_count
             )
             logger.info(
-                "Scan cycle complete. Source=%s, MarketStatus=%s, RawCloud=%d, Stage0=%d, MomCandidates=%d, SetupCandidates=%d, FinalWatchlist=%d",
+                "Scan cycle complete. Source=%s, MarketStatus=%s, RawCloud=%d, OTCFiltered=%d, Stage0=%d, MomCandidates=%d, SetupCandidates=%d, FinalWatchlist=%d",
                 output.source,
                 output.market_status,
                 output.funnel.cloud_raw_returned,
+                output.funnel.otc_filtered_count,
                 output.funnel.stage0_quality_passed,
                 output.funnel.lane_momentum_candidates,
                 output.funnel.lane_setup_candidates,

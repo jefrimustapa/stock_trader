@@ -2,6 +2,7 @@ import os
 import sqlite3
 import logging
 from pathlib import Path
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,12 @@ class ScreenerConfig:
     SCAN_INTERVAL_SECONDS: int = int(os.getenv("SCAN_INTERVAL_SECONDS", "300"))
     MAX_KLINE_30D_SYMBOLS: int = int(os.getenv("MAX_KLINE_30D_SYMBOLS", "100"))
     MAX_REALTIME_SUBSCRIPTIONS: int = int(os.getenv("MAX_REALTIME_SUBSCRIPTIONS", "15"))
+
+    # Exchange Filtering & Cache (HOM-271)
+    ALLOWED_EXCHANGES: Tuple[str, ...] = tuple(
+        x.strip() for x in os.getenv("ALLOWED_EXCHANGES", "US_NYSE,US_NASDAQ,US_AMEX").split(",") if x.strip()
+    )
+    EXCHANGE_CACHE_TTL_SECONDS: int = int(os.getenv("EXCHANGE_CACHE_TTL_SECONDS", "3600"))
 
     # Default configuration values (fallback / env defaults)
     DEFAULT_CLOUD_MIN_PRICE: float = float(os.getenv("CLOUD_MIN_PRICE", "10.0"))
