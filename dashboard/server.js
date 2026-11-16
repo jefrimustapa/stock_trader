@@ -17,14 +17,8 @@ const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.
 const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
 const AUTHENTIK_LOGIN_URL = (process.env.AUTHENTIK_LOGIN_URL || 'https://auth.julietmike.net/flows/-/default/authentication/').trim();
 
-// Single-application logout endpoint: defaults to Authentik outpost sign_out route.
-// Global invalidation (/flows/-/default/invalidation/) is explicitly blocked to protect global SSO sessions (e.g. Paperclip).
-let rawLogoutUrl = (process.env.AUTHENTIK_LOGOUT_URL || '/outpost.goauthentik.io/sign_out').trim();
-if (rawLogoutUrl.includes('/flows/-/default/invalidation/')) {
-    console.warn('[Dashboard Warning] AUTHENTIK_LOGOUT_URL is configured to global invalidation flow. Overriding to local app logout /outpost.goauthentik.io/sign_out to protect global SSO sessions.');
-    rawLogoutUrl = '/outpost.goauthentik.io/sign_out';
-}
-const AUTHENTIK_LOGOUT_URL = rawLogoutUrl;
+// Authentik SSO logout endpoint: defaults to Authentik SSO invalidation flow (HOM-156).
+const AUTHENTIK_LOGOUT_URL = (process.env.AUTHENTIK_LOGOUT_URL || 'https://auth.julietmike.net/flows/-/default/invalidation/').trim();
 const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
 const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
@@ -269,7 +263,7 @@ app.get('/logout', (req, res) => {
     // Note (HOM-154): "cookies" directive must NOT be included as it purges all cookies for .julietmike.net
     res.setHeader('Clear-Site-Data', '"cache", "storage"');
 
-    // 4. Redirect to isolated single-application logout URL
+    // 4. Redirect to Authentik SSO invalidation URL (HOM-156)
     res.redirect(302, AUTHENTIK_LOGOUT_URL);
 });
 
@@ -441,7 +435,7 @@ app.get('/', authenticateDashboard, (req, res) => {
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span class="badge badge-user">Authentik: ${safeUser}</span>
                 <span class="badge badge-active">Live Dashboard</span>
-                <a href="/logout" class="btn-logout" title="Log Keluar daripada Dashboard (Sesi Paperclip kekal aktif)">Log Keluar (Logout)</a>
+                <a href="/logout" class="btn-logout" title="Log Keluar daripada Dashboard & Authentik SSO (Sesi Paperclip kekal aktif)">Log Keluar (Logout)</a>
             </div>
         </header>
 
