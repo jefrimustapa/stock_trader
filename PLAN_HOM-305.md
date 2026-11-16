@@ -25,23 +25,23 @@ Menyempurnakan 5 pembaharuan antaramuka dan fungsi operasi dashboard selaras den
 ---
 
 ## 1.1 Mekanisme Pembangun Ejen (Agent Pipeline Wake Architecture)
-Menjawab soalan pemohon: *"Siapa yang akan wake ejen untuk laksanakan analisis selepas butang simulasi dibuang?"*:
+Menjawab soalan pemohon: *"Siapa yang akan wake ejen untuk laksanakan analisis?"* dan *"Ejen ni duduk dalam Paperclip, boleh trigger melalui event dari luar ke?"*:
 
-1. **Pencetus Utama Pasaran (Event-Driven L0 Screener)**:
-   - Kontena `stock_screener_daemon` (L0) berjalan secara berjadual setiap 5 minit (300 saat) sepanjang waktu pasaran US dibuka (09:45 - 15:45 NY).
-   - Sebaik sahaja tapisan selesai dan fail `watchlist.json` ditulis ke volum data kongsi, `stock_screener_daemon` menghantar isyarat pemicu (event-driven HTTP trigger) ke Bridge L4 (`POST http://mcp-bridge:8000/api/v1/agents/simulate-run` atau pemicu analisis kitaran).
-2. **Pelaksanaan Saluran Paip Analisis Autonomi di Bridge L4**:
-   - Bridge L4 memulakan enjin `AgentPipeline.run_simulation_cycle()` secara autonomi tanpa memerlukan sebarang klik atau tindakan manusia di dashboard.
-   - Analisis berantai dijalankan secara berturutan:
-     - **Tariq (L1)**: Menilai struktur teknikal (Wyckoff, SMC, Zon Sokongan/Rintangan).
-     - **Nawwar (L1)**: Menilai sentimen pasaran, berita terkini, dan tapisan tarikh pendapatan (earnings).
-     - **Haziq (L2)**: Mengira skor komposit $S_{total} = (0.65 \times S_{tech}) + (0.35 \times S_{sent\_norm})$ dan merangka saiz kedudukan berasaskan risiko 1.5% modal.
-     - **Danial (L3)**: Mengaudit pematuhan 8 Hard Rules dan menyekat pesanan jika melebihi had siling modal portfolio.
-     - **L4 Dispatch**: Menghantar pesanan ke Moomoo OpenD (`MOOMOO_TRD_ENV=SIMULATE` atau LIVE).
-3. **Pembangun Ejen Maya Paperclip (LLM Wake-on-Demand)**:
-   - Bagi analisis kualitatif berasaskan Model Bahasa Besar (LLM reasoning) ke atas calon teratas, perkhidmatan Bridge memanggil webhook/routine Paperclip API menggunakan token perkhidmatan untuk membangunkan (*wake*) ejen maya Tariq, Nawwar, dan Haziq dengan konteks data terkini.
-4. **Peranan Dashboard UI**:
-   - Dashboard berfungsi sebagai **konsol pemantauan pasif (*read-only real-time console*)** bagi menyemak keputusan, status saluran paip, dan status pesanan sebenar, bukannya pemicu transaksi manual.
+1. **Bolehkah Ejen Paperclip Dipicu daripada Acara Luaran (External Trigger)?**:
+   - **YA, BOLEH**. Paperclip Control Plane menyediakan REST API rasmi (`$PAPERCLIP_API_URL`). Mana-mana sistem luar atau kontena Docker (seperti Screener Daemon atau Bridge) boleh menghantar panggilan HTTP POST (contoh: `POST /api/issues` atau `POST /api/issues/{id}/comments` dengan parameter `assigneeAgentId: <agent-id>`) menggunakan Bearer Token API Paperclip.
+   - Panggilan ini secara automatik mencetuskan sesi bangun (*wake-on-demand*) bagi ejen LLM berkenaan di Paperclip untuk memulakan analisis.
+
+2. **Dua Lapisan Pelaksanaan Ejen (Dual-Layer Architecture)**:
+   - **Lapisan 1: Enjin Kuantitatif & Pematuhan Deterministik Tempatan (Local Bridge Engine)**:
+     - Logik saringan 4 ejen (Tariq Teknikal, Nawwar Sentimen, Haziq Saiz Posisi, Danial 8 Hard Rules) telah siap dibina sebagai modul Python di dalam kontena `bridge/src/agent_pipeline.py`.
+     - Lapisan ini beroperasi 100% secara tempatan di dalam rangkaian Docker (`stock_network`). Apabila `stock_screener_daemon` selesai menjana `watchlist.json` setiap 5 minit (300 saat) semasa pasaran US dibuka (09:45 – 15:45 NY), ia menghantar pemicu HTTP tempatan terus ke Bridge (`POST http://mcp-bridge:8000/api/v1/agents/simulate-run`).
+     - Kelebihan: Latensi ultra-rendah (milisaat), tidak membazirkan token LLM, dan bebas risiko gangguan rangkaian luaran.
+   - **Lapisan 2: Taakulan Kualitatif Ejen Maya Paperclip (LLM Deep Reasoning)**:
+     - Sekiranya analisis kualitatif berasaskan Model Bahasa Besar (LLM) diperlukan bagi calon teratas (*top 3 candidates*), perkhidmatan Bridge memanggil Paperclip REST API untuk membangunkan ejen maya Tariq/Nawwar/Haziq.
+     - Ejen Paperclip bangun, menganalisis data konteks, dan menghantar keputusan kembali ke Bridge melalui port loopback (`http://127.0.0.1:8005`) dengan pengesahan `PAPERCLIP_BRIDGE_SECRET`.
+
+3. **Peranan Dashboard UI**:
+   - Dashboard bertindak sebagai **konsol pemantauan pasif (*read-only real-time console*)** yang memaparkan data daripada pangkalan data SQLite `agent_activity.sqlite`, bukan pemicu manual transaksi.
 
 ---
 
