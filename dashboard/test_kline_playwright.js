@@ -205,6 +205,68 @@ async function runSuite() {
     await mobileContext.close();
 
     // -------------------------------------------------------------------------
+    // Scenario 2B: Mobile Landscape Viewport (844 x 390) - Fullscreen Compact Mode
+    // -------------------------------------------------------------------------
+    console.log('\n--- Scenario 2B: Mobile Landscape Viewport (844 x 390) ---');
+    const landscapeContext = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+    });
+    await landscapeContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+
+    const landscapePage = await landscapeContext.newPage();
+    await landscapePage.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
+    await landscapePage.waitForTimeout(500);
+
+    const validLandscapeRow = landscapePage.locator('tr:has-text("US.VVVV")');
+    if ((await validLandscapeRow.count()) > 0) {
+      console.log('  Clicking US.VVVV row in landscape to test active candlestick chart...');
+      await validLandscapeRow.first().click();
+    } else {
+      const landscapeRows = landscapePage.locator('table tbody tr');
+      await landscapeRows.first().click();
+    }
+    await landscapePage.waitForTimeout(1000);
+
+    const landscapeDrawer = landscapePage.locator('.MuiDrawer-paperAnchorRight');
+    assertCheck('Mobile Landscape: Drawer opened on row click', await landscapeDrawer.isVisible());
+
+    const landscapeBounds = await landscapeDrawer.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    console.log(`  Landscape drawer dimensions: ${Math.round(landscapeBounds.width)}x${Math.round(landscapeBounds.height)}px`);
+    assertCheck(`Landscape: Drawer width covers full viewport (${Math.round(landscapeBounds.width)}px >= 840px)`, landscapeBounds.width >= 840);
+    assertCheck(`Landscape: Drawer height covers full viewport (${Math.round(landscapeBounds.height)}px >= 380px)`, landscapeBounds.height >= 380);
+
+    // Verify chart container exists and has valid height without vertical overflow
+    const landscapeChart = landscapeDrawer.locator('#kline-chart-container');
+    assertCheck('Landscape: Chart container rendered', await landscapeChart.isVisible());
+    const chartHeight = await landscapeChart.evaluate((el) => el.clientHeight);
+    console.log(`  Landscape chart canvas height: ${chartHeight}px`);
+    assertCheck(`Landscape: Chart canvas has usable height (${chartHeight}px >= 140px)`, chartHeight >= 140);
+
+    // Verify HUD bar rendered
+    const hudBar = landscapeDrawer.locator('text=Vol');
+    assertCheck('Landscape: Interactive HUD bar visible', (await hudBar.count()) >= 1);
+
+    const landscapeScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-landscape.png');
+    await landscapePage.screenshot({ path: landscapeScreenshotPath });
+    assertCheck(`Captured landscape screenshot to ${landscapeScreenshotPath}`, fs.existsSync(landscapeScreenshotPath));
+
+    await landscapeDrawer.locator('button[title="Tutup panel"]').click();
+    await landscapePage.waitForTimeout(400);
+    assertCheck('Landscape: Drawer closed on close button click', !(await landscapeDrawer.isVisible()));
+
+    await landscapeContext.close();
+
+    // -------------------------------------------------------------------------
     // Scenario 3: OTC Market Stock Handling (US.MGCLY)
     // -------------------------------------------------------------------------
     console.log('\n--- Scenario 3: OTC Market Stock Handling (US.MGCLY) ---');
