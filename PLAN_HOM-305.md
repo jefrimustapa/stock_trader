@@ -1,104 +1,106 @@
-# Plan: Pengasingan Tetapan Had Siling Modal dari L0 Screener ke Tab Khusus
+# Plan: Penyatuan Antaramuka L0 (Saringan & Watchlist), Penjenamaan L1->L4, Kawalan Pembatalan Pesanan, dan Paginasi Aktiviti Ejen (HOM-305 Tambahan)
 Branch: fix/hom-305-modal-ceiling-tab
 Issue: https://crew.julietmike.net/HOM/issues/HOM-305
 Status: waiting for go (implementation NOT started)
 
-## 1. Goal & Requirements
-Mengasingkan kawalan tetapan "Had Siling Modal Maksimum (Limit Buying Power)" daripada Tab 1 (Parameter Screener L0) kepada Tab khusus berasingan ("Pengurusan Modal & Risiko" / "Portfolio Sizing") dalam halaman Settings Dashboard (`SettingsPage.jsx`).
+## 1. Goal & Requirements (Arahan Terkini Pemohon: Jefri 2026-11-16)
+Menyempurnakan 5 pembaharuan antaramuka dan fungsi operasi dashboard selaras dengan maklum balas pemohon:
 
-### Skop Tugasan:
-1. **Pindahkan kawalan modal keluar dari Tab Screener**: Alihkan kawalan `max_buying_power`, input field, preset chips, dan penjelasan saiz posisi ke Tab baru: "Pengurusan Modal & Risiko".
-2. **Kembalikan Tab 1 tulen untuk L0 Screener**: Tab 1 ("Parameter Screener L0") hanya memaparkan parameter penapisan saham fizikal:
-   - Harga Minimum Saham (`min_price`)
-   - Cap Pasaran Minimum (`min_market_cap`)
-   - Volum Harian ADV20 Minimum (`min_volume`)
-   - Nisbah Volum Relatif RVOL Minimum & Maksimum (`min_rvol`, `max_rvol`)
-   - Had Calon Saham per Lorong Strategi (`max_candidates_per_lane`)
-3. **Penguatkuasaan Dinamik Tanpa Restart**: Pastikan perubahan had modal melalui Tab baru disegerakkan secara langsung ke fail konfigurasi SQLite WAL (`shared_data/screener_config.sqlite`) dan dikuatkuasakan serta-merta pada runtime kontena live (`stock_mcp_bridge` / `stock_screener_daemon`) tanpa memerlukan restart manual kontena.
-4. **Sokongan Navigasi Tab & Hash**:
-   - Tab 0: `Parameter Screener L0` (`#/settings` atau `#/settings?tab=screener`)
-   - Tab 1: `Pengurusan Modal & Risiko` (`#/settings?tab=capital` atau `#/settings?tab=risk`)
-   - Tab 2: `Pengurusan Gerbang OpenD` (`#/settings?tab=opend`)
+1. **Pembuangan Butang Simulasi Pipeline (`AgentsPage.jsx`)**:
+   - Memadamkan butang "Jalankan Simulasi Pipeline" sepenuhnya daripada antaramuka.
+   - Menghapuskan kekeliruan penjanaan pesanan simulasi tempatan `SUBMITTED_PAPER_SIM`. Sistem beroperasi secara automatik di latar belakang.
+2. **Penyatuan Halaman Corong Saringan & Watchlist (Rebrand ke "L0: Saringan & Watchlist")**:
+   - Menggabungkan kandungan `FunnelPage.jsx` (Visual Corong Saringan 5-Peringkat) dan `WatchlistPage.jsx` (Jadual Kaunter Saham L0 Dwi-Lorong) ke dalam satu halaman tunggal.
+   - Menggabungkan kad penerangan ke dalam kad metrik corong di bahagian atas, menghapuskan kad berasingan yang redundan.
+   - Mengemas kini menu navigasi sidebar (`Layout.jsx`) dan routing (`App.jsx`).
+3. **Butang Batal (Cancel Button) Mandatori bagi Semua Transaksi Belum Muktamad**:
+   - Setiap transaksi pada jadual pesanan yang berada dalam status belum muktamad (`SUBMITTED`, `PENDING`, dan `SUBMITTED_PAPER_SIM`) wajib memaparkan butang "Batal" yang aktif.
+   - Memastikan backend `/api/agents/orders/{order_id}/cancel` menyokong pembatalan pesanan secara selamat dan idempotik.
+4. **Penjenamaan Semula Tab/Menu Aktiviti Ejen**:
+   - Menukar nama navigasi sidebar dan tajuk utama halaman pemantauan kepada format seni bina: `"L1 -> L4: Aktiviti Pasukan Ejen"`.
+5. **Paginasi Senarai Aktiviti Ejen & Konfigurasi Entri Per Halaman**:
+   - Memasukkan jadual pesanan transaksi ke dalam komponen paginasi (`TablePagination` MUI).
+   - Menambah tetapan konfigurasi bilangan entri per halaman (pilihan: 5, 10, 25, 50) dalam Settings Page (disimpan dalam `screener_config.sqlite`).
 
 ---
 
 ## 2. User Acceptance Criteria (Kriteria Penerimaan Pengguna)
-1. **Pemisahan Antaramuka**:
-   - Bila pengguna membuka tab "Parameter Screener L0", pengguna hanya melihat 5 parameter saringan kaunter saham tulen. Medan Had Siling Modal tidak lagi wujud dalam tab ini.
-   - Bila pengguna menekan tab "Pengurusan Modal & Risiko", pengguna melihat kad konfigurasi Had Siling Modal Maksimum, butang preset pantas ($10k, $25k, $50k, $100k, $500k), penerangan integrasi saiz posisi Haziq (L2) & Danial (L3), dan butang simpan khusus modal.
-2. **Pengesahan & Had Keselamatan (BVA)**:
-   - Nilai had siling modal < $500.00 disekat serta-merta dengan mesej amaran antaramuka dan HTTP 400.
-   - Nilai had siling modal > $100,000,000.00 disekat dengan amaran.
-   - Nilai sah berjaya disimpan dan dipaparkan dalam chip status semasa.
-3. **Penyegerakan Live (Zero-Downtime / No Restart)**:
-   - Sebaik sahaja had modal disimpan, pembacaan seterusnya oleh `bridge` / `agent_pipeline.py` (Haziq & Danial) terus menggunakan had modal efektif baru tanpa sebarang restart kontena `stock_mcp_bridge` atau `stock_screener_daemon`.
-4. **Responsif & Navigasi**:
-   - Pautan langsung `#/settings?tab=opend` kekal membuka panel OpenD (Tab 2) dengan tepat tanpa mengganggu aliran KPI dashboard sedia ada.
-   - Paparan antaramuka tersusun kemas dan berfungsi pada kedua-dua resolusi Desktop (1280x800) dan Mobile (390x844).
+1. **Butang Simulasi Dibuang**:
+   - Pada halaman pemantauan ejen (`#/agents`), butang "Jalankan Simulasi Pipeline" tidak lagi kelihatan.
+   - Hanya butang "Segarkan" dan status penyelarasan automatik dipaparkan.
+2. **Penyatuan L0 Saringan & Watchlist**:
+   - Menu navigasi sidebar memaparkan entri bersatu: `"L0: Saringan & Watchlist"` (pautan `#/l0` atau `#/watchlist`).
+   - Halaman memaparkan corong 5 nombor di bahagian atas berserta penerangan padat, diikuti terus oleh jadual Watchlist Kaunter Saham L0 tanpa limpahan kad hiasan berulang.
+3. **Kawalan Pembatalan Pesanan**:
+   - Semua transaksi pesanan berstatus `SUBMITTED`, `PENDING`, atau `SUBMITTED_PAPER_SIM` memaparkan butang "Batal" yang boleh ditekan.
+   - Menekan butang membatalkan pesanan serta-merta, menukar statusnya kepada `CANCELLED`, dan melumpuhkan butang tindakan.
+4. **Penjenamaan Menu L1 -> L4**:
+   - Menu navigasi sidebar dan tajuk halaman jelas tertulis: `"L1 -> L4: Aktiviti Pasukan Ejen"`.
+5. **Paginasi Boleh Ditetapkan**:
+   - Jadual aktiviti dan pesanan menyokong paginasi lancar (Next/Prev dan pilihan baris).
+   - Pengguna boleh menetapkan saiz paparan lalai (5, 10, 25, 50 entri) melalui Halaman Tetapan (Settings).
 
 ---
 
 ## 3. Fail & Modul yang Terlibat
-1. `dashboard/src/pages/SettingsPage.jsx`:
-   - [MODIFY] Tambah Tab ke-3 pada senarai Tab MUI:
-     - Index 0: `Parameter Screener L0` (`id="tab-screener-config"`)
-     - Index 1: `Pengurusan Modal & Risiko` (`id="tab-capital-risk"`)
-     - Index 2: `Pengurusan Gerbang OpenD` (`id="tab-opend-gateway"`)
-   - [MODIFY] Kemas kini logik hash navigation (`getInitialTab`, event listener `hashchange`, `handleTabChange`) untuk menyokong `tab=capital`, `tab=risk`, dan memetakan `tab=opend` ke index 2.
-   - [MODIFY] Asingkan borang simpan:
-     - Simpan Parameter Screener (hanya hantar 5 parameter L0).
-     - Simpan Had Modal & Risiko (hantar parameter `max_buying_power`).
-   - [MODIFY] Pindahkan kad Had Siling Modal, kad penerangan sizing institutional, dan kad ringkasan modal ke panel Tab 1.
-2. `dashboard/server.js`:
-   - [VERIFY / MAINTAIN] Menyokong semakan PATCH partial updates bagi konfigurasi screener & had modal dengan validasi sempadan BVA sedia ada.
-3. `bridge/src/agent_pipeline.py`:
-   - [VERIFY / MAINTAIN] Memastikan fungsi `get_max_buying_power_limit()` membaca terus nilai terkini daripada SQLite WAL database pada setiap pusingan analisis & pengauditan.
-4. `dashboard/test_hom305_playwright.js`:
-   - [NEW] Skrip ujian E2E Playwright merangkumi pengesahan pemisahan Tab, BVA modal, navigasi hash, desktop & mobile screenshot.
+1. `dashboard/src/pages/AgentsPage.jsx`:
+   - [MODIFY] Padam butang "Jalankan Simulasi Pipeline" dan fungsi berkaitan.
+   - [MODIFY] Kemas kini lajur TINDAKAN jadual pesanan untuk memaparkan butang "Batal" pada semua status belum muktamad (`SUBMITTED`, `PENDING`, `SUBMITTED_PAPER_SIM`).
+   - [MODIFY] Tambah `TablePagination` pada jadual pesanan berasaskan konfigurasi saiz halaman.
+2. `dashboard/src/pages/L0Page.jsx` (gabungan `FunnelPage.jsx` & `WatchlistPage.jsx`):
+   - [NEW / RESTRUCTURE] Menyatukan visual corong saringan dan jadual senarai pantau L0 dalam satu komponen padat.
+3. `dashboard/src/components/Layout.jsx`:
+   - [MODIFY] Kemas kini senarai pautan navigasi:
+     - Gantikan "Corong Saringan" dan "Watchlist Dwi-Lorong" dengan satu entri: `"L0: Saringan & Watchlist"`.
+     - Tukar "Aktiviti Ejen" kepada `"L1 -> L4: Aktiviti Pasukan Ejen"`.
+4. `dashboard/src/App.jsx`:
+   - [MODIFY] Kemas kini routing hash (`#/l0`, `#/watchlist`, `#/agents`) dengan fallback ke laluan bersatu baharu.
+5. `dashboard/src/pages/SettingsPage.jsx`:
+   - [MODIFY] Tambah kawalan tetapan "Bilangan Entri Per Halaman Aktiviti Ejen" (dropdown / chips: 5, 10, 25, 50) dalam Tab Tetapan.
+6. `dashboard/server.js`:
+   - [MODIFY] Simpan dan baca parameter `agent_orders_per_page` daripada `screener_config.sqlite`.
+7. `bridge/src/agent_pipeline.py`:
+   - [VERIFY / MODIFY] Memastikan `cancel_paper_order` memproses pembatalan pesanan `SIM-ORD-*` dan `ORD-*` secara konsisten.
+8. `dashboard/test_hom305_playwright.js`:
+   - [MODIFY] Ujian E2E automatik merangkumi semakan tiada butang simulasi, penjenamaan L0 dan L1->L4, butang batal transaksi, dan paginasi.
 
 ---
 
 ## 4. Pendekatan & Alternatif yang Ditolak
 - **Pendekatan Dipilih**:
-  Mewujudkan 3 tab berasingan pada `SettingsPage`: Tab 0 (L0 Screener), Tab 1 (Pengurusan Modal & Risiko), Tab 2 (Pengurusan Gerbang OpenD). Setiap tab mempunyai skop borang dan butang simpan tersendiri, tetapi berkongsi backend SQLite WAL yang sama bagi menjamin ketepatan transaksi data.
-- **Alternatif Ditolak 1: Mengasingkan Modal ke Halaman/Laluan URL Baharu (cth. `#/capital`)**:
-  Ditolak kerana konfigurasi modal adalah sebahagian daripada tetapan sistem teras. Mewujudkan laluan URL baharu dalam menu navigasi utama akan menambah kekusutan sidebar dashboard dan memecahkan konsistensi UI Sneat.
-- **Alternatif Ditolak 2: Menggunakan Dialog Modal (Popup) di Tab 1**:
-  Ditolak kerana had siling modal memerlukan penerangan mendalam mengenai mekanisma sizing Haziq dan pengauditan Danial serta butang preset yang memerlukan ruang paparan yang selesa.
-- **Alternatif Ditolak 3: Membina jadual pangkalan data baharu (`capital_config.sqlite`)**:
-  Ditolak kerana `screener_config.sqlite` sedia ada sudah mempunyai kolum `max_buying_power` dalam mod WAL yang boleh diakses serentak oleh kontena dashboard, bridge, dan screener tanpa konflik konkurensi.
+  Menyatukan paparan L0 ke dalam satu halaman dengan susun atur vertikal kemas, mengemaskini menu sidebar, dan menyokong pembatalan pesanan belum muktamad secara konsisten di peringkat backend SQLite dan broker.
+- **Alternatif Ditolak 1: Mengekalkan Butang Simulasi dengan Popup Peringatan**:
+  Ditolak kerana pemohon secara jelas mengarahkan butang simulasi dibuang kerana mengelirukan pengguna dan tidak mencerminkan operasi autonomi sebenar.
+- **Alternatif Ditolak 2: Menyimpan Bilangan Entri Paginasi hanya dalam LocalStorage**:
+  Ditolak kerana konfigurasi paparan sistem mesti konsisten merentasi pelayar dan peranti pengguna melalui pangkalan data SQLite berpusat.
 
 ---
 
 ## 5. Analisis Risiko & Mitigasi
-- **Risiko 1: Pautan Pintas OpenD Terjejas (Breaking Change pada Hash Navigation)**:
-  - *Mitigasi*: Pautan di `App.jsx` dan `KpiCards.jsx` menggunakan `#/settings?tab=opend`. Logik `getInitialTab` dan `handleTabChange` diselaraskan agar jika `hash.includes('tab=opend')`, ia secara automatik memilih Tab 2 (OpenD), manakala `tab=capital` atau `tab=risk` memilih Tab 1, dan lalai ialah Tab 0.
-- **Risiko 2: Borang Simpan Tab 0 Menimpa Had Modal dengan Nilai Lalai**:
-  - *Mitigasi*: Butang simpan Tab 0 hanya menghantar field parameter L0 (atau mengekalkan nilai `max_buying_power` sedia ada tanpa mengubahnya), dan sebaliknya untuk Tab 1.
-- **Risiko 3: Latensi atau Kunci Pangkalan Data SQLite (Locking)**:
-  - *Mitigasi*: Pangkalan data beroperasi dalam mod `WAL` (Write-Ahead Logging) dengan timeout transaksi pantas, memastikan pembacaan live oleh pipeline ejen tidak disekat oleh operasi PATCH dari dashboard.
+- **Risiko 1: Pautan Lama (`#/funnel`) Tidak Berfungsi**:
+  - *Mitigasi*: Tambah lencongan automatik (*redirect*) di `App.jsx` supaya sebarang navigasi ke `#/funnel` terus memaparkan halaman bersatu `#/l0`.
+- **Risiko 2: Pembatalan Pesanan Menghasilkan Konflik Status**:
+  - *Mitigasi*: Melaksanakan semakan idempotensi sebelum pembatalan; jika pesanan sudah `CANCELLED` atau `FILLED`, operasi dipulangkan dengan mesej selamat tanpa ralat pelayan.
 
 ---
 
-## 6. Perkara yang TIDAK Termasuk (Explicitly Out of Scope)
-- Pengubahsuaian formula saiz posisi di dalam `Haziq` atau kriteria sembilan semakan risiko di dalam `Danial` (logik kuantitatif kekal seperti sedia ada).
-- Penambahan parameter penapisan saham L0 yang baharu di luar 5 parameter piawai.
-- Sebarang pengubahsuaian konfigurasi rangkaian port atau fail `.env` luaran.
+## 6. Perkara yang TIDAK Termasuk
+- Pengubahsuaian formula saiz posisi di dalam Haziq atau syarat 8 Hard Rules Danial.
+- Penambahan parameter penapisan saham fizikal baharu di luar 5 parameter piawai L0.
 
 ---
 
 ## 7. Pelan Pengujian & Verifikasi (SDLC Checklist)
 - **SDLC 3 (BVA & Unit Tests)**:
-  - Ujian sempadan nilai had modal: $499.99 (gagal), $500.00 (lulus minima), $50,000 (lulus pertengahan), $100M (lulus maksima), $100,000,001 (gagal).
-  - Ujian parameter penapisan L0 kekal utuh dan tidak terjejas oleh perubahan UI.
+  - Ujian pembatalan status pesanan (`SUBMITTED`, `PENDING`, `SUBMITTED_PAPER_SIM`).
+  - Ujian sempadan BVA bagi saiz entri paginasi (min 5, max 50).
 - **SDLC 4 (Ujian Hujung-ke-Hujung E2E Playwright)**:
-  - Menggunakan kontena `playwright-inno-x` melalui `/paperclip/bin/pw-browser`.
-  - Sahkan Tab 0 hanya mengandungi kawalan L0 dan TIADA kawalan modal.
-  - Sahkan Tab 1 mengandungi kawalan Had Siling Modal, preset, dan butang simpan.
-  - Sahkan Tab 2 memaparkan panel OpenD Gateway.
-  - Ujian pada resolusi Desktop (1280x800) dan Mobile (390x844) berserta tangkapan skrin ke `/qa/`.
+  - Ujian pengesahan ketiadaan butang simulasi.
+  - Ujian paparan halaman bersepadu L0 dan penjenamaan menu sidebar L1->L4.
+  - Ujian interaksi butang Batal pada pesanan aktif.
+  - Ujian penukaran muka surat paginasi (Next / Previous / Page size).
+  - Tangkapan skrin Desktop & Mobile ke `/qa/`.
 - **SDLC 5a (Semakan Keselamatan & Auth Cloudflare)**:
-  - Sahkan Sijil SSL (`*.beta.julietmike.net`), Force SSL, HTTP/2, dan integriti endpoint melalui curl.
+  - Sahkan Sijil SSL (`*.beta.julietmike.net`), Force SSL, HTTP/2 via curl.
 - **SDLC 7 & 7a (Rujukan Fizikal)**:
-  - Ujian langsung ke atas URL Beta: `https://stock-trader.beta.julietmike.net/`
-  - Sahkan HTTPS dan HTTP/2 aktif.
+  - Ujian langsung ke atas URL Beta: `https://stock-trader.beta.julietmike.net/`.
