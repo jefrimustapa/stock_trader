@@ -160,6 +160,7 @@ Sistem sedia ada (`stock_trader`) telah mempunyai:
 - Perdagangan menggunakan wang sebenar (Live Real-Money Trading).
 - Pengubahsuaian konfigurasi rangkaian port hos OpenD (port 11111/22222 kekal terasing dalam Docker network `stock_network`).
 - Mengubah prompt sistem atau izin Paperclip agent di luar kod projek `stock_trader`.
+- Borang fallback autentikasi dalaman / token input di web UI (Dimansuhkan mengikut arahan Jefri: Capaian web 100% menggunakan Authentik SSO `auth.julietmike.net` dengan lencongan 302 terus tanpa borang login tempatan).
 
 ---
 

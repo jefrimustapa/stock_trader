@@ -186,64 +186,15 @@ async function authenticateDashboard(req, res, next) {
         }
     }
 
-    // 3. If request is from a browser wanting HTML, render an interactive Access Login / Token form
-    const acceptsHtml = req.accepts && req.accepts('html');
+    // 4. Browser requests wanting HTML without Authentik session redirect directly to Authentik SSO (No internal fallback form)
+    const acceptsHtml = req.headers['accept'] && req.headers['accept'].includes('text/html');
     if (acceptsHtml && req.method === 'GET' && req.path === '/') {
-        return res.status(401).send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authentication Required | STOCK-TRADER</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; max-width: 440px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        h2 { margin-top: 0; color: #38bdf8; font-size: 22px; }
-        p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
-        .input-group { margin: 20px 0; }
-        label { display: block; font-size: 13px; margin-bottom: 6px; color: #cbd5e1; }
-        input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 14px; }
-        button, a.btn-login { display: block; text-align: center; box-sizing: border-box; text-decoration: none; width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; margin-bottom: 12px; }
-        button:hover, a.btn-login:hover { background: #0369a1; }
-        .note { margin-top: 16px; font-size: 12px; color: #64748b; border-top: 1px solid #334155; padding-top: 12px; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>STOCK-TRADER Access</h2>
-        <p>This operations dashboard is protected by <strong>Authentik SSO (auth.julietmike.net)</strong>. Please log in or enter your <strong>Service Token</strong>.</p>
-        <a href="${escapeHtml(AUTHENTIK_LOGIN_URL)}" class="btn-login" target="_blank" rel="noopener noreferrer">Log Masuk Authentik SSO</a>
-        <form onsubmit="handleToken(event)">
-            <div class="input-group">
-                <label for="token">Internal Service Token / JWT:</label>
-                <input type="password" id="token" placeholder="Masukkan token pengesahan..." required />
-            </div>
-            <button type="submit">Log Masuk dengan Token</button>
-        </form>
-        <div class="note">
-            SSO Endpoint: ${escapeHtml(AUTHENTIK_LOGIN_URL)}
-        </div>
-    </div>
-    <script>
-        function handleToken(e) {
-            e.preventDefault();
-            const val = document.getElementById('token').value.trim();
-            if (!val) return;
-            if (val.includes('.')) {
-                document.cookie = "authentik_jwt=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
-            } else {
-                document.cookie = "x_service_token=" + encodeURIComponent(val) + "; path=/; max-age=86400; SameSite=Lax";
-            }
-            window.location.reload();
-        }
-    </script>
-</body>
-</html>`);
+        return res.redirect(302, AUTHENTIK_LOGIN_URL);
     }
 
     // Strict fail-closed for API/direct requests:
     return res.status(401).json({
-        error: 'Authentication required. Authentik JWT assertion or X-Service-Token header missing or invalid.'
+        error: 'Authentication required. Authentik session or JWT assertion missing or invalid.'
     });
 }
 

@@ -100,6 +100,16 @@ async function runDashboardTests() {
         assert.strictEqual(unauthRes.statusCode, 401, `Expected 401 for unauthenticated request, got ${unauthRes.statusCode}: ${unauthRes.body}`);
         console.log('✓ PASS: Missing auth returns 401 Unauthorized');
 
+        // Test 2a2: Browser HTML request without Authentik session must redirect 302 directly to Authentik SSO (no internal fallback form)
+        const browserUnauthRes = await makeRequest(testPort, {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }, '/');
+        assert.strictEqual(browserUnauthRes.statusCode, 302, `Expected 302 redirect for browser HTML request, got ${browserUnauthRes.statusCode}`);
+        assert.ok(browserUnauthRes.headers['location'], 'Redirect location header must be present');
+        assert.ok(browserUnauthRes.headers['location'].includes('auth.julietmike.net'), `Redirect must point to Authentik SSO, got: ${browserUnauthRes.headers['location']}`);
+        assert.ok(!browserUnauthRes.body.includes('STOCK-TRADER Access'), 'Must not render internal fallback token form');
+        console.log('✓ PASS: Browser HTML unauthenticated request redirects 302 directly to Authentik SSO without internal fallback form');
+
         // Test 2b: Fake alg:none JWT must return 401
         const fakeHeader = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString('base64url');
         const fakePayload = Buffer.from(JSON.stringify({ aud: testClientId, email: "attacker@fake.local", sub: "fake" })).toString('base64url');
