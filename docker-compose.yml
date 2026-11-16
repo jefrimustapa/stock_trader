@@ -96,6 +96,27 @@ services:
       - FORWARD_AUTH_SECRET=${FORWARD_AUTH_SECRET:-}
       - TZ=America/New_York
 
+  trading-dashboard-beta:
+    image: stock_trader-trading-dashboard-beta:latest
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dashboard
+    container_name: stock_trading_dashboard_beta
+    restart: unless-stopped
+    networks:
+      - stock_network
+      - npm_default
+    volumes:
+      - shared_trading_data:/app/shared_data
+    environment:
+      - PORT=3000
+      - SHARED_DATA_DIR=/app/shared_data
+      - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:-}
+      - BRIDGE_URL=${BRIDGE_URL:-http://mcp-bridge:8000}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID:-stock-trader}
+      - DISABLE_AUTHENTIK_AUTH=true
+      - TZ=America/New_York
+
 networks:
   # Standard bridge network enabling egress for OpenD and host loopback port mapping for MCP bridge
   stock_network:

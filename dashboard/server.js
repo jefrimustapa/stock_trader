@@ -33,8 +33,8 @@ const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
 const BRIDGE_SERVICE_TOKEN = (process.env.BRIDGE_SERVICE_TOKEN || '').trim();
 const BRIDGE_URL = (process.env.BRIDGE_URL || 'http://mcp-bridge:8000').trim();
 
-// Fail-fast startup validation: AUTHENTIK_CLIENT_ID is mandatory
-if (!AUTHENTIK_CLIENT_ID) {
+// Fail-fast startup validation: AUTHENTIK_CLIENT_ID is mandatory unless disabled for beta testing
+if (!AUTHENTIK_CLIENT_ID && process.env.DISABLE_AUTHENTIK_AUTH !== 'true') {
     console.error('[Dashboard Error] FATAL: Missing AUTHENTIK_CLIENT_ID environment variable. Authentik Client ID must be configured.');
     process.exit(1);
 }
@@ -93,6 +93,11 @@ function escapeHtml(unsafe) {
 
 // Origin Authentication Middleware: Authentik JWT Assertion & Service Token
 async function authenticateDashboard(req, res, next) {
+    // 0. Check if Authentik authentication is explicitly disabled for beta testing environment
+    if (process.env.DISABLE_AUTHENTIK_AUTH === 'true') {
+        req.authUser = 'beta-tester';
+        return next();
+    }
     // 1. Check internal service token using timing-safe comparison (Header or Cookie)
     let serviceToken = req.headers['x-service-token'];
     if (!serviceToken && req.headers.cookie) {
@@ -273,7 +278,10 @@ app.get('/logout', (req, res) => {
     // Note (HOM-154): "cookies" directive must NOT be included as it purges all cookies for .julietmike.net
     res.setHeader('Clear-Site-Data', '"cache", "storage"');
 
-    // 4. Redirect to Authentik SSO invalidation URL (HOM-156)
+    // 4. Redirect to Authentik SSO invalidation URL (HOM-156) or root for beta
+    if (process.env.DISABLE_AUTHENTIK_AUTH === 'true') {
+        return res.redirect(302, '/');
+    }
     res.redirect(302, AUTHENTIK_LOGOUT_URL);
 });
 
