@@ -75,9 +75,11 @@ services:
       - PORT=3000
       - SHARED_DATA_DIR=/app/shared_data
       - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:?BRIDGE_SERVICE_TOKEN is required}
-      - CF_ACCESS_AUD=${CF_ACCESS_AUD:?CF_ACCESS_AUD is required}
-      - CF_ACCESS_TEAM_DOMAIN=${CF_ACCESS_TEAM_DOMAIN:-julietmike.cloudflareaccess.com}
-      - CF_ACCESS_CERTS_URL=${CF_ACCESS_CERTS_URL:-https://julietmike.cloudflareaccess.com/cdn-cgi/access/certs}
+      - BRIDGE_URL=${BRIDGE_URL:-http://mcp-bridge:8000}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID:?AUTHENTIK_CLIENT_ID is required}
+      - AUTHENTIK_ISSUER_URL=${AUTHENTIK_ISSUER_URL:-https://auth.julietmike.net/application/o/stock-trader/}
+      - AUTHENTIK_JWKS_URL=${AUTHENTIK_JWKS_URL:-https://auth.julietmike.net/application/o/stock-trader/jwks/}
+      - AUTHENTIK_LOGOUT_URL=${AUTHENTIK_LOGOUT_URL:-https://auth.julietmike.net/flows/-/default/invalidation/}
       - TZ=America/New_York
 
 networks:
