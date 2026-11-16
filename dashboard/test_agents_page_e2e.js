@@ -9,7 +9,11 @@ const path = require('path');
 const fs = require('fs');
 
 const TARGET_URL = process.env.TEST_URL || 'https://stock-trader.beta.julietmike.net';
-const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN || 'c7fed05ca5e657d0a08e187e9b36755db8eeb7cf76b82648dc6d60d278a19def';
+const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN;
+if (!SERVICE_TOKEN) {
+  console.error('Fatal Configuration Error: BRIDGE_SERVICE_TOKEN environment variable is required.');
+  process.exit(1);
+}
 const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || '/qa';
 
 console.log('================================================================');
