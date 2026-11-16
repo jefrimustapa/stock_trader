@@ -29,6 +29,7 @@ class WatchlistStock(BaseModel):
     lane_score: float = Field(..., ge=0.0, le=100.0, description="Normalized composite lane score (0-100)")
     setup_metrics: Optional[SetupMetrics] = Field(default=None, description="Metrics specific to SETUP lane")
     status: str = Field(default="READY_FOR_ANALYSIS", description="Readiness flag for downstream LLM analysis")
+    exchange: Optional[str] = Field(default=None, description="Listing exchange code e.g. US_NYSE, US_NASDAQ, US_AMEX")
 
 
 class QuotaStatus(BaseModel):
@@ -50,6 +51,7 @@ class DroppedReason(BaseModel):
 class FunnelStageMetrics(BaseModel):
     cloud_raw_returned: int = Field(default=0, ge=0, description="Total raw stocks returned from cloud screen")
     cloud_skipped_incomplete: int = Field(default=0, ge=0, description="Stocks skipped due to missing fields in cloud response")
+    otc_filtered_count: int = Field(default=0, ge=0, description="Total OTC stocks filtered out before/during screening")
     stage0_quality_passed: int = Field(default=0, ge=0, description="Stocks passing Stage 0 baseline quality gates")
     lane_momentum_candidates: int = Field(default=0, ge=0, description="Stocks qualifying for Momentum lane")
     lane_setup_candidates: int = Field(default=0, ge=0, description="Stocks qualifying for Setup lane")

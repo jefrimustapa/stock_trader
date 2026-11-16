@@ -44,6 +44,20 @@ class CloudScreener:
             cap = float(s.get("market_cap", 0.0))
             adv20 = float(s.get("adv_20", 0.0))
             dist_52w = float(s.get("price_to_52w_high", s.get("dist_52w", 0.0)))
+            exchange = s.get("exchange")
+
+            # Exchange cutoff (Defense-in-depth: Reject OTC counters)
+            if exchange is not None and exchange not in ScreenerConfig.ALLOWED_EXCHANGES:
+                if funnel:
+                    funnel.otc_filtered_count += 1
+                    funnel.dropped_reasons.append({
+                        "symbol": symbol,
+                        "stage": "STAGE0_QUALITY",
+                        "reason": "OTC_EXCHANGE_REJECTED",
+                        "actual_value": None,
+                        "threshold": None
+                    })
+                continue
 
             # Hard baseline cutoffs
             if price < ScreenerConfig.CLOUD_HARD_MIN_PRICE:
@@ -96,6 +110,8 @@ class CloudScreener:
             item["market_cap"] = cap
             item["adv_20"] = adv20
             item["dist_52w"] = dist_52w
+            if exchange is not None:
+                item["exchange"] = exchange
             passed.append(item)
 
         if funnel:
@@ -380,7 +396,8 @@ class CloudScreener:
                 lane=item["lane"],
                 lane_score=float(item["lane_score"]),
                 setup_metrics=item.get("setup_metrics"),
-                status="READY_FOR_ANALYSIS"
+                status="READY_FOR_ANALYSIS",
+                exchange=item.get("exchange")
             )
             final_stocks.append(stock_obj)
 
@@ -417,7 +434,8 @@ class CloudScreener:
                     lane=LaneEnum.MOMENTUM.value,
                     lane_score=80.0,
                     setup_metrics=None,
-                    status="READY_FOR_ANALYSIS"
+                    status="READY_FOR_ANALYSIS",
+                    exchange=item.get("exchange")
                 ))
             except QuotaExceededError:
                 break
@@ -434,15 +452,17 @@ class CloudScreener:
         source: str = "REAL",
         warning: Optional[str] = None,
         quote_ctx: Any = None,
-        cloud_skipped_count: int = 0
+        cloud_skipped_count: int = 0,
+        otc_filtered_count: int = 0
     ) -> WatchlistOutput:
         """Runs the full hybrid multi-stage pipeline and writes watchlist.json atomically."""
         ts = timestamp or datetime.now(timezone.utc)
         effective_data_as_of = data_as_of or ts.isoformat()
 
         funnel = FunnelStageMetrics(
-            cloud_raw_returned=len(raw_stocks) + cloud_skipped_count if source != "OPEND_UNAVAILABLE" else 0,
-            cloud_skipped_incomplete=cloud_skipped_count if source != "OPEND_UNAVAILABLE" else 0
+            cloud_raw_returned=len(raw_stocks) + cloud_skipped_count + otc_filtered_count if source != "OPEND_UNAVAILABLE" else 0,
+            cloud_skipped_incomplete=cloud_skipped_count if source != "OPEND_UNAVAILABLE" else 0,
+            otc_filtered_count=otc_filtered_count if source != "OPEND_UNAVAILABLE" else 0
         )
 
         if source == "OPEND_UNAVAILABLE":
