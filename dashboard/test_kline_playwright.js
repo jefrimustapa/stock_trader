@@ -123,6 +123,8 @@ async function runSuite() {
       assertCheck('TradingView Lightweight Charts HTML5 canvas elements instantiated', canvasCount > 0);
       const ohlcHud = (await drawer.locator('text=Vol').count() > 0) || (await drawer.locator('text=Arahkan kursor').count() > 0);
       assertCheck('Interactive OHLC HUD bar rendered above chart', ohlcHud);
+      const zoomBtnRecent = drawer.locator('button:has-text("40 Lilin")');
+      assertCheck('Zoom control "40 Lilin" button rendered', (await zoomBtnRecent.count()) > 0);
     }
 
     // 5. Test switching timeframe to 15M
@@ -139,11 +141,24 @@ async function runSuite() {
     // 7. Close drawer
     const closeBtn = drawer.locator('button[title="Tutup panel"]');
     await closeBtn.click();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
 
     // Verify drawer closed
     const isDrawerClosed = !(await drawer.isVisible());
     assertCheck('Drawer closed when close button clicked', isDrawerClosed);
+
+    // Also test opening US.SMA on 1D timeframe if row is present in table
+    const smaRow = page.locator('tr:has-text("US.SMA")');
+    if ((await smaRow.count()) > 0) {
+      console.log('  Opening US.SMA 1D candlestick chart...');
+      await smaRow.first().click();
+      await page.waitForTimeout(1500);
+      const smaScreenshotPath = path.join(QA_DIR, 'kline-watchlist-sma-desktop.png');
+      await page.screenshot({ path: smaScreenshotPath });
+      assertCheck(`Captured US.SMA screenshot to ${smaScreenshotPath}`, fs.existsSync(smaScreenshotPath));
+      await drawer.locator('button[title="Tutup panel"]').click();
+      await page.waitForTimeout(400);
+    }
 
     await desktopContext.close();
 
@@ -209,6 +224,8 @@ async function runSuite() {
     if ((await mgclyRow.count()) > 0) {
       console.log('  Found US.MGCLY row in Watchlist table...');
       assertCheck('US.MGCLY row present in Watchlist table', (await mgclyRow.count()) >= 1);
+      const otcChipInTable = mgclyRow.locator('text=OTC');
+      assertCheck('OTC remark badge preserved in table row for US.MGCLY', (await otcChipInTable.count()) >= 1);
 
       console.log('  Clicking US.MGCLY row to open drawer...');
       await mgclyRow.first().click();

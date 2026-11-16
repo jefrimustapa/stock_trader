@@ -13,6 +13,7 @@ import {
   useTheme,
   useMediaQuery,
   Divider,
+  Tooltip,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -21,6 +22,8 @@ import LaunchIcon from '@mui/icons-material/Launch';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import axios from 'axios';
 import { createChart, ColorType, CandlestickSeries, HistogramSeries, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { sneatTokens } from '../theme';
@@ -49,10 +52,39 @@ export function KlineDrawer({ open, onClose, stock }) {
   const [klineData, setKlineData] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [hoverOhlc, setHoverOhlc] = useState(null);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const activeSubRef = useRef({ symbol: null, interval: null });
+
+  const handleShowRecent = () => {
+    if (!chartInstanceRef.current || !klineData?.candles?.length) return;
+    const total = klineData.candles.length;
+    chartInstanceRef.current.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, total - (isMobile ? 25 : 42)),
+      to: total + 2,
+    });
+  };
+
+  const handleFitAll = () => {
+    if (!chartInstanceRef.current) return;
+    chartInstanceRef.current.timeScale().fitContent();
+  };
+
+  const handleZoomIn = () => {
+    if (!chartInstanceRef.current) return;
+    const ts = chartInstanceRef.current.timeScale();
+    const current = ts.options().barSpacing || 14;
+    ts.applyOptions({ barSpacing: Math.min(50, current * 1.35) });
+  };
+
+  const handleZoomOut = () => {
+    if (!chartInstanceRef.current) return;
+    const ts = chartInstanceRef.current.timeScale();
+    const current = ts.options().barSpacing || 14;
+    ts.applyOptions({ barSpacing: Math.max(3, current * 0.72) });
+  };
 
   const symbol = stock?.symbol || '';
   const companyName = stock?.name || stock?.company_name || 'US Equities';
@@ -167,18 +199,19 @@ export function KlineDrawer({ open, onClose, stock }) {
         },
       },
       rightPriceScale: {
-        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 78, 100, 0.12)',
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(76, 78, 100, 0.12)',
         scaleMargins: {
           top: 0.08,
-          bottom: 0.25,
+          bottom: 0.22,
         },
       },
       timeScale: {
-        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 78, 100, 0.12)',
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(76, 78, 100, 0.12)',
         timeVisible: interval !== 'day',
         secondsVisible: false,
-        minBarSpacing: 5,
-        rightOffset: 8,
+        barSpacing: 14,
+        minBarSpacing: 4,
+        rightOffset: 6,
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -206,6 +239,7 @@ export function KlineDrawer({ open, onClose, stock }) {
       borderVisible: true,
       borderUpColor: '#28C76F',
       borderDownColor: '#EA5455',
+      wickVisible: true,
       wickUpColor: '#28C76F',
       wickDownColor: '#EA5455',
       priceFormat: {
@@ -215,23 +249,24 @@ export function KlineDrawer({ open, onClose, stock }) {
       },
     });
 
-    // Volume Series - histogram overlay confined strictly to bottom 20%
+    // Volume Series - dedicated volume scale without price axis ticks
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
-      priceScaleId: '', // overlay
+      priceScaleId: 'vol_scale',
     });
 
-    volumeSeries.priceScale().applyOptions({
+    chart.priceScale('vol_scale').applyOptions({
       scaleMargins: {
-        top: 0.8,
+        top: 0.82,
         bottom: 0,
       },
+      visible: false,
     });
 
     candleSeries.priceScale().applyOptions({
       scaleMargins: {
         top: 0.08,
-        bottom: 0.25,
+        bottom: 0.22,
       },
     });
 
@@ -250,8 +285,12 @@ export function KlineDrawer({ open, onClose, stock }) {
     for (const c of sortedCandles) {
       let timeVal = c.time || c.timestamp;
       if (!timeVal) continue;
-      if (typeof timeVal === 'string' && timeVal.includes(' ') && interval !== 'day') {
-        timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
+      if (typeof timeVal === 'string') {
+        if (interval === 'day' && timeVal.includes(' ')) {
+          timeVal = timeVal.split(' ')[0];
+        } else if (interval !== 'day' && timeVal.includes(' ')) {
+          timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
+        }
       }
       const timeKey = String(timeVal);
       if (seenTimes.has(timeKey)) continue;
@@ -276,10 +315,15 @@ export function KlineDrawer({ open, onClose, stock }) {
     candleSeries.setData(formattedCandles);
     volumeSeries.setData(formattedVolumes);
 
-    chart.timeScale().applyOptions({
-      barSpacing: formattedCandles.length < 30 ? 14 : 9,
-    });
-    chart.timeScale().fitContent();
+    // Initial comfortable zoom showing the latest 40 candles (not squeezed 150)
+    const totalBars = formattedCandles.length;
+    if (totalBars > 0) {
+      const visibleCount = Math.min(totalBars, isMobile ? 25 : 42);
+      chart.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, totalBars - visibleCount),
+        to: totalBars + 2,
+      });
+    }
 
     // Subscribe to crosshair move for interactive OHLC HUD
     chart.subscribeCrosshairMove((param) => {
@@ -371,9 +415,10 @@ export function KlineDrawer({ open, onClose, stock }) {
       }}
       PaperProps={{
         sx: {
-          width: isMobile ? '100%' : 640,
-          maxWidth: '100%',
+          width: isMobile ? '100%' : isMaximized ? '92vw' : 780,
+          maxWidth: isMobile ? '100%' : isMaximized ? '96vw' : 840,
           height: isMobile ? '88vh' : '100%',
+          transition: 'width 0.2s ease, max-width 0.2s ease',
           borderTopLeftRadius: isMobile ? 16 : 0,
           borderTopRightRadius: isMobile ? 16 : 0,
           backgroundColor: (t) => (t.palette.mode === 'dark' ? '#2B2C40' : '#FFFFFF'),
@@ -457,17 +502,39 @@ export function KlineDrawer({ open, onClose, stock }) {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <IconButton
-            size="small"
-            onClick={() => fetchKline(symbol, interval)}
-            disabled={loading}
-            title="Muat semula graf"
-          >
-            <RefreshIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small" onClick={handleClose} title="Tutup panel">
-            <CloseIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Muat semula graf">
+            <IconButton
+              size="small"
+              onClick={() => fetchKline(symbol, interval)}
+              disabled={loading}
+              title="Muat semula graf"
+              aria-label="Muat semula graf"
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          {!isMobile && (
+            <Tooltip title={isMaximized ? "Kecilkan panel" : "Besarkan panel graf"}>
+              <IconButton
+                size="small"
+                onClick={() => setIsMaximized(!isMaximized)}
+                title={isMaximized ? "Kecilkan panel" : "Besarkan panel graf"}
+                aria-label={isMaximized ? "Kecilkan panel" : "Besarkan panel graf"}
+              >
+                {isMaximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="Tutup panel">
+            <IconButton
+              size="small"
+              onClick={handleClose}
+              title="Tutup panel"
+              aria-label="Tutup panel"
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -780,60 +847,113 @@ export function KlineDrawer({ open, onClose, stock }) {
               sx={{
                 mb: 1.5,
                 px: 2,
-                py: 1,
-                borderRadius: 1.5,
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(67, 89, 113, 0.04)',
+                py: 1.2,
+                borderRadius: 2,
+                backgroundColor: isDark ? 'rgba(30, 30, 45, 0.95)' : '#FFFFFF',
                 border: (t) => `1px solid ${t.palette.divider}`,
+                boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(67, 89, 113, 0.05)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: 1,
+                gap: 1.5,
               }}
             >
               {displayOhlc ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75, flexWrap: 'wrap' }}>
-                  <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'text.secondary' }}>
-                    {displayOhlc.timeStr || interval.toUpperCase()}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>O</Typography>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                  <Chip
+                    size="small"
+                    label={displayOhlc.timeStr || interval.toUpperCase()}
+                    sx={{
+                      fontWeight: 700,
+                      fontFamily: 'monospace',
+                      fontSize: '0.72rem',
+                      height: 22,
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(67, 89, 113, 0.08)',
+                      color: 'text.primary',
+                    }}
+                  />
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>O</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.open?.toFixed(2)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>H</Typography>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>H</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.high?.toFixed(2)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>L</Typography>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>L</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.low?.toFixed(2)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>C</Typography>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>C</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.close?.toFixed(2)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>Vol</Typography>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'text.primary' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>Vol</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: 'text.primary' }}>
                       {formatVol(displayOhlc.volume)}
                     </Typography>
                   </Box>
                 </Box>
               ) : (
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                  Arahkan kursor ke lilin untuk melihat metrik OHLCV
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                  Arahkan kursor ke graf untuk metrik lilin
                 </Typography>
               )}
 
+              {/* Zoom and Scale Controls */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ButtonGroup size="small" variant="outlined" sx={{ height: 26 }}>
+                  <Button
+                    onClick={handleShowRecent}
+                    sx={{
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      textTransform: 'none',
+                      px: 1,
+                      borderColor: (t) => t.palette.divider,
+                    }}
+                    title="Fokus 40 lilin terkini"
+                  >
+                    40 Lilin
+                  </Button>
+                  <Button
+                    onClick={handleFitAll}
+                    sx={{
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      textTransform: 'none',
+                      px: 1,
+                      borderColor: (t) => t.palette.divider,
+                    }}
+                    title="Papar semua lilin (Fit All)"
+                  >
+                    Semua
+                  </Button>
+                  <Button
+                    onClick={handleZoomIn}
+                    sx={{ px: 0.75, minWidth: 26, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    title="Zum Masuk (+)"
+                  >
+                    +
+                  </Button>
+                  <Button
+                    onClick={handleZoomOut}
+                    sx={{ px: 0.75, minWidth: 26, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    title="Zum Keluar (-)"
+                  >
+                    -
+                  </Button>
+                </ButtonGroup>
                 {klineData?.cached && (
                   <Chip
                     size="small"
