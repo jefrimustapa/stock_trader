@@ -17,22 +17,15 @@ const AUTHENTIK_ISSUER_URL = (process.env.AUTHENTIK_ISSUER_URL || 'https://auth.
 const AUTHENTIK_JWKS_URL = (process.env.AUTHENTIK_JWKS_URL || 'https://auth.julietmike.net/application/o/stock-trader/jwks/').trim();
 const AUTHENTIK_LOGIN_URL = (process.env.AUTHENTIK_LOGIN_URL || 'https://auth.julietmike.net/flows/-/default/authentication/').trim();
 
-// Authentik SSO logout endpoint: defaults to Authentik SSO invalidation flow with post-logout redirect (HOM-156, HOM-158, HOM-159).
-// In Authentik, redirecting to /application/o/stock-trader/ ensures that after session invalidation,
-// the user is directed to the authentication flow with next=/application/o/stock-trader/,
-// and after re-authenticating, Authentik launches the stock-trader dashboard rather than /if/user/.
-const DEFAULT_POST_LOGOUT_REDIRECT = '/application/o/stock-trader/';
-const DEFAULT_AUTHENTIK_LOGOUT_URL = `https://auth.julietmike.net/flows/-/default/invalidation/?next=${encodeURIComponent(DEFAULT_POST_LOGOUT_REDIRECT)}`;
+// Authentik SSO logout endpoint: defaults to Authentik dedicated stock-trader invalidation flow (HOM-156, HOM-158, HOM-159, HOM-160).
+// In Authentik, using the dedicated stock-trader-invalidation-flow ensures that after session invalidation,
+// the user is directed back to the stock-trader application flow instead of being dumped at Authentik's /if/user/ portal.
+const DEFAULT_AUTHENTIK_LOGOUT_URL = 'https://auth.julietmike.net/if/flow/stock-trader-invalidation-flow/';
 
 let rawLogoutUrl = (process.env.AUTHENTIK_LOGOUT_URL || DEFAULT_AUTHENTIK_LOGOUT_URL).trim();
-// Ensure next parameter points to /application/o/stock-trader/ if pointing to Authentik invalidation flow
-if (rawLogoutUrl.includes('/flows/-/default/invalidation')) {
-    if (!rawLogoutUrl.includes('next=')) {
-        const separator = rawLogoutUrl.includes('?') ? '&' : '?';
-        rawLogoutUrl = `${rawLogoutUrl}${separator}next=${encodeURIComponent(DEFAULT_POST_LOGOUT_REDIRECT)}`;
-    } else if (rawLogoutUrl.includes('next=https%3A%2F%2Fstock-trader.beta.julietmike.net') || rawLogoutUrl.includes('next=https://stock-trader.beta.julietmike.net')) {
-        rawLogoutUrl = rawLogoutUrl.replace(/next=https(%3A%2F%2F|:\/\/)[^&]+/, `next=${encodeURIComponent(DEFAULT_POST_LOGOUT_REDIRECT)}`);
-    }
+// If configured with legacy default invalidation flow, normalize to stock-trader-invalidation-flow
+if (rawLogoutUrl.includes('/flows/-/default/invalidation') || rawLogoutUrl.includes('/if/flow/default-invalidation-flow')) {
+    rawLogoutUrl = DEFAULT_AUTHENTIK_LOGOUT_URL;
 }
 const AUTHENTIK_LOGOUT_URL = rawLogoutUrl;
 const FORWARD_AUTH_SECRET = (process.env.FORWARD_AUTH_SECRET || '').trim();
