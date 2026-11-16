@@ -442,6 +442,31 @@ class AgentPipeline:
             all_passed = False
             rejection_reason = f"Pelanggaran Rule 8: Sambungan broker OpenD terputus ({opend_status})"
 
+        # Kawalan Kedudukan Aktif: Elak pembelian berulang bagi kaunter yang sama
+        active_order_count = 0
+        active_order_status = None
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT status FROM paper_orders WHERE symbol = ? AND status IN ('SUBMITTED', 'PENDING', 'FILLED') ORDER BY id DESC LIMIT 1",
+                    (symbol,)
+                ).fetchone()
+                if row:
+                    active_order_count = 1
+                    active_order_status = row["status"]
+        except Exception as e:
+            logger.warning("Error checking active orders for %s: %s", symbol, e)
+
+        r_dedup_pass = (active_order_count == 0)
+        rule_checks.append({
+            "rule": "Kawalan Kedudukan Aktif (Elak Pembelian Berulang)",
+            "passed": r_dedup_pass,
+            "detail": "Tiada pesanan aktif / posisi terbuka bagi simbol ini" if r_dedup_pass else f"Pesanan/posisi sedia ada aktif ({active_order_status}). Pembelian berulang disekat."
+        })
+        if not r_dedup_pass and all_passed:
+            all_passed = False
+            rejection_reason = f"Simbol {symbol} telah mempunyai pesanan aktif/posisi terbuka ({active_order_status}). Pembelian berulang disekat."
+
         return {
             "agent": "Danial",
             "role": "L3 Risk & Compliance Officer",
@@ -452,7 +477,7 @@ class AgentPipeline:
             "order_request": order.model_dump(),
             "rule_checks": rule_checks,
             "notes": (
-                f"Audit 8 Hard Rules: {'LULUS 8/8 peraturan risiko' if all_passed else 'DITOLAK - ' + rejection_reason}."
+                f"Audit Danial: {'LULUS 8/8 peraturan risiko & kawalan posisi unik' if all_passed else 'DITOLAK - ' + rejection_reason}."
             )
         }
 
@@ -755,6 +780,52 @@ class AgentPipeline:
                 ORDER BY id DESC LIMIT ?
             """, (limit,))
             return [dict(r) for r in cursor.fetchall()]
+
+    def cancel_paper_order(self, order_id_or_client_id: str) -> Dict[str, Any]:
+        """
+        Cancels an active paper trading order (SUBMITTED/PENDING) and updates status in SQLite DB.
+        """
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT id, order_id, client_order_id, symbol, status FROM paper_orders WHERE order_id = ? OR client_order_id = ?",
+                (order_id_or_client_id, order_id_or_client_id)
+            ).fetchone()
+
+            if not row:
+                return {
+                    "success": False,
+                    "message": f"Pesanan {order_id_or_client_id} tidak dijumpai."
+                }
+
+            current_status = row["status"]
+            if current_status in ("CANCELLED", "FILLED", "REJECTED"):
+                return {
+                    "success": False,
+                    "message": f"Pesanan tidak boleh dibatalkan kerana sudah berstatus {current_status}."
+                }
+
+            order_id = row["order_id"]
+            client = get_moomoo_client()
+            if client and hasattr(client, "cancel_order") and client.is_connected():
+                try:
+                    client.cancel_order(order_id)
+                except Exception as e:
+                    logger.warning("Broker cancel error for %s: %s", order_id, e)
+
+            conn.execute(
+                "UPDATE paper_orders SET status = 'CANCELLED', message = 'Dibatalkan oleh pengguna melalui dashboard' WHERE id = ?",
+                (row["id"],)
+            )
+            conn.commit()
+
+            return {
+                "success": True,
+                "order_id": order_id,
+                "client_order_id": row["client_order_id"],
+                "symbol": row["symbol"],
+                "status": "CANCELLED",
+                "message": f"Pesanan {order_id} ({row['symbol']}) berjaya dibatalkan."
+            }
 
 
 # Module-level singleton

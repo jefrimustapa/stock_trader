@@ -42,6 +42,7 @@ export function AgentsPage() {
   const [selectedSymbolIndex, setSelectedSymbolIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  const [cancellingOrder, setCancellingOrder] = useState(null);
 
   const fetchActivity = useCallback(async () => {
     try {
@@ -91,6 +92,29 @@ export function AgentsPage() {
       setErrorMsg('Ralat mencetuskan simulasi: ' + err.message);
     } finally {
       setRunningSim(false);
+    }
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (!orderId) return;
+    try {
+      setCancellingOrder(orderId);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+      const res = await fetch(`/api/agents/orders/${encodeURIComponent(orderId)}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      setSuccessMsg(data.message || `Pesanan ${orderId} berjaya dibatalkan.`);
+      await fetchActivity();
+    } catch (err) {
+      setErrorMsg('Ralat membatalkan pesanan: ' + err.message);
+    } finally {
+      setCancellingOrder(null);
     }
   };
 
@@ -739,54 +763,98 @@ export function AgentsPage() {
                   <TableRow>
                     <TableCell sx={{ fontWeight: 700 }}>ORDER ID</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>SIMBOL</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>TINDAKAN</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>ARAH</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>KUANTITI</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>HARGA ENTRI</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>STOP LOSS</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>TAKE PROFIT</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>STATUS OPEND</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>CAP MASA</TableCell>
+                    <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>TINDAKAN</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {orders.map((ord, oIdx) => (
-                    <TableRow key={ord.client_order_id || oIdx} hover>
-                      <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                        {ord.order_id || ord.client_order_id?.substring(0, 8)}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{ord.symbol}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={ord.order_side || 'BUY'}
-                          size="small"
-                          sx={{
-                            fontWeight: 700,
-                            bgcolor: sneatTokens.success.soft,
-                            color: sneatTokens.success.main,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} unit</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>${Number(ord.entry_price || 0).toFixed(2)}</TableCell>
-                      <TableCell sx={{ color: 'error.main', fontWeight: 600 }}>
-                        ${Number(ord.stop_loss_price || 0).toFixed(2)}
-                      </TableCell>
-                      <TableCell sx={{ color: 'success.main', fontWeight: 600 }}>
-                        ${Number(ord.take_profit_price || 0).toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={ord.status || 'SUBMITTED'}
-                          size="small"
-                          color={ord.status?.includes('REJECT') ? 'error' : 'success'}
-                          sx={{ fontWeight: 600 }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                        {ord.created_at ? new Date(ord.created_at).toLocaleString() : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {orders.map((ord, oIdx) => {
+                    const orderKey = ord.order_id || ord.client_order_id;
+                    const isPendingOrSubmitted = ord.status === 'SUBMITTED' || ord.status === 'PENDING';
+                    return (
+                      <TableRow key={ord.client_order_id || oIdx} hover>
+                        <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          {ord.order_id || ord.client_order_id?.substring(0, 8)}
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{ord.symbol}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={ord.order_side || 'BUY'}
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              bgcolor: sneatTokens.success.soft,
+                              color: sneatTokens.success.main,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} unit</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>${Number(ord.entry_price || 0).toFixed(2)}</TableCell>
+                        <TableCell sx={{ color: 'error.main', fontWeight: 600 }}>
+                          ${Number(ord.stop_loss_price || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell sx={{ color: 'success.main', fontWeight: 600 }}>
+                          ${Number(ord.take_profit_price || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={ord.status || 'SUBMITTED'}
+                            size="small"
+                            color={
+                              ord.status?.includes('REJECT')
+                                ? 'error'
+                                : ord.status === 'CANCELLED'
+                                ? 'default'
+                                : ord.status === 'FILLED'
+                                ? 'success'
+                                : 'warning'
+                            }
+                            sx={{ fontWeight: 600 }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          {ord.created_at ? new Date(ord.created_at).toLocaleString() : '-'}
+                        </TableCell>
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          {isPendingOrSubmitted ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              id={`btn-cancel-order-${orderKey}`}
+                              disabled={cancellingOrder === orderKey}
+                              onClick={() => handleCancelOrder(orderKey)}
+                              sx={{
+                                fontSize: '0.72rem',
+                                py: 0.25,
+                                px: 1,
+                                minWidth: 64,
+                                borderRadius: 1.5,
+                                textTransform: 'none',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {cancellingOrder === orderKey ? (
+                                <CircularProgress size={14} color="inherit" />
+                              ) : (
+                                'Batal'
+                              )}
+                            </Button>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              -
+                            </Typography>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

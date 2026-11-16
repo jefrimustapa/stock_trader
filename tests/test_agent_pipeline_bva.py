@@ -208,6 +208,72 @@ class TestAgentPipelineBVA(unittest.TestCase):
         r5 = next(r for r in audit_pass["rule_checks"] if "Rule 5" in r["rule"])
         self.assertTrue(r5["passed"])
 
+    def test_danial_rejects_repetitive_buy_when_active_order_exists(self):
+        """Danial Gatekeeper blocks repetitive buy if an active/filled order already exists."""
+        now_ny = datetime(2026, 11, 16, 10, 30, tzinfo=NY_TZ)
+        equity = 100000.0
+        symbol = "US.AAPL"
+
+        # Initially, no orders exist -> Pass
+        cand = {"symbol": symbol, "price": 150.0, "adv_20": 10000000.0}
+        haziq = {"entry_price": 150.0, "stop_loss_price": 145.0, "allocated_shares": 10, "risk_per_trade_pct": 1.0}
+        audit1 = self.pipeline.evaluate_danial_compliance(cand, haziq, equity, now_ny, mock_market_window=True)
+        self.assertTrue(audit1["passed"])
+
+        # Insert active order into DB
+        with self.pipeline._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO paper_orders (order_id, client_order_id, symbol, order_side, quantity, entry_price, status)
+                VALUES ('ORD-TEST-1', 'CLI-TEST-1', ?, 'BUY', 10, 150.0, 'SUBMITTED')
+                """,
+                (symbol,)
+            )
+            conn.commit()
+
+        # Second evaluation for same symbol -> Blocked due to active order
+        audit2 = self.pipeline.evaluate_danial_compliance(cand, haziq, equity, now_ny, mock_market_window=True)
+        self.assertFalse(audit2["passed"])
+        self.assertIn("Pembelian berulang disekat", audit2["rejection_reason"])
+
+    def test_cancel_paper_order_and_allow_reentry(self):
+        """Cancelling a pending/submitted order succeeds and frees symbol for subsequent entry."""
+        symbol = "US.MSFT"
+        with self.pipeline._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO paper_orders (order_id, client_order_id, symbol, order_side, quantity, entry_price, status)
+                VALUES ('ORD-MSFT-1', 'CLI-MSFT-1', ?, 'BUY', 20, 400.0, 'SUBMITTED')
+                """,
+                (symbol,)
+            )
+            conn.commit()
+
+        # Cancel order
+        cancel_res = self.pipeline.cancel_paper_order("ORD-MSFT-1")
+        self.assertTrue(cancel_res["success"])
+        self.assertEqual(cancel_res["status"], "CANCELLED")
+
+        # Verify DB updated
+        orders = self.pipeline.get_paper_orders(limit=5)
+        msft_order = next(o for o in orders if o["order_id"] == "ORD-MSFT-1")
+        self.assertEqual(msft_order["status"], "CANCELLED")
+
+        # Second cancel attempt should fail gracefully
+        cancel_again = self.pipeline.cancel_paper_order("ORD-MSFT-1")
+        self.assertFalse(cancel_again["success"])
+
+        # Cancel non-existent order should fail
+        cancel_missing = self.pipeline.cancel_paper_order("ORD-NON-EXISTENT")
+        self.assertFalse(cancel_missing["success"])
+
+        # Danial compliance for MSFT should now PASS because active order is cancelled
+        now_ny = datetime(2026, 11, 16, 10, 30, tzinfo=NY_TZ)
+        cand = {"symbol": symbol, "price": 400.0, "adv_20": 10000000.0}
+        haziq = {"entry_price": 400.0, "stop_loss_price": 390.0, "allocated_shares": 10, "risk_per_trade_pct": 1.0}
+        audit_reentry = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True)
+        self.assertTrue(audit_reentry["passed"])
+
     # =========================================================================
     # 5. Mutation Testing (5 Manual Mutants Killed)
     # =========================================================================

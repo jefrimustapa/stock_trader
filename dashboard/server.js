@@ -1144,6 +1144,29 @@ app.post('/api/agents/simulate-run', authenticateDashboard, async (req, res) => 
     }
 });
 
+app.post('/api/agents/orders/:order_id/cancel', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const { order_id } = req.params;
+        const bridgeRes = await axios.post(`${targetUrl}/api/v1/agents/orders/${encodeURIComponent(order_id)}/cancel`, {}, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Service-Token': BRIDGE_SERVICE_TOKEN
+            },
+            timeout: 10000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error cancelling agent order via bridge:', err.message);
+        return res.status(err.response?.status || 502).json({
+            error: 'Gagal membatalkan pesanan ejen: ' + (err.response?.data?.detail || err.message)
+        });
+    }
+});
+
 app.get('/api/trade/orders', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {

@@ -98,3 +98,29 @@ def get_agent_paper_orders(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal mendapatkan senarai pesanan simulasi: {str(e)}"
         )
+
+
+@router.post("/orders/{order_id}/cancel")
+def cancel_agent_paper_order(
+    order_id: str,
+    caller: str = Depends(authenticate_request)
+):
+    """Cancels a pending or submitted paper trading order."""
+    try:
+        pipeline = get_agent_pipeline()
+        res = pipeline.cancel_paper_order(order_id)
+        if not res.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=res.get("message", "Gagal membatalkan pesanan.")
+            )
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error cancelling order %s: %s", order_id, e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ralat membatalkan pesanan: {str(e)}"
+        )
+
