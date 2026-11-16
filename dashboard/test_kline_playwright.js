@@ -187,8 +187,14 @@ async function runSuite() {
     await mobilePage.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
     await mobilePage.waitForTimeout(500);
 
-    const mobileRows = mobilePage.locator('table tbody tr');
-    await mobileRows.first().click();
+    const mobileSmaRow = mobilePage.locator('tr:has-text("US.SMA")');
+    if ((await mobileSmaRow.count()) > 0) {
+      console.log('  Clicking US.SMA row in mobile portrait to test active candlestick chart...');
+      await mobileSmaRow.first().click();
+    } else {
+      const mobileRows = mobilePage.locator('table tbody tr');
+      await mobileRows.first().click();
+    }
     await mobilePage.waitForTimeout(1000);
 
     const mobileDrawer = mobilePage.locator('.MuiDrawer-paperAnchorBottom');
@@ -196,11 +202,26 @@ async function runSuite() {
 
     // Verify mobile drawer anchor bottom style / height
     const drawerHeight = await mobileDrawer.evaluate((el) => el.getBoundingClientRect().height);
-    assertCheck(`Mobile: Drawer height occupies majority of screen (${Math.round(drawerHeight)}px)`, drawerHeight > 400);
+    assertCheck(`Mobile: Drawer height occupies majority of screen (${Math.round(drawerHeight)}px)`, drawerHeight > 500);
+
+    // Verify chart container rendered
+    const mobileChart = mobileDrawer.locator('#kline-chart-container');
+    assertCheck('Mobile: Chart container rendered', await mobileChart.isVisible());
+    const mobileChartHeight = await mobileChart.evaluate((el) => el.clientHeight);
+    console.log(`  Mobile chart canvas height: ${mobileChartHeight}px`);
+    assertCheck(`Mobile: Chart canvas has usable height (${mobileChartHeight}px >= 200px)`, mobileChartHeight >= 200);
+
+    // Verify bottom info bar is visible and within the drawer viewport (not cropped!)
+    const bottomBar = mobileDrawer.locator('text=Sumber: Moomoo OpenAPI');
+    assertCheck('Mobile: Bottom status bar is visible and not cropped', await bottomBar.isVisible());
 
     const mobileScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-mobile.png');
     await mobilePage.screenshot({ path: mobileScreenshotPath });
     assertCheck(`Captured mobile screenshot to ${mobileScreenshotPath}`, fs.existsSync(mobileScreenshotPath));
+
+    await mobileDrawer.locator('button[title="Tutup panel"]').click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile: Drawer closed on close button click', !(await mobileDrawer.isVisible()));
 
     await mobileContext.close();
 

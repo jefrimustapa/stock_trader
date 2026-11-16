@@ -185,7 +185,9 @@ export function KlineDrawer({ open, onClose, stock }) {
     }
 
     const container = chartContainerRef.current;
-    const initialHeight = container.clientHeight > 0 ? container.clientHeight : (isSmallHeight ? 220 : 460);
+    const initialHeight = container.clientHeight > 0
+      ? container.clientHeight
+      : (isSmallHeight ? 220 : isMobilePortrait ? 280 : 460);
     const chartHeight = Math.max(160, initialHeight);
     const chart = createChart(container, {
       width: container.clientWidth || 590,
@@ -390,7 +392,7 @@ export function KlineDrawer({ open, onClose, stock }) {
         chartInstanceRef.current = null;
       }
     };
-  }, [open, loading, klineData, isDark, interval, isSmallHeight, isMobileLandscape]);
+  }, [open, loading, klineData, isDark, interval, isSmallHeight, isMobileLandscape, isMobilePortrait]);
 
   const isHealthy = !loading && klineData?.status === 'HEALTHY' && Array.isArray(klineData.candles) && klineData.candles.length > 0;
   const isOtc = !loading && (
@@ -435,8 +437,9 @@ export function KlineDrawer({ open, onClose, stock }) {
         sx: {
           width: isMobilePortrait ? '100%' : isMobileLandscape ? '100vw' : isMaximized ? '92vw' : 780,
           maxWidth: isMobilePortrait ? '100%' : isMobileLandscape ? '100vw' : isMaximized ? '96vw' : 840,
-          height: isMobilePortrait ? '88vh' : isMobileLandscape ? '100vh' : '100%',
-          transition: 'width 0.2s ease, max-width 0.2s ease',
+          height: isMobilePortrait ? 'calc(100dvh - 24px)' : isMobileLandscape ? '100vh' : '100%',
+          maxHeight: isMobilePortrait ? 'calc(100dvh - 16px)' : '100%',
+          transition: 'width 0.2s ease, max-width 0.2s ease, height 0.2s ease',
           borderTopLeftRadius: isMobilePortrait ? 16 : 0,
           borderTopRightRadius: isMobilePortrait ? 16 : 0,
           backgroundColor: (t) => (t.palette.mode === 'dark' ? '#2B2C40' : '#FFFFFF'),
@@ -450,35 +453,53 @@ export function KlineDrawer({ open, onClose, stock }) {
         },
       }}
     >
+      {/* Mobile Portrait Sheet Puller */}
+      {isMobilePortrait && (
+        <Box
+          sx={{
+            width: 36,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.18)'),
+            mx: 'auto',
+            mt: 1,
+            mb: 0.25,
+            flexShrink: 0,
+          }}
+        />
+      )}
+
       {/* Drawer Header */}
       <Box
         sx={{
-          p: isSmallHeight ? 1 : 2.5,
-          px: isSmallHeight ? 1.75 : 2.5,
+          p: isSmallHeight ? 1 : isMobilePortrait ? 1.25 : 2.5,
+          px: isSmallHeight ? 1.75 : isMobilePortrait ? 1.75 : 2.5,
           borderBottom: 1,
           borderColor: 'divider',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexShrink: 0,
           backgroundColor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#FAFAFC'),
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
           <Box
             sx={{
-              width: isSmallHeight ? 28 : 40,
-              height: isSmallHeight ? 28 : 40,
+              width: isSmallHeight ? 28 : isMobilePortrait ? 34 : 40,
+              height: isSmallHeight ? 28 : isMobilePortrait ? 34 : 40,
               borderRadius: isSmallHeight ? 1.5 : 2,
               backgroundColor: sneatTokens.primary.soft,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: sneatTokens.primary.main,
+              flexShrink: 0,
             }}
           >
             <ShowChartIcon fontSize={isSmallHeight ? "small" : "medium"} />
           </Box>
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant={isSmallHeight ? "subtitle1" : "h6"} sx={{ fontWeight: 800, lineHeight: 1.2 }}>
                 {symbol}
@@ -516,10 +537,12 @@ export function KlineDrawer({ open, onClose, stock }) {
             </Box>
             <Typography
               variant="caption"
+              noWrap
               sx={{
                 color: 'text.secondary',
                 fontWeight: 500,
                 display: isSmallHeight ? 'none' : 'block',
+                maxWidth: isMobilePortrait ? 220 : 360,
               }}
             >
               {companyName}
@@ -567,8 +590,8 @@ export function KlineDrawer({ open, onClose, stock }) {
       {/* Price Strip & Timeframe Selector Toolbar */}
       <Box
         sx={{
-          px: isSmallHeight ? 1.75 : 2.5,
-          py: isSmallHeight ? 0.6 : 1.5,
+          px: isSmallHeight ? 1.75 : isMobilePortrait ? 2 : 2.5,
+          py: isSmallHeight ? 0.6 : isMobilePortrait ? 0.9 : 1.5,
           borderBottom: 1,
           borderColor: 'divider',
           display: 'flex',
@@ -576,10 +599,11 @@ export function KlineDrawer({ open, onClose, stock }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 1.5,
+          flexShrink: 0,
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-          <Typography variant={isSmallHeight ? "h6" : "h5"} sx={{ fontWeight: 800 }}>
+          <Typography variant={isSmallHeight ? "h6" : isMobilePortrait ? "h6" : "h5"} sx={{ fontWeight: 800 }}>
             ${Number(price).toFixed(2)}
           </Typography>
           <Chip
@@ -596,7 +620,7 @@ export function KlineDrawer({ open, onClose, stock }) {
           />
         </Box>
 
-        <ButtonGroup size="small" variant="outlined" sx={{ borderRadius: 1.5, height: isSmallHeight ? 26 : 'auto' }}>
+        <ButtonGroup size="small" variant="outlined" sx={{ borderRadius: 1.5, height: isSmallHeight ? 26 : 28 }}>
           {TIMEFRAMES.map((tf) => (
             <Button
               key={tf.value}
@@ -605,10 +629,10 @@ export function KlineDrawer({ open, onClose, stock }) {
               sx={{
                 fontWeight: 700,
                 fontSize: '0.75rem',
-                px: isSmallHeight ? 1 : 1.25,
-                py: isSmallHeight ? 0.2 : 0.4,
+                px: isSmallHeight ? 1 : isMobilePortrait ? 1.1 : 1.25,
+                py: isSmallHeight ? 0.2 : 0.3,
                 textTransform: 'none',
-                minWidth: isSmallHeight ? 36 : 42,
+                minWidth: isSmallHeight ? 36 : 40,
                 backgroundColor: interval === tf.value ? sneatTokens.primary.main : 'transparent',
                 borderColor: sneatTokens.primary.main,
                 '&:hover': {
@@ -623,7 +647,17 @@ export function KlineDrawer({ open, onClose, stock }) {
       </Box>
 
       {/* Drawer Body / Chart Area */}
-      <Box sx={{ flexGrow: 1, p: isSmallHeight ? 1 : 2, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          flexGrow: 1,
+          p: isSmallHeight ? 1 : isMobilePortrait ? 1.25 : 2,
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          overflow: 'hidden',
+          minHeight: 0,
+        }}
+      >
         {loading && (
           <Box
             sx={{
@@ -868,13 +902,13 @@ export function KlineDrawer({ open, onClose, stock }) {
             </Card>
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1, minHeight: 0 }}>
             {/* Interactive OHLC HUD Bar */}
             <Box
               sx={{
-                mb: isSmallHeight ? 0.75 : 1.5,
-                px: isSmallHeight ? 1.25 : 2,
-                py: isSmallHeight ? 0.4 : 1.2,
+                mb: isSmallHeight ? 0.75 : isMobilePortrait ? 1 : 1.5,
+                px: isSmallHeight ? 1.25 : isMobilePortrait ? 1.25 : 2,
+                py: isSmallHeight ? 0.4 : isMobilePortrait ? 0.6 : 1.2,
                 borderRadius: 2,
                 backgroundColor: isDark ? 'rgba(30, 30, 45, 0.95)' : '#FFFFFF',
                 border: (t) => `1px solid ${t.palette.divider}`,
@@ -883,50 +917,51 @@ export function KlineDrawer({ open, onClose, stock }) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: isSmallHeight ? 1 : 1.5,
+                gap: isSmallHeight || isMobilePortrait ? 0.75 : 1.5,
+                flexShrink: 0,
               }}
             >
               {displayOhlc ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: isSmallHeight ? 1 : 1.75, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: isSmallHeight || isMobilePortrait ? 1 : 1.75, flexWrap: 'wrap' }}>
                   <Chip
                     size="small"
                     label={displayOhlc.timeStr || interval.toUpperCase()}
                     sx={{
                       fontWeight: 700,
                       fontFamily: 'monospace',
-                      fontSize: isSmallHeight ? '0.65rem' : '0.72rem',
-                      height: isSmallHeight ? 18 : 22,
+                      fontSize: isSmallHeight || isMobilePortrait ? '0.65rem' : '0.72rem',
+                      height: isSmallHeight || isMobilePortrait ? 18 : 22,
                       backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(67, 89, 113, 0.08)',
                       color: 'text.primary',
                     }}
                   />
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>O</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem', fontWeight: 700 }}>O</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: isMobilePortrait ? '0.75rem' : '0.85rem', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.open?.toFixed(2)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>H</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem', fontWeight: 700 }}>H</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: isMobilePortrait ? '0.75rem' : '0.85rem', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.high?.toFixed(2)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>L</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem', fontWeight: 700 }}>L</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: isMobilePortrait ? '0.75rem' : '0.85rem', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.low?.toFixed(2)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>C</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: displayOhlc.color }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem', fontWeight: 700 }}>C</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: isMobilePortrait ? '0.75rem' : '0.85rem', fontWeight: 800, color: displayOhlc.color }}>
                       ${displayOhlc.close?.toFixed(2)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem', fontWeight: 700 }}>Vol</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 800, color: 'text.primary' }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem', fontWeight: 700 }}>Vol</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: isMobilePortrait ? '0.75rem' : '0.85rem', fontWeight: 800, color: 'text.primary' }}>
                       {formatVol(displayOhlc.volume)}
                     </Typography>
                   </Box>
@@ -939,14 +974,14 @@ export function KlineDrawer({ open, onClose, stock }) {
 
               {/* Zoom and Scale Controls */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ButtonGroup size="small" variant="outlined" sx={{ height: isSmallHeight ? 22 : 26 }}>
+                <ButtonGroup size="small" variant="outlined" sx={{ height: isSmallHeight || isMobilePortrait ? 22 : 26 }}>
                   <Button
                     onClick={handleShowRecent}
                     sx={{
                       fontSize: '0.68rem',
                       fontWeight: 700,
                       textTransform: 'none',
-                      px: 1,
+                      px: isMobilePortrait ? 0.75 : 1,
                       borderColor: (t) => t.palette.divider,
                     }}
                     title="Fokus 40 lilin terkini"
@@ -959,7 +994,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                       fontSize: '0.68rem',
                       fontWeight: 700,
                       textTransform: 'none',
-                      px: 1,
+                      px: isMobilePortrait ? 0.75 : 1,
                       borderColor: (t) => t.palette.divider,
                     }}
                     title="Papar semua lilin (Fit All)"
@@ -968,14 +1003,14 @@ export function KlineDrawer({ open, onClose, stock }) {
                   </Button>
                   <Button
                     onClick={handleZoomIn}
-                    sx={{ px: 0.75, minWidth: 26, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    sx={{ px: 0.75, minWidth: 24, fontWeight: 800, borderColor: (t) => t.palette.divider }}
                     title="Zum Masuk (+)"
                   >
                     +
                   </Button>
                   <Button
                     onClick={handleZoomOut}
-                    sx={{ px: 0.75, minWidth: 26, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    sx={{ px: 0.75, minWidth: 24, fontWeight: 800, borderColor: (t) => t.palette.divider }}
                     title="Zum Keluar (-)"
                   >
                     -
@@ -1004,9 +1039,9 @@ export function KlineDrawer({ open, onClose, stock }) {
             {interval === 'day' && klineData?.candles?.length <= 3 && (
               <Box
                 sx={{
-                  mb: isSmallHeight ? 0.75 : 1.5,
+                  mb: isSmallHeight || isMobilePortrait ? 0.75 : 1.5,
                   px: isSmallHeight ? 1.25 : 2,
-                  py: isSmallHeight ? 0.5 : 1,
+                  py: isSmallHeight || isMobilePortrait ? 0.5 : 1,
                   borderRadius: 1.5,
                   backgroundColor: 'rgba(3, 195, 236, 0.08)',
                   border: `1px solid ${sneatTokens.info.main}`,
@@ -1015,6 +1050,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                   justifyContent: 'space-between',
                   flexWrap: 'wrap',
                   gap: 1,
+                  flexShrink: 0,
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1049,7 +1085,7 @@ export function KlineDrawer({ open, onClose, stock }) {
               sx={{
                 flex: 1,
                 width: '100%',
-                minHeight: isSmallHeight ? 140 : 420,
+                minHeight: isSmallHeight ? 140 : isMobilePortrait ? 200 : 420,
                 borderRadius: 2,
                 overflow: 'hidden',
                 backgroundColor: isDark ? '#1E1E2D' : '#FAFAFC',
@@ -1059,11 +1095,11 @@ export function KlineDrawer({ open, onClose, stock }) {
             />
 
             {/* Bottom Status & Info Bar */}
-            <Box sx={{ mt: isSmallHeight ? 0.5 : 1.5, display: isSmallHeight ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
-              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem' }}>
+            <Box sx={{ mt: isSmallHeight ? 0.5 : isMobilePortrait ? 0.75 : 1.5, display: isSmallHeight ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5, flexShrink: 0 }}>
+              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: isMobilePortrait ? '0.62rem' : '0.68rem' }}>
                 Sumber: Moomoo OpenAPI (K-line Semasa · Kuota Sejarah Sifar)
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem' }}>
+              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: isMobilePortrait ? '0.62rem' : '0.68rem' }}>
                 Pelepasan automatik selepas panel ditutup
               </Typography>
             </Box>
