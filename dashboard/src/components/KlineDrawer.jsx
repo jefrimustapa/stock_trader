@@ -61,10 +61,17 @@ export function KlineDrawer({ open, onClose, stock }) {
   const handleShowRecent = () => {
     if (!chartInstanceRef.current || !klineData?.candles?.length) return;
     const total = klineData.candles.length;
-    chartInstanceRef.current.timeScale().setVisibleLogicalRange({
-      from: Math.max(0, total - (isMobile ? 25 : 42)),
-      to: total + 2,
-    });
+    if (total < 10) {
+      chartInstanceRef.current.timeScale().setVisibleLogicalRange({
+        from: -15,
+        to: 15,
+      });
+    } else {
+      chartInstanceRef.current.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, total - (isMobile ? 25 : 42)),
+        to: total + 2,
+      });
+    }
   };
 
   const handleFitAll = () => {
@@ -315,14 +322,21 @@ export function KlineDrawer({ open, onClose, stock }) {
     candleSeries.setData(formattedCandles);
     volumeSeries.setData(formattedVolumes);
 
-    // Initial comfortable zoom showing the latest 40 candles (not squeezed 150)
+    // Initial comfortable zoom showing the latest 40 candles (or natural spacing if < 10 candles)
     const totalBars = formattedCandles.length;
     if (totalBars > 0) {
-      const visibleCount = Math.min(totalBars, isMobile ? 25 : 42);
-      chart.timeScale().setVisibleLogicalRange({
-        from: Math.max(0, totalBars - visibleCount),
-        to: totalBars + 2,
-      });
+      if (totalBars < 10) {
+        chart.timeScale().setVisibleLogicalRange({
+          from: -15,
+          to: 15,
+        });
+      } else {
+        const visibleCount = Math.min(totalBars, isMobile ? 25 : 42);
+        chart.timeScale().setVisibleLogicalRange({
+          from: Math.max(0, totalBars - visibleCount),
+          to: totalBars + 2,
+        });
+      }
     }
 
     // Subscribe to crosshair move for interactive OHLC HUD
@@ -972,6 +986,48 @@ export function KlineDrawer({ open, onClose, stock }) {
                 </Typography>
               </Box>
             </Box>
+
+            {/* Contextual Notice for Newly Listed Stocks (<= 3 daily candles) */}
+            {interval === 'day' && klineData?.candles?.length <= 3 && (
+              <Box
+                sx={{
+                  mb: 1.5,
+                  px: 2,
+                  py: 1,
+                  borderRadius: 1.5,
+                  backgroundColor: 'rgba(3, 195, 236, 0.08)',
+                  border: `1px solid ${sneatTokens.info.main}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 18, color: sneatTokens.info.main }} />
+                  <Typography variant="caption" sx={{ color: sneatTokens.info.main, fontWeight: 700 }}>
+                    Saham Penyenaraian Baharu (IPO): Hanya {klineData.candles.length} hari dagangan wujud sejak penyenaraian di bursa.
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => setInterval('15m')}
+                  sx={{
+                    py: 0.25,
+                    px: 1.25,
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    backgroundColor: sneatTokens.info.main,
+                    '&:hover': { backgroundColor: sneatTokens.info.dark },
+                  }}
+                >
+                  Papar Lilin 15M (Intraday)
+                </Button>
+              </Box>
+            )}
 
             {/* TradingView Canvas Container */}
             <Box

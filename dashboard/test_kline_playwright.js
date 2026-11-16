@@ -125,6 +125,11 @@ async function runSuite() {
       assertCheck('Interactive OHLC HUD bar rendered above chart', ohlcHud);
       const zoomBtnRecent = drawer.locator('button:has-text("40 Lilin")');
       assertCheck('Zoom control "40 Lilin" button rendered', (await zoomBtnRecent.count()) > 0);
+
+      // Screenshot 1D view for US.VVVV showing new IPO notice and proportional single candle
+      const vvvvScreenshotPath = path.join(QA_DIR, 'kline-watchlist-vvvv-1d.png');
+      await page.screenshot({ path: vvvvScreenshotPath });
+      assertCheck(`Captured US.VVVV 1D screenshot to ${vvvvScreenshotPath}`, fs.existsSync(vvvvScreenshotPath));
     }
 
     // 5. Test switching timeframe to 15M
