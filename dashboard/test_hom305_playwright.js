@@ -131,10 +131,7 @@ async function runSuite() {
 
     const capitalPanelText = await page.innerText('#tab-panel-capital');
     assertCheck('Tab 1 contains "Had Siling Modal Maksimum (Limit Buying Power)"', capitalPanelText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
-    assertCheck('Tab 1 contains "Prinsip Perlindungan Modal & Sizing Posisi Ejen"', capitalPanelText.includes('Prinsip Perlindungan Modal & Sizing Posisi Ejen'));
-    assertCheck('Tab 1 mentions Haziq (L2 Quant Analyst)', capitalPanelText.includes('Haziq (L2 Quant Analyst)'));
-    assertCheck('Tab 1 mentions Danial (L3 Risk Auditor)', capitalPanelText.includes('Danial (L3 Risk Auditor)'));
-    assertCheck('Tab 1 mentions Live WAL Sync (Zero Downtime)', capitalPanelText.includes('Live WAL Sync (Zero Downtime)'));
+    assertCheck('Tab 1 does NOT contain cliché "Prinsip Perlindungan Modal" card (HOM-305 feedback)', !capitalPanelText.includes('Prinsip Perlindungan Modal & Sizing Posisi Ejen'));
 
     // Verify Capital Input Field & Presets
     const bpInputTab1 = page.locator('#inputMaxBuyingPower');
@@ -237,6 +234,22 @@ async function runSuite() {
     const mobileTab1Shot = path.join(QA_DIR, 'hom305-settings-tab1-mobile.png');
     await mobilePage.screenshot({ path: mobileTab1Shot, fullPage: true });
     assertCheck('Screenshot captured: hom305-settings-tab1-mobile.png', fs.existsSync(mobileTab1Shot));
+
+    // -----------------------------------------------------------------------
+    // Part E: Agents Page Feedback Verification (Real Data, Passed Counters, Color Coding)
+    // -----------------------------------------------------------------------
+    console.log('\n[Part E: Agents Page Verification & Color Coding]');
+    await page.goto(`${TARGET_URL}/#/agents`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(1000);
+
+    const agentsText = await page.innerText('body');
+    assertCheck('Agents Page displays "Kaunter Semasa Lulus" metric', agentsText.includes('Kaunter Semasa Lulus'));
+    assertCheck('Agents Page removed cliché labels "L1: " / "L2: "', !agentsText.includes('L1: 1 Lulus') && !agentsText.includes('L2: 1 Lulus'));
+    assertCheck('Agents Page removed cliché chips "(L1_TECHNICAL)" / "(L4_DISPATCH)"', !agentsText.includes('(L1_TECHNICAL)') && !agentsText.includes('(L4_DISPATCH)'));
+
+    const agentsScreenshot = path.join(QA_DIR, 'hom305-agents-passed-counters.png');
+    await page.screenshot({ path: agentsScreenshot, fullPage: true });
+    assertCheck('Screenshot captured: hom305-agents-passed-counters.png', fs.existsSync(agentsScreenshot));
 
     console.log('\n================================================================');
     console.log(`  HOM-305 Playwright Suite Finished: ${passedTests} / ${totalTests} passed`);

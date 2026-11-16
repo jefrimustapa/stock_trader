@@ -136,6 +136,8 @@ export function AgentsPage() {
   const stats = activityData?.stats || {};
   const cycles = activityData?.cycles || [];
   const latestCycle = cycles[0] || null;
+  const approvedCount = deliberations.filter((d) => d.final_decision?.includes('APPROVED')).length;
+  const totalCandidatesCount = deliberations.length || latestCycle?.total_candidates || 0;
 
   return (
     <Box sx={{ width: '100%', py: 1 }}>
@@ -252,24 +254,33 @@ export function AgentsPage() {
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
               <Chip
-                label={`L1: ${latestCycle?.passed_l1 ?? 0} Lulus`}
-                size="small"
-                sx={{ fontWeight: 700, bgcolor: sneatTokens.info.soft, color: sneatTokens.info.main }}
+                id="chip-actual-passed-count"
+                icon={<CheckCircleIcon sx={{ fontSize: 18 }} />}
+                label={`Kaunter Semasa Lulus: ${approvedCount} / ${totalCandidatesCount}`}
+                size="medium"
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  bgcolor: approvedCount > 0 ? sneatTokens.success.soft : 'action.hover',
+                  color: approvedCount > 0 ? sneatTokens.success.main : 'text.secondary',
+                  border: '1px solid',
+                  borderColor: approvedCount > 0 ? sneatTokens.success.main : 'divider',
+                  '& .MuiChip-icon': {
+                    color: approvedCount > 0 ? sneatTokens.success.main : 'text.secondary',
+                  },
+                }}
               />
               <Chip
-                label={`L2: ${latestCycle?.passed_l2 ?? 0} Lulus`}
-                size="small"
-                sx={{ fontWeight: 700, bgcolor: sneatTokens.primary.soft, color: sneatTokens.primary.main }}
-              />
-              <Chip
-                label={`L3: ${latestCycle?.passed_l3 ?? 0} Lulus`}
-                size="small"
-                sx={{ fontWeight: 700, bgcolor: sneatTokens.warning.soft, color: sneatTokens.warning.main }}
-              />
-              <Chip
-                label={`L4: ${latestCycle?.orders_placed ?? orders.length} Pesanan`}
-                size="small"
-                sx={{ fontWeight: 700, bgcolor: sneatTokens.success.soft, color: sneatTokens.success.main }}
+                label={`Pesanan Dijana: ${latestCycle?.orders_placed ?? orders.length}`}
+                size="medium"
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  bgcolor: sneatTokens.primary.soft,
+                  color: sneatTokens.primary.main,
+                  border: '1px solid',
+                  borderColor: sneatTokens.primary.main,
+                }}
               />
               {latestCycle?.cycle_id && (
                 <Chip
@@ -472,9 +483,19 @@ export function AgentsPage() {
       {/* Candidate Selector Tabs */}
       {deliberations.length > 0 && (
         <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'text.secondary' }}>
-            PILIH CALON SAHAM UNTUK MENELITI LOG DELIBERASI EJEN:
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+              PILIH CALON SAHAM UNTUK MENELITI LOG DELIBERASI EJEN:
+            </Typography>
+            <Chip
+              id="chip-actual-passed-summary"
+              label={`${approvedCount} Lulus / ${totalCandidatesCount} Kaunter`}
+              size="small"
+              color={approvedCount > 0 ? 'success' : 'default'}
+              variant="outlined"
+              sx={{ fontWeight: 700 }}
+            />
+          </Box>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {deliberations.map((d, idx) => {
               const isSelected = idx === selectedSymbolIndex;
@@ -482,15 +503,37 @@ export function AgentsPage() {
               return (
                 <Chip
                   key={d.symbol || idx}
-                  label={`${d.symbol} (${d.stage_reached})`}
+                  id={`chip-deliberation-${d.symbol}`}
+                  label={d.symbol}
                   onClick={() => setSelectedSymbolIndex(idx)}
-                  color={isSelected ? 'primary' : 'default'}
-                  variant={isSelected ? 'filled' : 'outlined'}
                   icon={isApproved ? <CheckCircleIcon sx={{ fontSize: 16 }} /> : <CancelIcon sx={{ fontSize: 16 }} />}
                   sx={{
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    borderColor: isSelected ? sneatTokens.primary.main : 'divider',
+                    fontSize: '0.85rem',
+                    py: 0.5,
+                    px: 0.5,
+                    borderRadius: 2,
+                    ...(isApproved
+                      ? {
+                          bgcolor: isSelected ? sneatTokens.success.main : sneatTokens.success.soft,
+                          color: isSelected ? '#ffffff' : sneatTokens.success.main,
+                          borderColor: sneatTokens.success.main,
+                          border: '1px solid',
+                          boxShadow: isSelected ? '0 2px 8px rgba(113, 221, 55, 0.4)' : 'none',
+                          '& .MuiChip-icon': {
+                            color: isSelected ? '#ffffff' : sneatTokens.success.main,
+                          },
+                        }
+                      : {
+                          bgcolor: isSelected ? 'action.selected' : 'action.hover',
+                          color: 'text.secondary',
+                          borderColor: isSelected ? 'primary.main' : 'divider',
+                          border: '1px solid',
+                          '& .MuiChip-icon': {
+                            color: 'text.disabled',
+                          },
+                        }),
                   }}
                 />
               );
