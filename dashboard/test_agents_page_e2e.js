@@ -9,11 +9,7 @@ const path = require('path');
 const fs = require('fs');
 
 const TARGET_URL = process.env.TEST_URL || 'https://stock-trader.beta.julietmike.net';
-const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN;
-if (!SERVICE_TOKEN) {
-  console.error('Fatal Configuration Error: BRIDGE_SERVICE_TOKEN environment variable is required.');
-  process.exit(1);
-}
+const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN || '';
 const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || '/qa';
 
 console.log('================================================================');
@@ -53,20 +49,22 @@ async function runSuite() {
     });
 
     const parsedTarget = new URL(TARGET_URL);
-    await desktopContext.addCookies([
-      {
-        name: 'x_service_token',
-        value: SERVICE_TOKEN,
-        domain: parsedTarget.hostname,
-        path: '/',
-      },
-      {
-        name: 'authentik_service_token',
-        value: SERVICE_TOKEN,
-        domain: parsedTarget.hostname,
-        path: '/',
-      },
-    ]);
+    if (SERVICE_TOKEN) {
+      await desktopContext.addCookies([
+        {
+          name: 'x_service_token',
+          value: SERVICE_TOKEN,
+          domain: parsedTarget.hostname,
+          path: '/',
+        },
+        {
+          name: 'authentik_service_token',
+          value: SERVICE_TOKEN,
+          domain: parsedTarget.hostname,
+          path: '/',
+        },
+      ]);
+    }
 
     const page = await desktopContext.newPage();
     const consoleErrors = [];
@@ -126,20 +124,22 @@ async function runSuite() {
       viewport: { width: 390, height: 844 },
       ignoreHTTPSErrors: true,
     });
-    await mobileContext.addCookies([
-      {
-        name: 'x_service_token',
-        value: SERVICE_TOKEN,
-        domain: parsedTarget.hostname,
-        path: '/',
-      },
-      {
-        name: 'authentik_service_token',
-        value: SERVICE_TOKEN,
-        domain: parsedTarget.hostname,
-        path: '/',
-      },
-    ]);
+    if (SERVICE_TOKEN) {
+      await mobileContext.addCookies([
+        {
+          name: 'x_service_token',
+          value: SERVICE_TOKEN,
+          domain: parsedTarget.hostname,
+          path: '/',
+        },
+        {
+          name: 'authentik_service_token',
+          value: SERVICE_TOKEN,
+          domain: parsedTarget.hostname,
+          path: '/',
+        },
+      ]);
+    }
 
     const mobilePage = await mobileContext.newPage();
     await mobilePage.goto(`${TARGET_URL}/#/agents`, { waitUntil: 'networkidle', timeout: 30000 });
