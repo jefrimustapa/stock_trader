@@ -55,3 +55,4 @@ playwright_screenshots/
 .vscode/
 .claude/
 .pytest_cache/
+qa-artifacts/

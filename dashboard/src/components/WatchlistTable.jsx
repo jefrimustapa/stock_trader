@@ -22,10 +22,19 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import TuneIcon from '@mui/icons-material/Tune';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
 import { sneatTokens } from '../theme';
+import { KlineDrawer } from './KlineDrawer';
 
 export function WatchlistTable({ dataPayload }) {
   const [laneFilter, setLaneFilter] = useState('ALL');
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleRowClick = (stock) => {
+    setSelectedStock(stock);
+    setDrawerOpen(true);
+  };
 
   const watchlistData = dataPayload?.watchlist || {};
   const rawItems = Array.isArray(watchlistData)
@@ -98,6 +107,18 @@ export function WatchlistTable({ dataPayload }) {
           </Tabs>
 
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1, pb: { xs: 1, md: 0 } }}>
+            <Chip
+              size="small"
+              icon={<ShowChartIcon sx={{ fontSize: '13px !important' }} />}
+              label="Klik baris untuk K-line"
+              sx={{
+                fontWeight: 600,
+                fontSize: '0.72rem',
+                backgroundColor: sneatTokens.primary.soft,
+                color: sneatTokens.primary.main,
+                borderRadius: 1.5,
+              }}
+            />
             <Chip
               size="small"
               icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important' }} />}
@@ -203,12 +224,14 @@ export function WatchlistTable({ dataPayload }) {
                       <TableRow
                         key={row.symbol || idx}
                         hover
+                        onClick={() => handleRowClick(row)}
                         sx={{
+                          cursor: 'pointer',
                           transition: 'background-color 0.15s',
                           '&:hover': {
                             backgroundColor: (theme) => theme.palette.mode === 'dark'
-                              ? 'rgba(255, 255, 255, 0.04)'
-                              : 'rgba(67, 89, 113, 0.04)',
+                              ? 'rgba(105, 108, 255, 0.08)'
+                              : 'rgba(105, 108, 255, 0.05)',
                           },
                           '&:last-child td, &:last-child th': { border: 0 },
                         }}
@@ -228,16 +251,21 @@ export function WatchlistTable({ dataPayload }) {
                             pl: 2.5,
                           }}
                         >
-                          <Typography
-                            variant="subtitle2"
-                            sx={{
-                              fontWeight: 700,
-                              color: sneatTokens.primary.main,
-                              letterSpacing: '0.02em',
-                            }}
-                          >
-                            {row.symbol}
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 700,
+                                color: sneatTokens.primary.main,
+                                letterSpacing: '0.02em',
+                              }}
+                            >
+                              {row.symbol}
+                            </Typography>
+                            <Tooltip title="Klik untuk graf K-line">
+                              <ShowChartIcon sx={{ fontSize: 16, color: sneatTokens.primary.main, opacity: 0.65 }} />
+                            </Tooltip>
+                          </Box>
                         </TableCell>
 
                         <TableCell>
@@ -342,6 +370,12 @@ export function WatchlistTable({ dataPayload }) {
           </TableContainer>
         </CardContent>
       </Card>
+
+      <KlineDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        stock={selectedStock}
+      />
     </Box>
   );
 }

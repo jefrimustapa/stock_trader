@@ -940,6 +940,108 @@ app.get('/api/screener/kline-quota', authenticateDashboard, async (req, res) => 
     }
 });
 
+// In-Memory K-Line Cache
+const klineCacheMap = new Map();
+
+function getKlineTtlMs(interval) {
+    if (interval === 'day') {
+        return 30 * 1000; // 30s
+    }
+    return 10 * 1000; // 10s for 15m, 5m, 1m
+}
+
+app.get('/api/kline', authenticateDashboard, async (req, res) => {
+    try {
+        const symbol = req.query.symbol;
+        if (!symbol || typeof symbol !== 'string') {
+            return res.status(400).json({ error: 'Parameter symbol diperlukan' });
+        }
+        const interval = String(req.query.interval || 'day').toLowerCase();
+        const num = parseInt(req.query.num || '100', 10) || 100;
+
+        const cacheKey = `${symbol.toUpperCase()}:${interval}`;
+        const cached = klineCacheMap.get(cacheKey);
+        const ttl = getKlineTtlMs(interval);
+        const now = Date.now();
+
+        if (cached && (now - cached.timestamp < ttl)) {
+            return res.json({
+                ...cached.data,
+                cached: true
+            });
+        }
+
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(503).json({
+                status: 'UNAVAILABLE',
+                connected: false,
+                symbol,
+                interval,
+                candles: [],
+                error: 'Bridge service token tidak dikonfigurasi'
+            });
+        }
+
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/kline`, {
+            params: { symbol, interval, num },
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 6000
+        });
+
+        const result = bridgeRes.data;
+        if (result.status === 'HEALTHY') {
+            klineCacheMap.set(cacheKey, {
+                data: result,
+                timestamp: now
+            });
+        }
+
+        return res.json({
+            ...result,
+            cached: false
+        });
+    } catch (err) {
+        let errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        if (/ECONNREFUSED|Connection refused|not reachable|ENOTFOUND|EAI_AGAIN|connect/i.test(errMsg)) {
+            errMsg = 'Moomoo OpenD tidak dapat dihubungi';
+        } else if (/ETIMEDOUT|timeout/i.test(errMsg)) {
+            errMsg = 'Sambungan ke Moomoo OpenD tamat masa';
+        }
+        return res.status(200).json({
+            status: 'UNAVAILABLE',
+            connected: false,
+            symbol: req.query.symbol || '',
+            interval: req.query.interval || 'day',
+            candles: [],
+            error: errMsg
+        });
+    }
+});
+
+app.post('/api/kline/release', authenticateDashboard, async (req, res) => {
+    try {
+        const { symbol, interval } = req.body || {};
+        if (!symbol || typeof symbol !== 'string') {
+            return res.status(400).json({ error: 'Parameter symbol diperlukan' });
+        }
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(200).json({ status: 'OK', released: symbol, active: false });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.post(`${targetUrl}/api/v1/kline/release`, {
+            symbol,
+            interval: interval || 'day'
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 4000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        return res.status(200).json({ status: 'OK', released: req.body?.symbol, error: err.message });
+    }
+});
+
 app.get('/api/data', authenticateDashboard, async (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
