@@ -99,7 +99,16 @@ async function authenticateDashboard(req, res, next) {
         return res.status(401).json({ error: 'Invalid service token' });
     }
 
-    // 2. Check Authentik JWT Assertion (Header X-authentik-jwt, Authorization Bearer, or Cookie)
+    // 2. Check Authentik Forward Auth Headers (injected by NPM / Authentik Outpost)
+    const forwardAuthUsername = (req.headers['x-authentik-username'] || '').trim();
+    const forwardAuthEmail = (req.headers['x-authentik-email'] || '').trim();
+    const forwardAuthName = (req.headers['x-authentik-name'] || '').trim();
+    if (forwardAuthUsername || forwardAuthEmail || forwardAuthName) {
+        req.authUser = forwardAuthUsername || forwardAuthEmail || forwardAuthName;
+        return next();
+    }
+
+    // 3. Check Authentik JWT Assertion (Header X-authentik-jwt, Authorization Bearer, or Cookie)
     let authJwt = req.headers['x-authentik-jwt'];
     if (!authJwt && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
         authJwt = req.headers.authorization.slice(7).trim();
