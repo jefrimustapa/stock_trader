@@ -277,16 +277,16 @@ async function runDashboardTests() {
             assert.strictEqual(wrongIssRes.statusCode, 401, `Expected 401 for wrong issuer, got ${wrongIssRes.statusCode}`);
             console.log('✓ PASS: RS256 JWT with mismatched issuer rejected with 401');
 
-            // Test 2f: GET /logout endpoint must redirect to Authentik SSO invalidation flow (HOM-156)
-            // SDLC #8 (HOM-154 & HOM-156): Clear-Site-Data must NOT contain "cookies", stock-trader cookies are cleared,
-            // and destination is Authentik SSO invalidation flow (https://auth.julietmike.net/flows/-/default/invalidation/)
+            // Test 2f (HOM-156 & HOM-158): GET /logout endpoint must redirect to Authentik SSO invalidation flow
+            // with ?next=https%3A%2F%2Fstock-trader.beta.julietmike.net%2F post-logout redirect
+            const expectedLogoutRedirect = 'https://auth.julietmike.net/flows/-/default/invalidation/?next=https%3A%2F%2Fstock-trader.beta.julietmike.net%2F';
             const logoutRes = await makeRequest(testPort2, {
                 cookie: 'authentik_proxy_session=mock-proxy-cookie; authentik_jwt=mock-jwt; paperclip_session=safe-paperclip-token; CF_Authorization=safe-cf-token; other_user_cookie=keep-me; ; =malformed'
             }, '/logout');
             assert.strictEqual(logoutRes.statusCode, 302, `Expected 302 for /logout, got ${logoutRes.statusCode}`);
             assert.ok(logoutRes.headers.location, 'Location header must be present');
-            assert.strictEqual(logoutRes.headers.location, 'https://auth.julietmike.net/flows/-/default/invalidation/',
-                `Expected redirect to Authentik SSO invalidation flow, got: ${logoutRes.headers.location}`);
+            assert.strictEqual(logoutRes.headers.location, expectedLogoutRedirect,
+                `HOM-158: Expected redirect to Authentik SSO invalidation flow with next param, got: ${logoutRes.headers.location}`);
             assert.ok(logoutRes.headers['clear-site-data'], 'Clear-Site-Data header must be set');
             assert.ok(!logoutRes.headers['clear-site-data'].includes('cookies'),
                 `Security violation (HOM-154): Clear-Site-Data must NOT include "cookies", got: ${logoutRes.headers['clear-site-data']}`);
@@ -300,25 +300,25 @@ async function runDashboardTests() {
             assert.ok(!setCookies.some(c => c.startsWith('paperclip_session=')), 'Must NOT clear paperclip_session cookie');
             assert.ok(!setCookies.some(c => c.startsWith('CF_Authorization=')), 'Must NOT clear CF_Authorization cookie');
             assert.ok(!setCookies.some(c => c.startsWith('other_user_cookie=')), 'Must NOT clear other_user_cookie');
-            console.log('✓ PASS: /logout redirects to Authentik SSO invalidation, omits "cookies" from Clear-Site-Data, and preserves Paperclip/CF cookies');
+            console.log('✓ PASS: /logout redirects to Authentik SSO invalidation with next param, omits "cookies" from Clear-Site-Data, and preserves Paperclip/CF cookies');
 
             // Test 2f-BVA: Boundary Value Analysis for /logout cookie parsing & preservation
             const bvaEmptyCookieRes = await makeRequest(testPort2, {}, '/logout');
             assert.strictEqual(bvaEmptyCookieRes.statusCode, 302);
-            assert.strictEqual(bvaEmptyCookieRes.headers.location, 'https://auth.julietmike.net/flows/-/default/invalidation/');
+            assert.strictEqual(bvaEmptyCookieRes.headers.location, expectedLogoutRedirect);
             assert.strictEqual(bvaEmptyCookieRes.headers['clear-site-data'], '"cache", "storage"');
             const bvaCookies = bvaEmptyCookieRes.headers['set-cookie'] || [];
             assert.ok(bvaCookies.some(c => c.startsWith('authentik_jwt=')), 'Must still clear authentik_jwt');
             assert.ok(bvaCookies.some(c => c.startsWith('authentik_session=')), 'Must still clear authentik_session');
             assert.ok(bvaCookies.some(c => c.startsWith('x_service_token=')), 'Must still clear x_service_token');
-            console.log('✓ PASS: BVA - /logout handles request with no cookie header safely');
+            console.log('✓ PASS: BVA - /logout handles request with no cookie header safely and preserves next param');
 
-            // Test 2f-2 (HOM-156): Authentik SSO invalidation flow is NOT overridden or blocked
+            // Test 2f-2 (HOM-156 & HOM-158): Authentik SSO invalidation flow appends ?next parameter if missing from raw config
             const ssoLogoutRes = await makeRequest(testPort, {}, '/logout');
             assert.strictEqual(ssoLogoutRes.statusCode, 302, `Expected 302 for /logout, got ${ssoLogoutRes.statusCode}`);
-            assert.strictEqual(ssoLogoutRes.headers.location, 'https://auth.julietmike.net/flows/-/default/invalidation/',
-                `HOM-156: Configured or default invalidation URL must NOT be overridden to outpost sign_out, got: ${ssoLogoutRes.headers.location}`);
-            console.log('✓ PASS: Authentik SSO invalidation flow is allowed and active without override');
+            assert.strictEqual(ssoLogoutRes.headers.location, expectedLogoutRedirect,
+                `HOM-158: Configured invalidation URL without next param must automatically append next param, got: ${ssoLogoutRes.headers.location}`);
+            console.log('✓ PASS: Authentik SSO invalidation flow automatically appends ?next parameter if missing');
 
             // Test 2h (SDLC #8 defect regression): 401 on invalid/expired JWT must NOT leak err.message
             const expiredJwt = jwt.sign(
