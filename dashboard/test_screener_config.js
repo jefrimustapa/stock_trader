@@ -131,7 +131,9 @@ async function runTests() {
         check('Default min_price is 10.0', defaultRes.data.config.min_price === 10.0);
         check('Default min_market_cap is 1,000,000,000', defaultRes.data.config.min_market_cap === 1000000000.0);
         check('Default min_volume is 1,000,000', defaultRes.data.config.min_volume === 1000000.0);
+        check('Default max_candidates_per_lane is 5', defaultRes.data.config.max_candidates_per_lane === 5);
         check('Safety limit min_price.min is 1.0', defaultRes.data.limits.min_price.min === 1.0);
+        check('Limit max_candidates_per_lane is 1 to 20', defaultRes.data.limits.max_candidates_per_lane.min === 1 && defaultRes.data.limits.max_candidates_per_lane.max === 20);
 
         // Test 3: Boundary Value Analysis (BVA) on min_price
         console.log('\n--- 4. BVA: min_price Boundary ($0.99 vs $1.00 vs $1.01) ---');
@@ -222,6 +224,55 @@ async function runTests() {
         const auditAfter = await makeRequest('/api/screener/config/audit', 'GET', authHeader);
         const countAfter = Array.isArray(auditAfter.data.audit) ? auditAfter.data.audit.length : 0;
         check('Empty Payload {}: Does NOT write audit entry', countAfter === countBefore);
+
+        // Test 6c: BVA on max_candidates_per_lane (HOM-282)
+        console.log('\n--- 6c. BVA: max_candidates_per_lane (0 vs 1 vs 20 vs 21 & decimals) (HOM-282) ---');
+        // Below minimum (0) -> Reject
+        const bvaLaneZero = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 0 });
+        check('BVA: max_candidates_per_lane 0 rejected with HTTP 400', bvaLaneZero.statusCode === 400);
+
+        // Negative (-1) -> Reject
+        const bvaLaneNeg = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: -1 });
+        check('BVA: Negative max_candidates_per_lane (-1) rejected with HTTP 400', bvaLaneNeg.statusCode === 400);
+
+        // Above maximum (21) -> Reject
+        const bvaLane21 = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 21 });
+        check('BVA: max_candidates_per_lane 21 rejected with HTTP 400', bvaLane21.statusCode === 400);
+
+        // Extreme value (100) -> Reject
+        const bvaLane100 = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 100 });
+        check('BVA: Extreme max_candidates_per_lane (100) rejected with HTTP 400', bvaLane100.statusCode === 400);
+
+        // Decimal (5.5) -> Reject (must be strict integer)
+        const bvaLaneDecimal = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 5.5 });
+        check('BVA: Decimal max_candidates_per_lane (5.5) rejected with HTTP 400', bvaLaneDecimal.statusCode === 400);
+
+        // String non-number -> Reject
+        const bvaLaneStr = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 'invalid' });
+        check('BVA: String max_candidates_per_lane ("invalid") rejected with HTTP 400', bvaLaneStr.statusCode === 400);
+
+        // Boolean -> Reject
+        const bvaLaneBool = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: true });
+        check('BVA: Boolean max_candidates_per_lane (true) rejected with HTTP 400', bvaLaneBool.statusCode === 400);
+
+        // Boundary Minimum (1) -> Accept
+        const bvaLaneMin = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 1 });
+        check('BVA: Minimum boundary (1) accepted with HTTP 200', bvaLaneMin.statusCode === 200);
+        check('BVA: Config updated max_candidates_per_lane to 1', bvaLaneMin.data.config.max_candidates_per_lane === 1);
+
+        // Boundary Maximum (20) -> Accept
+        const bvaLaneMax = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 20 });
+        check('BVA: Maximum boundary (20) accepted with HTTP 200', bvaLaneMax.statusCode === 200);
+        check('BVA: Config updated max_candidates_per_lane to 20', bvaLaneMax.data.config.max_candidates_per_lane === 20);
+
+        // Target Value (8) -> Accept
+        const bvaLaneTarget = await makeRequest('/api/screener/config', 'PATCH', authHeader, { max_candidates_per_lane: 8 });
+        check('BVA: Target value (8) accepted with HTTP 200', bvaLaneTarget.statusCode === 200);
+        check('BVA: Config updated max_candidates_per_lane to 8', bvaLaneTarget.data.config.max_candidates_per_lane === 8);
+
+        // Verify GET persistence
+        const verifyGet = await makeRequest('/api/screener/config', 'GET', authHeader);
+        check('Persistence: GET /api/screener/config confirms max_candidates_per_lane is 8', verifyGet.data.config.max_candidates_per_lane === 8);
 
         // Test 7: Audit Trail & Data Integrity
         console.log('\n--- 7. Audit Trail & SQLite Persistence Verification ---');

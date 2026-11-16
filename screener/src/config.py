@@ -33,6 +33,7 @@ class ScreenerConfig:
     DEFAULT_CLOUD_MIN_ADV20: float = float(os.getenv("CLOUD_MIN_ADV20", "1000000.0"))
     DEFAULT_MOM_MIN_RVOL: float = float(os.getenv("MOM_MIN_RVOL", "1.30"))
     DEFAULT_MOM_MAX_RVOL: float = float(os.getenv("MOM_MAX_RVOL", "20.00"))
+    DEFAULT_MAX_CANDIDATES_PER_LANE: int = int(os.getenv("MAX_CANDIDATES_PER_LANE", "5"))
 
     # Stage 0: Coarse Cloud Screening parameters
     CLOUD_MIN_PRICE: float = DEFAULT_CLOUD_MIN_PRICE
@@ -58,7 +59,7 @@ class ScreenerConfig:
     SETUP_MAX_ATR_PCT: float = 0.030  # ATR(14) / Price <= 3.0%
 
     # K-line Enrichment & Quota Budgeting
-    MAX_CANDIDATES_PER_LANE: int = int(os.getenv("MAX_CANDIDATES_PER_LANE", "5"))
+    MAX_CANDIDATES_PER_LANE: int = DEFAULT_MAX_CANDIDATES_PER_LANE
     MAX_NEW_SYMBOLS_PER_DAY: int = int(os.getenv("MAX_NEW_SYMBOLS_PER_DAY", "4"))
 
     @classmethod
@@ -78,12 +79,13 @@ class ScreenerConfig:
         cls.CLOUD_MIN_ADV20 = cls.DEFAULT_CLOUD_MIN_ADV20
         cls.MOM_MIN_RVOL = cls.DEFAULT_MOM_MIN_RVOL
         cls.MOM_MAX_RVOL = cls.DEFAULT_MOM_MAX_RVOL
+        cls.MAX_CANDIDATES_PER_LANE = cls.DEFAULT_MAX_CANDIDATES_PER_LANE
 
     @classmethod
     def load_active_config(cls) -> dict:
         """
         Dynamically reads active screening configuration from SQLite database.
-        Enforces hard safety floor (min_price >= $1.00).
+        Enforces hard safety floor (min_price >= $1.00) and candidate lane limits (1-20).
         If database or row is missing, resets to environment defaults.
         Returns active configuration dictionary.
         """
@@ -97,6 +99,7 @@ class ScreenerConfig:
                 "min_volume": cls.CLOUD_MIN_ADV20,
                 "min_rvol": cls.MOM_MIN_RVOL,
                 "max_rvol": cls.MOM_MAX_RVOL,
+                "max_candidates_per_lane": cls.MAX_CANDIDATES_PER_LANE,
             }
 
         try:
@@ -104,7 +107,7 @@ class ScreenerConfig:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol FROM screener_config WHERE id = 1"
+                "SELECT * FROM screener_config WHERE id = 1"
             )
             row = cursor.fetchone()
             if row:
@@ -127,6 +130,16 @@ class ScreenerConfig:
                     cls.MOM_MIN_RVOL = min_rv
                 if max_rv >= min_rv:
                     cls.MOM_MAX_RVOL = max_rv
+
+                if "max_candidates_per_lane" in row.keys() and row["max_candidates_per_lane"] is not None:
+                    try:
+                        max_lane = int(row["max_candidates_per_lane"])
+                        if 1 <= max_lane <= 20:
+                            cls.MAX_CANDIDATES_PER_LANE = max_lane
+                        else:
+                            logger.warning("max_candidates_per_lane %s out of bounds [1, 20], keeping %s", max_lane, cls.MAX_CANDIDATES_PER_LANE)
+                    except (ValueError, TypeError) as e:
+                        logger.warning("Invalid max_candidates_per_lane in db: %s", e)
             else:
                 cls.reset_to_defaults()
 
@@ -140,5 +153,6 @@ class ScreenerConfig:
             "min_volume": cls.CLOUD_MIN_ADV20,
             "min_rvol": cls.MOM_MIN_RVOL,
             "max_rvol": cls.MOM_MAX_RVOL,
+            "max_candidates_per_lane": cls.MAX_CANDIDATES_PER_LANE,
         }
 
