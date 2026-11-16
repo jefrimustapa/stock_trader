@@ -76,9 +76,15 @@ async function runSuite() {
     const hintChip = page.locator('text=Klik baris untuk K-line');
     assertCheck('Hint chip "Klik baris untuk K-line" rendered in toolbar', (await hintChip.count()) >= 1);
 
-    // 2. Click the first watchlist row (e.g. AAPL or NVDA)
-    console.log('  Clicking first watchlist row to open K-line drawer...');
-    await rows.first().click();
+    // 2. Click a valid trading watchlist row (e.g. US.VVVV or first non-OTC row)
+    const validRow = page.locator('tr:has-text("US.VVVV")');
+    if ((await validRow.count()) > 0) {
+      console.log('  Clicking US.VVVV row to test active candlestick chart...');
+      await validRow.first().click();
+    } else {
+      console.log('  Clicking first watchlist row to open K-line drawer...');
+      await rows.first().click();
+    }
     await page.waitForTimeout(1000);
 
     // 3. Verify Drawer opened
@@ -103,10 +109,11 @@ async function runSuite() {
     // 4. Verify Chart Canvas or Fallback Warning Card
     const chartContainer = page.locator('#kline-chart-container');
     const isChartVisible = await chartContainer.isVisible();
-    const isWarningVisible = await drawer.locator('text=Data Graf K-line Moomoo Tidak Tersedia').isVisible();
+    const isWarningVisible = (await drawer.locator('text=Data Graf K-line').count() > 0) ||
+                             (await drawer.locator('text=Pasaran OTC Tidak Disokong').count() > 0);
 
     assertCheck(
-      'Drawer either rendered TradingView chart canvas OR fail-closed warning card',
+      'Drawer either rendered TradingView chart canvas OR fail-closed/OTC info card',
       isChartVisible || isWarningVisible
     );
 
@@ -174,6 +181,71 @@ async function runSuite() {
     assertCheck(`Captured mobile screenshot to ${mobileScreenshotPath}`, fs.existsSync(mobileScreenshotPath));
 
     await mobileContext.close();
+
+    // -------------------------------------------------------------------------
+    // Scenario 3: OTC Market Stock Handling (US.MGCLY)
+    // -------------------------------------------------------------------------
+    console.log('\n--- Scenario 3: OTC Market Stock Handling (US.MGCLY) ---');
+    const otcContext = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+    await otcContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+
+    const otcPage = await otcContext.newPage();
+    await otcPage.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
+    await otcPage.waitForTimeout(500);
+
+    // Locate the row with US.MGCLY
+    const mgclyRow = otcPage.locator('tr:has-text("US.MGCLY")');
+    if ((await mgclyRow.count()) > 0) {
+      console.log('  Found US.MGCLY row in Watchlist table...');
+      const otcChipInTable = mgclyRow.locator('text=OTC');
+      assertCheck('OTC chip badge rendered in table row for US.MGCLY', (await otcChipInTable.count()) >= 1);
+
+      console.log('  Clicking US.MGCLY row to open drawer...');
+      await mgclyRow.first().click();
+      await otcPage.waitForTimeout(1000);
+
+      const otcDrawer = otcPage.locator('.MuiDrawer-paperAnchorRight');
+      assertCheck('Drawer opened for US.MGCLY', await otcDrawer.isVisible());
+
+      // Verify OTC title
+      const otcTitle = otcDrawer.locator('text=Pasaran OTC Tidak Disokong Moomoo OpenAPI');
+      assertCheck('Drawer displays accurate title "Pasaran OTC Tidak Disokong Moomoo OpenAPI"', (await otcTitle.count()) >= 1);
+
+      // Verify OTC chip
+      const otcChipInDrawer = otcDrawer.locator('text=US OTC Market · Tiada Suapan Data Moomoo');
+      assertCheck('Drawer displays "US OTC Market · Tiada Suapan Data Moomoo" chip', (await otcChipInDrawer.count()) >= 1);
+
+      // Verify NO misleading "Buka Panel Kawalan OpenD" button
+      const openDButton = otcDrawer.locator('text=Buka Panel Kawalan OpenD');
+      assertCheck('Does NOT display misleading "Buka Panel Kawalan OpenD" button', (await openDButton.count()) === 0);
+
+      // Verify "Tutup Panel" and "Lihat di Yahoo Finance" buttons exist
+      const closePanelBtn = otcDrawer.getByRole('button', { name: 'Tutup Panel', exact: true });
+      const yahooBtn = otcDrawer.getByRole('link', { name: /Yahoo Finance/i });
+      assertCheck('"Tutup Panel" action button visible', await closePanelBtn.isVisible());
+      assertCheck('"Lihat di Yahoo Finance" link visible', await yahooBtn.isVisible());
+
+      const otcScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-otc.png');
+      await otcPage.screenshot({ path: otcScreenshotPath });
+      assertCheck(`Captured OTC drawer screenshot to ${otcScreenshotPath}`, fs.existsSync(otcScreenshotPath));
+
+      await closePanelBtn.click();
+      await otcPage.waitForTimeout(400);
+      assertCheck('Drawer closed when "Tutup Panel" clicked', !(await otcDrawer.isVisible()));
+    } else {
+      console.log('  US.MGCLY not found in current watchlist; skipping row click test.');
+    }
+
+    await otcContext.close();
 
     console.log('\n================================================================');
     console.log(`  E2E Test Suite Completed: ${passedTests}/${totalTests} Passed`);

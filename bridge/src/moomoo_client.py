@@ -254,9 +254,36 @@ class SubscriptionManager:
 
                 ret, sub_data = ctx.subscribe([norm_sym], [subtype])
                 if ret != RET_OK:
+                    err_str = str(sub_data or "")
+                    is_otc = "OTC" in err_str.upper()
+                    is_not_avail = "NOT AVAILABLE" in err_str.upper()
+                    if is_otc:
+                        return {
+                            "status": "UNSUPPORTED",
+                            "error_type": "OTC_MARKET",
+                            "connected": True,
+                            "opend_status": conn_status,
+                            "symbol": norm_sym,
+                            "interval": norm_int,
+                            "candles": [],
+                            "error": f"Kaunter pasaran OTC ({norm_sym}) tidak disokong untuk data K-line oleh Moomoo OpenAPI"
+                        }
+                    elif is_not_avail:
+                        return {
+                            "status": "UNSUPPORTED",
+                            "error_type": "QUOTE_NOT_AVAILABLE",
+                            "connected": True,
+                            "opend_status": conn_status,
+                            "symbol": norm_sym,
+                            "interval": norm_int,
+                            "candles": [],
+                            "error": f"Sebut harga K-line tidak tersedia untuk {norm_sym}: {err_str}"
+                        }
                     return {
                         "status": "ERROR",
+                        "error_type": "SUBSCRIPTION_FAILED",
                         "connected": True,
+                        "opend_status": conn_status,
                         "symbol": norm_sym,
                         "interval": norm_int,
                         "candles": [],

@@ -191,6 +191,27 @@ class TestKlineSubscriptionBVA(unittest.TestCase):
         self.assertEqual(res["status"], "ERROR")
         self.assertIn("penuh", res["error"])
 
+    def test_get_kline_otc_market_unsupported_returns_structured_unsupported_status(self):
+        """
+        SDLC Step 8: Regression test for OTC market stocks (e.g. US.MGCLY).
+        When OpenD rejects subscription with OTC error, it must return status UNSUPPORTED,
+        error_type OTC_MARKET, and connected True (so UI does not wrongly blame OpenD disconnection).
+        """
+        self.client._connected = True
+        self.client._last_status = "CONNECTED"
+
+        class OtcRejectQuoteContext:
+            def subscribe(self, code_list, subtype_list):
+                return -1, "US OTC market quote is not available for MGCLY."
+
+        self.client._quote_ctx = OtcRejectQuoteContext()
+
+        res = self.mgr.get_kline("US.MGCLY", "day")
+        self.assertEqual(res["status"], "UNSUPPORTED")
+        self.assertEqual(res["error_type"], "OTC_MARKET")
+        self.assertTrue(res["connected"])
+        self.assertIn("OTC", res["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

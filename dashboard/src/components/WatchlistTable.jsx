@@ -262,6 +262,22 @@ export function WatchlistTable({ dataPayload }) {
                             >
                               {row.symbol}
                             </Typography>
+                            {Boolean(row.symbol && row.symbol.replace(/^US\./, '').length === 5 && (row.symbol.endsWith('Y') || row.symbol.endsWith('F'))) && (
+                              <Tooltip title="Kaunter pasaran Over-The-Counter (OTC) US (Tiada suapan K-line Moomoo)">
+                                <Chip
+                                  size="small"
+                                  label="OTC"
+                                  sx={{
+                                    height: 18,
+                                    fontSize: '0.62rem',
+                                    fontWeight: 700,
+                                    backgroundColor: sneatTokens.info.soft,
+                                    color: sneatTokens.info.main,
+                                    cursor: 'help',
+                                  }}
+                                />
+                              </Tooltip>
+                            )}
                             <Tooltip title="Klik untuk graf K-line">
                               <ShowChartIcon sx={{ fontSize: 16, color: sneatTokens.primary.main, opacity: 0.65 }} />
                             </Tooltip>
