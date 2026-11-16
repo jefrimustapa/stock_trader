@@ -22,8 +22,15 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import axios from 'axios';
-import { createChart, ColorType, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { sneatTokens } from '../theme';
+
+function formatVol(val) {
+  const n = Number(val || 0);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n > 0 ? n.toFixed(0) : '0';
+}
 
 const TIMEFRAMES = [
   { label: '1D', value: 'day' },
@@ -41,6 +48,7 @@ export function KlineDrawer({ open, onClose, stock }) {
   const [loading, setLoading] = useState(false);
   const [klineData, setKlineData] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [hoverOhlc, setHoverOhlc] = useState(null);
 
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
@@ -135,61 +143,81 @@ export function KlineDrawer({ open, onClose, stock }) {
     }
 
     const container = chartContainerRef.current;
+    const chartHeight = Math.max(460, container.clientHeight || 480);
     const chart = createChart(container, {
-      width: container.clientWidth || 500,
-      height: 400,
+      width: container.clientWidth || 590,
+      height: chartHeight,
       layout: {
         background: {
           type: ColorType.Solid,
-          color: isDark ? '#2B2C40' : '#FFFFFF',
+          color: isDark ? '#1E1E2D' : '#FAFAFC',
         },
-        textColor: isDark ? '#DBDBEB' : '#435971',
+        textColor: isDark ? '#A1A5B7' : '#5E6278',
+        fontSize: 12,
+        fontFamily: "'Public Sans', -apple-system, BlinkMacSystemFont, sans-serif",
       },
       grid: {
         vertLines: {
-          color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(67, 89, 113, 0.06)',
+          color: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(76, 78, 100, 0.06)',
+          style: LineStyle.Dotted,
         },
         horzLines: {
-          color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(67, 89, 113, 0.06)',
+          color: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(76, 78, 100, 0.06)',
+          style: LineStyle.Dotted,
+        },
+      },
+      rightPriceScale: {
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 78, 100, 0.12)',
+        scaleMargins: {
+          top: 0.08,
+          bottom: 0.25,
         },
       },
       timeScale: {
-        borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(67, 89, 113, 0.12)',
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 78, 100, 0.12)',
         timeVisible: interval !== 'day',
         secondsVisible: false,
+        minBarSpacing: 5,
+        rightOffset: 8,
       },
       crosshair: {
+        mode: CrosshairMode.Normal,
         vertLine: {
-          color: sneatTokens.primary.main,
+          color: 'rgba(105, 108, 255, 0.65)',
           width: 1,
-          style: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#696CFF',
         },
         horzLine: {
-          color: sneatTokens.primary.main,
+          color: 'rgba(105, 108, 255, 0.65)',
           width: 1,
-          style: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#696CFF',
         },
       },
     });
 
     chartInstanceRef.current = chart;
 
-    // Candlestick Series
+    // Candlestick Series - high contrast vibrant colors
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: sneatTokens.success.main,
-      downColor: sneatTokens.error.main,
-      borderUpColor: sneatTokens.success.main,
-      borderDownColor: sneatTokens.error.main,
-      wickUpColor: sneatTokens.success.main,
-      wickDownColor: sneatTokens.error.main,
+      upColor: '#28C76F',
+      downColor: '#EA5455',
+      borderVisible: true,
+      borderUpColor: '#28C76F',
+      borderDownColor: '#EA5455',
+      wickUpColor: '#28C76F',
+      wickDownColor: '#EA5455',
+      priceFormat: {
+        type: 'price',
+        precision: 2,
+        minMove: 0.01,
+      },
     });
 
-    // Volume Series
+    // Volume Series - histogram overlay confined strictly to bottom 20%
     const volumeSeries = chart.addSeries(HistogramSeries, {
-      color: isDark ? 'rgba(105, 108, 255, 0.4)' : 'rgba(105, 108, 255, 0.3)',
-      priceFormat: {
-        type: 'volume',
-      },
+      priceFormat: { type: 'volume' },
       priceScaleId: '', // overlay
     });
 
@@ -200,10 +228,17 @@ export function KlineDrawer({ open, onClose, stock }) {
       },
     });
 
+    candleSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.08,
+        bottom: 0.25,
+      },
+    });
+
     // Format candles for lightweight-charts
     const sortedCandles = [...klineData.candles].sort((a, b) => {
-      const ta = typeof a.time === 'number' ? a.time : (a.timestamp || 0);
-      const tb = typeof b.time === 'number' ? b.time : (b.timestamp || 0);
+      const ta = typeof a.time === 'number' ? a.time : (a.timestamp || new Date(a.time).getTime());
+      const tb = typeof b.time === 'number' ? b.time : (b.timestamp || new Date(b.time).getTime());
       return ta - tb;
     });
 
@@ -213,9 +248,14 @@ export function KlineDrawer({ open, onClose, stock }) {
     const formattedVolumes = [];
 
     for (const c of sortedCandles) {
-      const timeVal = c.time || c.timestamp;
-      if (!timeVal || seenTimes.has(timeVal)) continue;
-      seenTimes.add(timeVal);
+      let timeVal = c.time || c.timestamp;
+      if (!timeVal) continue;
+      if (typeof timeVal === 'string' && timeVal.includes(' ') && interval !== 'day') {
+        timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
+      }
+      const timeKey = String(timeVal);
+      if (seenTimes.has(timeKey)) continue;
+      seenTimes.add(timeKey);
 
       formattedCandles.push({
         time: timeVal,
@@ -229,20 +269,53 @@ export function KlineDrawer({ open, onClose, stock }) {
       formattedVolumes.push({
         time: timeVal,
         value: Number(c.volume || 0),
-        color: isUp ? 'rgba(113, 221, 55, 0.35)' : 'rgba(255, 62, 29, 0.35)',
+        color: isUp ? 'rgba(40, 199, 111, 0.45)' : 'rgba(234, 84, 85, 0.45)',
       });
     }
 
     candleSeries.setData(formattedCandles);
     volumeSeries.setData(formattedVolumes);
+
+    chart.timeScale().applyOptions({
+      barSpacing: formattedCandles.length < 30 ? 14 : 9,
+    });
     chart.timeScale().fitContent();
+
+    // Subscribe to crosshair move for interactive OHLC HUD
+    chart.subscribeCrosshairMove((param) => {
+      if (!param || !param.time || !param.seriesData) {
+        setHoverOhlc(null);
+        return;
+      }
+      const candle = param.seriesData.get(candleSeries);
+      const vol = param.seriesData.get(volumeSeries);
+      if (candle) {
+        const isUp = Number(candle.close) >= Number(candle.open);
+        setHoverOhlc({
+          open: Number(candle.open),
+          high: Number(candle.high),
+          low: Number(candle.low),
+          close: Number(candle.close),
+          volume: vol?.value || 0,
+          color: isUp ? '#28C76F' : '#EA5455',
+          timeStr: typeof param.time === 'number'
+            ? new Date(param.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : String(param.time),
+        });
+      } else {
+        setHoverOhlc(null);
+      }
+    });
 
     // Resize observer
     const resizeObserver = new ResizeObserver((entries) => {
       if (!entries || entries.length === 0) return;
-      const { width } = entries[0].contentRect;
+      const { width, height } = entries[0].contentRect;
       if (width > 0 && chartInstanceRef.current) {
-        chartInstanceRef.current.applyOptions({ width });
+        chartInstanceRef.current.applyOptions({
+          width,
+          height: height > 0 ? height : chartHeight,
+        });
       }
     });
 
@@ -272,6 +345,20 @@ export function KlineDrawer({ open, onClose, stock }) {
   const isQuotaFull = !loading && !isOtc && !isOpenDDisconnected && Boolean(errorMsg && /Had kuota langganan/i.test(errorMsg));
   const isUnavailable = !loading && (!isHealthy || !!errorMsg);
 
+  const latestCandle = Array.isArray(klineData?.candles) && klineData.candles.length > 0
+    ? klineData.candles[klineData.candles.length - 1]
+    : null;
+
+  const displayOhlc = hoverOhlc || (latestCandle ? {
+    open: Number(latestCandle.open),
+    high: Number(latestCandle.high),
+    low: Number(latestCandle.low),
+    close: Number(latestCandle.close),
+    volume: Number(latestCandle.volume || 0),
+    timeStr: latestCandle.time_str || (latestCandle.time ? String(latestCandle.time) : ''),
+    color: Number(latestCandle.close) >= Number(latestCandle.open) ? '#28C76F' : '#EA5455',
+  } : null);
+
   return (
     <Drawer
       anchor={isMobile ? 'bottom' : 'right'}
@@ -284,9 +371,9 @@ export function KlineDrawer({ open, onClose, stock }) {
       }}
       PaperProps={{
         sx: {
-          width: isMobile ? '100%' : 560,
+          width: isMobile ? '100%' : 640,
           maxWidth: '100%',
-          height: isMobile ? '82vh' : '100%',
+          height: isMobile ? '88vh' : '100%',
           borderTopLeftRadius: isMobile ? 16 : 0,
           borderTopRightRadius: isMobile ? 16 : 0,
           backgroundColor: (t) => (t.palette.mode === 'dark' ? '#2B2C40' : '#FFFFFF'),
@@ -687,25 +774,83 @@ export function KlineDrawer({ open, onClose, stock }) {
             </Card>
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Chart Legend / Summary */}
-            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                Sumber: Moomoo OpenAPI (K-line Semasa · Kuota Sejarah Sifar)
-              </Typography>
-              {klineData?.cached && (
-                <Chip
-                  size="small"
-                  label="Cache Tempatan"
-                  sx={{
-                    fontSize: '0.65rem',
-                    height: 18,
-                    backgroundColor: sneatTokens.info.soft,
-                    color: sneatTokens.info.main,
-                    fontWeight: 600,
-                  }}
-                />
+          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
+            {/* Interactive OHLC HUD Bar */}
+            <Box
+              sx={{
+                mb: 1.5,
+                px: 2,
+                py: 1,
+                borderRadius: 1.5,
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(67, 89, 113, 0.04)',
+                border: (t) => `1px solid ${t.palette.divider}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
+              {displayOhlc ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'text.secondary' }}>
+                    {displayOhlc.timeStr || interval.toUpperCase()}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>O</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                      ${displayOhlc.open?.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>H</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                      ${displayOhlc.high?.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>L</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                      ${displayOhlc.low?.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>C</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: displayOhlc.color }}>
+                      ${displayOhlc.close?.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>Vol</Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'text.primary' }}>
+                      {formatVol(displayOhlc.volume)}
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : (
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                  Arahkan kursor ke lilin untuk melihat metrik OHLCV
+                </Typography>
               )}
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {klineData?.cached && (
+                  <Chip
+                    size="small"
+                    label="Cache"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.62rem',
+                      backgroundColor: sneatTokens.info.soft,
+                      color: sneatTokens.info.main,
+                      fontWeight: 600,
+                    }}
+                  />
+                )}
+                <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem', fontWeight: 500 }}>
+                  {klineData?.candles?.length || 0} lilin
+                </Typography>
+              </Box>
             </Box>
 
             {/* TradingView Canvas Container */}
@@ -713,23 +858,24 @@ export function KlineDrawer({ open, onClose, stock }) {
               ref={chartContainerRef}
               id="kline-chart-container"
               sx={{
-                flexGrow: 1,
+                flex: 1,
                 width: '100%',
-                minHeight: 380,
+                minHeight: 460,
                 borderRadius: 2,
                 overflow: 'hidden',
-                backgroundColor: isDark ? '#2B2C40' : '#FFFFFF',
+                backgroundColor: isDark ? '#1E1E2D' : '#FAFAFC',
                 border: (t) => `1px solid ${t.palette.divider}`,
+                boxShadow: isDark ? 'inset 0 0 16px rgba(0,0,0,0.3)' : 'none',
               }}
             />
 
-            {/* Bottom Notice */}
-            <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Bottom Status & Info Bar */}
+            <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
               <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem' }}>
-                Had minimum langganan Moomoo 60 saat. Langganan dilepaskan automatik selepas panel ditutup.
+                Sumber: Moomoo OpenAPI (K-line Semasa · Kuota Sejarah Sifar)
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600 }}>
-                {klineData?.candles?.length || 0} lilin
+              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem' }}>
+                Pelepasan automatik selepas panel ditutup
               </Typography>
             </Box>
           </Box>
