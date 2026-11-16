@@ -217,35 +217,42 @@ class TestAgentPipelineBVA(unittest.TestCase):
         # Initially, no orders exist -> Pass
         cand = {"symbol": symbol, "price": 150.0, "adv_20": 10000000.0}
         haziq = {"entry_price": 150.0, "stop_loss_price": 145.0, "allocated_shares": 10, "risk_per_trade_pct": 1.0}
-        audit1 = self.pipeline.evaluate_danial_compliance(cand, haziq, equity, now_ny, mock_market_window=True)
+        audit1 = self.pipeline.evaluate_danial_compliance(cand, haziq, equity, now_ny, mock_market_window=True, force_simulation=True)
         self.assertTrue(audit1["passed"])
 
         # Insert active order into DB
         with self.pipeline._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO paper_orders (order_id, client_order_id, symbol, order_side, quantity, entry_price, status)
-                VALUES ('ORD-TEST-1', 'CLI-TEST-1', ?, 'BUY', 10, 150.0, 'SUBMITTED')
+                INSERT INTO paper_orders (
+                    order_id, client_order_id, cycle_id, symbol, order_side,
+                    quantity, entry_price, stop_loss_price, take_profit_price,
+                    status, opend_status, message, created_at
+                ) VALUES ('ORD-TEST-1', 'CLI-TEST-1', 'CYC-TEST-1', ?, 'BUY', 10, 150.0, 145.0, 160.0, 'SUBMITTED', 'SIMULATED', 'ok', ?)
                 """,
-                (symbol,)
+                (symbol, now_ny.isoformat())
             )
             conn.commit()
 
         # Second evaluation for same symbol -> Blocked due to active order
-        audit2 = self.pipeline.evaluate_danial_compliance(cand, haziq, equity, now_ny, mock_market_window=True)
+        audit2 = self.pipeline.evaluate_danial_compliance(cand, haziq, equity, now_ny, mock_market_window=True, force_simulation=True)
         self.assertFalse(audit2["passed"])
         self.assertIn("Pembelian berulang disekat", audit2["rejection_reason"])
 
     def test_cancel_paper_order_and_allow_reentry(self):
         """Cancelling a pending/submitted order succeeds and frees symbol for subsequent entry."""
+        now_ny = datetime(2026, 11, 16, 10, 30, tzinfo=NY_TZ)
         symbol = "US.MSFT"
         with self.pipeline._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO paper_orders (order_id, client_order_id, symbol, order_side, quantity, entry_price, status)
-                VALUES ('ORD-MSFT-1', 'CLI-MSFT-1', ?, 'BUY', 20, 400.0, 'SUBMITTED')
+                INSERT INTO paper_orders (
+                    order_id, client_order_id, cycle_id, symbol, order_side,
+                    quantity, entry_price, stop_loss_price, take_profit_price,
+                    status, opend_status, message, created_at
+                ) VALUES ('ORD-MSFT-1', 'CLI-MSFT-1', 'CYC-TEST-2', ?, 'BUY', 20, 400.0, 390.0, 420.0, 'SUBMITTED', 'SIMULATED', 'ok', ?)
                 """,
-                (symbol,)
+                (symbol, now_ny.isoformat())
             )
             conn.commit()
 
@@ -268,10 +275,9 @@ class TestAgentPipelineBVA(unittest.TestCase):
         self.assertFalse(cancel_missing["success"])
 
         # Danial compliance for MSFT should now PASS because active order is cancelled
-        now_ny = datetime(2026, 11, 16, 10, 30, tzinfo=NY_TZ)
         cand = {"symbol": symbol, "price": 400.0, "adv_20": 10000000.0}
         haziq = {"entry_price": 400.0, "stop_loss_price": 390.0, "allocated_shares": 10, "risk_per_trade_pct": 1.0}
-        audit_reentry = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True)
+        audit_reentry = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True, force_simulation=True)
         self.assertTrue(audit_reentry["passed"])
 
     # =========================================================================

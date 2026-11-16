@@ -79,9 +79,9 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
         self.assertEqual(delib["haziq"]["risk_reward_ratio"], 1.5)
         self.assertGreater(delib["haziq"]["allocated_shares"], 0)
 
-        # Danial details
+        # Danial details (8 Hard Rules + 1 Active Order/Position Check = 9 checks)
         self.assertTrue(delib["danial"]["passed"])
-        self.assertEqual(len(delib["danial"]["rule_checks"]), 8)
+        self.assertEqual(len(delib["danial"]["rule_checks"]), 9)
         for check in delib["danial"]["rule_checks"]:
             self.assertTrue(check["passed"], f"Rule check failed: {check['rule']}")
 
