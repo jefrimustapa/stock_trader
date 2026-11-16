@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import BridgeConfig
 from .reconciliation import PositionReconciler
-from .routes import health, trade, telnet
+from .moomoo_client import get_moomoo_client
+from .routes import health, trade, telnet, kline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,8 +32,18 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing Bridge L4 background services...")
     reconciler.start()
 
+    async def run_kline_cleanup_loop():
+        moomoo_client = get_moomoo_client()
+        while True:
+            try:
+                moomoo_client.subscription_manager.cleanup_expired_subscriptions()
+            except Exception as e:
+                logger.error("K-line subscription cleanup loop error: %s", e)
+            await asyncio.sleep(15)
+
     heartbeat_task = asyncio.create_task(reconciler.run_heartbeat_loop())
     reconcile_task = asyncio.create_task(reconciler.run_reconciliation_loop())
+    kline_cleanup_task = asyncio.create_task(run_kline_cleanup_loop())
 
     logger.info("Bridge L4 Service ready on port 8000.")
     yield
@@ -41,8 +52,9 @@ async def lifespan(app: FastAPI):
     reconciler.stop()
     heartbeat_task.cancel()
     reconcile_task.cancel()
+    kline_cleanup_task.cancel()
     try:
-        await asyncio.gather(heartbeat_task, reconcile_task, return_exceptions=True)
+        await asyncio.gather(heartbeat_task, reconcile_task, kline_cleanup_task, return_exceptions=True)
     except Exception:
         pass
     logger.info("Bridge L4 Service shutdown complete.")
@@ -67,6 +79,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(trade.router)
 app.include_router(telnet.router)
+app.include_router(kline.router)
 
 
 if __name__ == "__main__":

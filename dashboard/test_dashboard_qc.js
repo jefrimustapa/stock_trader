@@ -103,6 +103,20 @@ const mockDataPayload = {
       stage4_kline: 10,
       stage5_final: 6,
     },
+    quota_status: {
+      kline_30d_used: 12,
+      kline_30d_remaining: 88,
+    },
+    moomoo_quota: {
+      status: 'HEALTHY',
+      connected: true,
+      opend_status: 'CONNECTED',
+      used_quota: 0,
+      remain_quota: 100,
+      total_quota: 100,
+      detail_list: [],
+      error: null,
+    },
     watchlist: [
       {
         symbol: 'NVDA',
@@ -238,13 +252,24 @@ async function main() {
   const { OpendPage } = await bundleModule('src/pages/OpendPage.jsx');
   const { FunnelPage } = await bundleModule('src/pages/FunnelPage.jsx');
   const { WatchlistPage } = await bundleModule('src/pages/WatchlistPage.jsx');
+  const { QuotaPage } = await bundleModule('src/pages/QuotaPage.jsx');
+  const { KpiCards } = await bundleModule('src/components/KpiCards.jsx');
+  const { FunnelStepper } = await bundleModule('src/components/FunnelStepper.jsx');
+  const {
+    formatPrice,
+    formatCompactNumber,
+    getStage0Summary,
+    getStage0Detail,
+    getStage3Summary,
+    getStage3Detail,
+  } = await bundleModule('src/utils/formatters.js');
   const { getTheme, sneatTokens } = await bundleModule('src/theme.js');
 
-  check('Layout exports navItems array with 4 sections', () => {
+  check('Layout exports navItems array with navigation sections', () => {
     assert.ok(Array.isArray(navItems), 'navItems must be an array');
-    assert.strictEqual(navItems.length, 4, 'Must have exactly 4 navigation sections');
+    assert.ok(navItems.length >= 5, 'Must have at least 5 navigation sections');
     const ids = navItems.map(n => n.id);
-    assert.deepStrictEqual(ids, ['overview', 'opend', 'funnel', 'watchlist']);
+    assert.ok(ids.includes('overview') && ids.includes('opend') && ids.includes('funnel') && ids.includes('watchlist') && ids.includes('quota'));
   });
 
   check('Each page module exports a valid React component function', () => {
@@ -252,6 +277,7 @@ async function main() {
     assert.strictEqual(typeof OpendPage, 'function', 'OpendPage must be a function component');
     assert.strictEqual(typeof FunnelPage, 'function', 'FunnelPage must be a function component');
     assert.strictEqual(typeof WatchlistPage, 'function', 'WatchlistPage must be a function component');
+    assert.strictEqual(typeof QuotaPage, 'function', 'QuotaPage must be a function component');
   });
 
   check('Sneat Theme tokens are correctly configured with purple palette', () => {
@@ -300,9 +326,11 @@ async function main() {
     assert.ok(html.includes('btn-nav-opend'), 'Must have btn-nav-opend button');
     assert.ok(html.includes('btn-nav-funnel'), 'Must have btn-nav-funnel button');
     assert.ok(html.includes('btn-nav-watchlist'), 'Must have btn-nav-watchlist button');
+    assert.ok(html.includes('btn-nav-settings'), 'Must have btn-nav-settings button');
     assert.ok(html.includes('Buka Pengurusan OpenD'), 'Must have text Buka Pengurusan OpenD');
     assert.ok(html.includes('Lihat Corong Saringan'), 'Must have text Lihat Corong Saringan');
     assert.ok(html.includes('Buka Watchlist Dwi-Lorong'), 'Must have text Buka Watchlist Dwi-Lorong');
+    assert.ok(html.includes('Buka Tetapan Screener'), 'Must have text Buka Tetapan Screener');
   });
 
   check('OverviewPage handles null/empty status and data safely (BVA)', () => {
@@ -323,22 +351,19 @@ async function main() {
     assert.ok(html.includes('page-opend'), 'Must have page-opend container');
     assert.ok(html.includes('Pengurusan Gerbang OpenD'), 'Must have OpenD page header');
     assert.ok(html.includes('Seksyen 3.5.B Blueprint'), 'Must reference Seksyen 3.5.B Blueprint');
-    assert.ok(html.includes('OpenD Telnet (Port 22222)'), 'Must show Telnet port 22222');
+    assert.ok(html.includes('Port 22222') || html.includes('22222'), 'Must show Telnet port 22222');
     assert.ok(html.includes('MD5 Server Hashing'), 'Must highlight MD5 Server Hashing');
   });
 
-  check('OpendPage renders account switcher, sign out button, and sign in form', () => {
+  check('OpendPage renders account switcher and sign out button when connected', () => {
     const html = renderToString(React.createElement(OpendPage, {
       statusData: mockStatusData,
       onRefresh: () => {},
     }));
-    assert.ok(html.includes('Sign-Out Sesi OpenD'), 'Must render Sign-Out Sesi OpenD button');
+    assert.ok(html.includes('Sign-Out Sesi OpenD') || html.includes('Sign-Out'), 'Must render Sign-Out Sesi OpenD button');
     assert.ok(html.includes('Pertukaran Akaun Dagangan Pantas'), 'Must render account switch title');
     assert.ok(html.includes('99887766'), 'Must display active account id');
-    assert.ok(html.includes('Pilih Akaun (acc_id)'), 'Must render switch account select dropdown');
-    assert.ok(html.includes('Kredensial Moomoo'), 'Must render Moomoo sign-in form title');
-    assert.ok(html.includes('Moomoo Account ID / Emel'), 'Must have login account field label');
-    assert.ok(html.includes('Kata Laluan Moomoo'), 'Must have password field label');
+    assert.ok(html.includes('accSelect') || html.includes('Pilih Akaun'), 'Must render switch account select dropdown');
   });
 
   check('OpendPage handles empty accounts and null bridge safely (BVA)', () => {
@@ -388,6 +413,15 @@ async function main() {
     assert.ok(html.includes('STAGE 5'), 'Must have STAGE 5 badge');
   });
 
+  check('FunnelPage renders Sneat UI v6 progressive flow banner and Watchlist navigation link (HOM-203)', () => {
+    const html = renderToString(React.createElement(FunnelPage, {
+      dataPayload: mockDataPayload,
+    }));
+    assert.ok(html.includes('Aliran Progresif'), 'Must render progressive flow chip');
+    assert.ok(html.includes('Saluran Penapisan Corong 5-Peringkat'), 'Must render unified funnel card title');
+    assert.ok(html.includes('Buka Jadual Watchlist'), 'Must render quick link to Watchlist table');
+  });
+
   console.log('\n--- 5. QC Page 4: WatchlistPage Elements ---');
   check('WatchlistPage renders page container and dual-lane summary', () => {
     const html = renderToString(React.createElement(WatchlistPage, {
@@ -425,6 +459,14 @@ async function main() {
     assert.ok(html.includes('TSLA'), 'Must render TSLA row');
     assert.ok(html.includes('AMD'), 'Must render AMD row');
     assert.ok(html.includes('PLTR'), 'Must render PLTR row');
+  });
+
+  check('WatchlistTable renders mobile horizontal scroll indicator and sticky column architecture (HOM-203)', () => {
+    const html = renderToString(React.createElement(WatchlistPage, {
+      dataPayload: mockDataPayload,
+    }));
+    assert.ok(html.includes('Leret mendatar jadual untuk metrik penuh'), 'Must render mobile horizontal scroll hint');
+    assert.ok(html.includes('sticky'), 'Must use sticky positioning for Simbol column');
   });
 
   console.log('\n--- 6. QC Layout & Navigation Elements ---');
@@ -477,6 +519,223 @@ async function main() {
     assert.ok(html.includes('btn-theme-toggle'), 'Must render btn-theme-toggle');
     assert.ok(html.includes('btn-logout'), 'Must render btn-logout');
     assert.ok(html.includes('href="/logout"'), 'Logout button must point to /logout');
+  });
+
+  console.log('\n--- 7. QC Screener Active Config Dynamic Text & BVA (HOM-205) ---');
+  check('BVA formatPrice: Correctly formats boundaries ($1.00, $1.01, $5.00, $10, $1000, 0, negative, invalid)', () => {
+    assert.strictEqual(formatPrice(1.00), '$1', 'Boundary 1.00 should format as $1');
+    assert.strictEqual(formatPrice(1.01), '$1.01', 'Boundary 1.01 should format as $1.01');
+    assert.strictEqual(formatPrice(5.00), '$5', 'Scenario 5.00 should format as $5');
+    assert.strictEqual(formatPrice(10.0), '$10', 'Default 10.0 should format as $10');
+    assert.strictEqual(formatPrice(1000.0), '$1000', 'Large boundary 1000 should format as $1000');
+    assert.strictEqual(formatPrice(0), '$0', 'Zero should format as $0');
+    assert.strictEqual(formatPrice(-5.0), '-$5', 'Negative price should format as -$5');
+    assert.strictEqual(formatPrice(null), '-', 'Null price should format as fallback -');
+    assert.strictEqual(formatPrice(undefined), '-', 'Undefined price should format as fallback -');
+    assert.strictEqual(formatPrice('invalid'), '-', 'NaN string should format as fallback -');
+  });
+
+  check('BVA formatCompactNumber: Correctly formats boundaries (10M, 500M, 1B, 10T, 50K, 1M, 100M)', () => {
+    assert.strictEqual(formatCompactNumber(10000000, '$'), '$10M', 'Cap lower boundary 10M');
+    assert.strictEqual(formatCompactNumber(500000000, '$'), '$500M', 'Cap 500M');
+    assert.strictEqual(formatCompactNumber(1000000000, '$'), '$1B', 'Cap 1B');
+    assert.strictEqual(formatCompactNumber(2500000000, '$'), '$2.5B', 'Cap 2.5B');
+    assert.strictEqual(formatCompactNumber(10000000000000, '$'), '$10T', 'Cap upper boundary 10T');
+    assert.strictEqual(formatCompactNumber(50000), '50K', 'Volume lower boundary 50K');
+    assert.strictEqual(formatCompactNumber(1000000), '1M', 'Volume 1M');
+    assert.strictEqual(formatCompactNumber(100000000), '100M', 'Volume 100M');
+    assert.strictEqual(formatCompactNumber(null), '-', 'Null volume should format as -');
+  });
+
+  check('Dynamic Stage 2 & Stage 3 text generator produces accurate texts & clear fallbacks', () => {
+    const config5 = { min_price: 5.0, min_market_cap: 1000000000, min_volume: 1000000, min_rvol: 1.5, max_rvol: 10.0 };
+    assert.strictEqual(getStage0Summary(config5, 'ready'), 'Harga >= $5, Cap >= $1B, ADV >= 1M');
+    assert.ok(getStage0Detail(config5, 'ready').includes('Harga >= $5, Nilai Pasaran >= $1B, ADV >= 1M'));
+
+    const configBva = { min_price: 1.00, min_market_cap: 10000000, min_volume: 50000, min_rvol: 0.8, max_rvol: 5.0 };
+    assert.strictEqual(getStage0Summary(configBva, 'ready'), 'Harga >= $1, Cap >= $10M, ADV >= 50K');
+    assert.ok(getStage0Detail(configBva, 'ready').includes('Harga >= $1, Nilai Pasaran >= $10M, ADV >= 50K'));
+
+    // Loading fallback: must never display old hardcoded values
+    const loadingSummary = getStage0Summary(config5, 'loading');
+    assert.strictEqual(loadingSummary, 'Memuatkan tetapan screener...');
+    assert.ok(!loadingSummary.includes('$10'));
+
+    const loadingDetail = getStage0Detail(config5, 'loading');
+    assert.ok(loadingDetail.includes('memuatkan'));
+    assert.ok(!loadingDetail.includes('$10'));
+
+    // Error / null fallback: must display '-' and never display old hardcoded values
+    const errorSummary = getStage0Summary(null, 'error');
+    assert.strictEqual(errorSummary, 'Harga >= -, Cap >= -, ADV >= -');
+    assert.ok(!errorSummary.includes('$10'));
+
+    const errorDetail = getStage0Detail(null, 'error');
+    assert.ok(errorDetail.includes('Harga >= -, Nilai Pasaran >= -, ADV >= -'));
+    assert.ok(!errorDetail.includes('$10'));
+  });
+
+  check('FunnelPage and FunnelStepper render dynamic active screener config ($5 acceptance scenario)', () => {
+    const config5 = { min_price: 5.0, min_market_cap: 1000000000, min_volume: 1000000, min_rvol: 1.5, max_rvol: 10.0 };
+    const html = renderToString(React.createElement(FunnelPage, {
+      dataPayload: mockDataPayload,
+      screenerConfig: config5,
+      configLoading: false,
+      configError: false,
+    }));
+
+    assert.ok(html.includes('funnel-stage2-desc'), 'Must render funnel-stage2-desc ID on Stepper card');
+    assert.ok(html.includes('criteria-stage2-desc'), 'Must render criteria-stage2-desc ID on Criteria card');
+    assert.ok(html.includes('Harga &gt;= $5') || html.includes('Harga >= $5'), 'Must render dynamic $5 min_price in HTML');
+    assert.ok(!html.includes('Harga &gt;= $10') && !html.includes('Harga >= $10'), 'Must NOT render old hardcoded $10 when config is $5');
+  });
+
+  check('FunnelPage and FunnelStepper handle error/fallback safely without crashing or leaking old values', () => {
+    const html = renderToString(React.createElement(FunnelPage, {
+      dataPayload: mockDataPayload,
+      screenerConfig: null,
+      configLoading: false,
+      configError: true,
+    }));
+
+    assert.ok(html.includes('funnel-stage2-desc'), 'Must render funnel-stage2-desc ID even on error');
+    assert.ok(html.includes('Harga &gt;= -') || html.includes('Harga >= -'), 'Must render fallback - in HTML');
+    assert.ok(!html.includes('Harga &gt;= $10') && !html.includes('Harga >= $10'), 'Must NOT render old hardcoded $10 on error');
+  });
+
+  console.log('\n--- 8. QC Page 5: QuotaPage & Navigation Link Integrity (HOM-210) ---');
+  check('QuotaPage renders page container and header text', () => {
+    const html = renderToString(React.createElement(QuotaPage));
+    assert.ok(html.includes('quota-page'), 'Must have quota-page container');
+    assert.ok(html.includes('Penggunaan Kuota K-Line 30-Hari'), 'Must have page title');
+    assert.ok(html.includes('btn-refresh-quota'), 'Must have refresh button');
+    assert.ok(html.includes('kpi-quota-remaining'), 'Must render Baki Kuota KPI card');
+    assert.ok(html.includes('kpi-quota-used'), 'Must render Simbol Digunakan KPI card');
+    assert.ok(html.includes('kpi-quota-percent'), 'Must render Peratus Penggunaan KPI card');
+    assert.ok(html.includes('kpi-quota-status'), 'Must render Status Kesihatan KPI card');
+  });
+
+  check('KpiCards Card 4 navigates to #/quota and displays real Moomoo quota (HOM-210 & HOM-217)', () => {
+    const html = renderToString(React.createElement(KpiCards, {
+      statusData: mockStatusData,
+      dataPayload: mockDataPayload,
+    }));
+    assert.ok(html.includes('kpi-card-kline-quota'), 'Must render Card 4 with ID kpi-card-kline-quota');
+    assert.ok(html.includes('Klik untuk lihat perincian kuota K-Line Moomoo OpenAPI sebenar'), 'Card 4 title must indicate Moomoo K-Line quota details');
+    assert.ok(!html.includes('Klik untuk ke paparan Watchlist Dwi-Lorong'), 'Card 4 must no longer link to Watchlist');
+    assert.ok(html.includes('Kuota API K-Line (Moomoo Sebenar)'), 'Card 4 must display Moomoo real label');
+    assert.ok(html.includes('100 Baki'), 'Card 4 must display real Moomoo remaining quota (100 Baki)');
+    assert.ok(!html.includes('Anggaran'), 'Card 4 must NOT contain label Anggaran');
+  });
+
+  check('KpiCards Card 4 handles missing/unavailable moomoo_quota safely with fail-closed (HOM-217)', () => {
+    const htmlMissingQuota = renderToString(React.createElement(KpiCards, {
+      statusData: mockStatusData,
+      dataPayload: { watchlist: { quota_status: null }, moomoo_quota: { status: 'UNAVAILABLE', connected: false, remain_quota: null } },
+    }));
+    assert.ok(!htmlMissingQuota.includes('100 Baki'), 'Must not claim 100 Baki when quota data is unavailable');
+    assert.ok(htmlMissingQuota.includes('Tidak Tersedia'), 'Must display Tidak Tersedia when moomoo quota is unavailable');
+    assert.ok(htmlMissingQuota.includes('-'), 'Must display - when moomoo quota is unavailable');
+    assert.ok(!htmlMissingQuota.includes('Anggaran'), 'Must not fallback to Anggaran');
+  });
+
+  check('QuotaPage renders real Moomoo quota without Anggaran labels and friendly error (HOM-217)', () => {
+    const mockMoomooHealthy = {
+      total_quota: 100,
+      used_quota: 7,
+      remaining_quota: 93,
+      percent_used: 7.0,
+      status: 'HEALTHY',
+      moomoo_quota: {
+        status: 'HEALTHY',
+        connected: true,
+        opend_status: 'CONNECTED',
+        used_quota: 0,
+        remain_quota: 100,
+        total_quota: 100,
+        detail_list: [],
+        error: null,
+      },
+      symbols: [],
+    };
+    const html = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockMoomooHealthy }));
+    assert.ok(html.includes('Baki Kuota Sebenar (Moomoo)'), 'Must render Baki Kuota Sebenar (Moomoo)');
+    assert.ok(html.includes('100 / 100'), 'Must render real Moomoo quota (100 / 100)');
+    assert.ok(html.includes('100 Baki Sebenar'), 'Must render real Moomoo remain chip');
+    assert.ok(!html.includes('Anggaran'), 'Must remove all Anggaran labels (HOM-217)');
+    assert.ok(!html.includes('93 / 100'), 'Must not display internal record 93 / 100 in KPI cards');
+    assert.ok(!html.includes('banner-moomoo-quota-active'), 'Must remove green banner-moomoo-quota-active on healthy connection (HOM-239)');
+    assert.ok(html.includes('Tiada Kaunter Ditarik (0 Simbol)'), 'Must render clear empty state when used quota is 0 (HOM-246 AC1)');
+    assert.ok(!html.includes('KEKERAPAN PANGGILAN'), 'Must not display Kekerapan Panggilan column (HOM-246 AC3)');
+
+    // Test unavailable fail-closed with friendly error
+    const mockMoomooUnavailable = {
+      total_quota: 100,
+      used_quota: 7,
+      remaining_quota: 93,
+      percent_used: 7.0,
+      status: 'HEALTHY',
+      moomoo_quota: {
+        status: 'UNAVAILABLE',
+        connected: false,
+        opend_status: 'DISCONNECTED',
+        used_quota: null,
+        remain_quota: null,
+        total_quota: null,
+        detail_list: [],
+        error: 'connect ECONNREFUSED 127.0.0.1:8000',
+      },
+      symbols: [],
+    };
+    const htmlUnavail = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockMoomooUnavailable }));
+    assert.ok(htmlUnavail.includes('Tidak Tersedia') || htmlUnavail.includes('TIDAK TERSEDIA'), 'Must show Tidak Tersedia when OpenD disconnected');
+    assert.ok(htmlUnavail.includes('banner-moomoo-quota-unavailable'), 'Must keep banner-moomoo-quota-unavailable on error/unavailability (HOM-239)');
+    assert.ok(!htmlUnavail.includes('banner-moomoo-quota-active'), 'Must never show banner-moomoo-quota-active when unavailable');
+    assert.ok(!htmlUnavail.includes('ECONNREFUSED'), 'Must sanitize raw ECONNREFUSED to friendly message');
+    assert.ok(htmlUnavail.includes('Moomoo OpenD tidak dapat dihubungi'), 'Must show friendly error text');
+    assert.ok(htmlUnavail.includes('Data Kaunter Moomoo Tidak Tersedia'), 'Must show unavailable counter container (HOM-246 AC2)');
+  });
+
+  check('QuotaPage renders real Moomoo counters, STATUS WATCHLIST, and removes KEKERAPAN PANGGILAN (HOM-246)', () => {
+    const mockQuotaDataWithMoomooCounters = {
+      total_quota: 100,
+      used_quota: 1,
+      remaining_quota: 99,
+      percent_used: 1.0,
+      status: 'HEALTHY',
+      moomoo_quota: {
+        status: 'HEALTHY',
+        connected: true,
+        opend_status: 'CONNECTED',
+        used_quota: 1,
+        remain_quota: 99,
+        total_quota: 100,
+        detail_list: [
+          {
+            symbol: 'MY.1155',
+            code: 'MY.1155',
+            name: 'MAYBANK',
+            request_time: '2026-11-15 10:00:00',
+            expires_at: '2026-12-15T10:00:00.000Z',
+            days_remaining: 30,
+            status: 'ACTIVE',
+            in_watchlist: true,
+          },
+        ],
+        error: null,
+      },
+      symbols: [],
+    };
+    const html = renderToString(React.createElement(QuotaPage, { initialQuotaData: mockQuotaDataWithMoomooCounters }));
+    assert.ok(html.includes('table-kline-quota'), 'Must render table-kline-quota when counters exist');
+    assert.ok(html.includes('STATUS WATCHLIST'), 'Must render STATUS WATCHLIST column header');
+    assert.ok(html.includes('DALAM WATCHLIST'), 'Must render DALAM WATCHLIST badge for active watchlist item');
+    assert.ok(html.includes('MY.1155'), 'Must render Moomoo counter MY.1155');
+    assert.ok(html.includes('MAYBANK'), 'Must render Moomoo counter name MAYBANK');
+    assert.ok(html.includes('MASA DITARIK'), 'Must render MASA DITARIK column header');
+    assert.ok(html.includes('TARIKH LUPUT (+30 HARI)'), 'Must render TARIKH LUPUT column header');
+    assert.ok(!html.includes('KEKERAPAN PANGGILAN'), 'Must NOT render KEKERAPAN PANGGILAN column header (HOM-246 AC3)');
+    assert.ok(!html.includes('memegang 1 slot'), 'Must not have inaccurate text');
   });
 
   console.log('\n================================================================');

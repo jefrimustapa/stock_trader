@@ -200,6 +200,17 @@ class CloudScreener:
                     })
                 continue
 
+            if rvol > ScreenerConfig.MOM_MAX_RVOL:
+                if funnel:
+                    funnel.dropped_reasons.append({
+                        "symbol": symbol,
+                        "stage": "LANE_MOMENTUM",
+                        "reason": "RVOL_ABOVE_MOMENTUM_MAX",
+                        "actual_value": rvol,
+                        "threshold": ScreenerConfig.MOM_MAX_RVOL
+                    })
+                continue
+
             if rs_spy <= ScreenerConfig.MOM_MIN_RS_SPY:
                 if funnel:
                     funnel.dropped_reasons.append({

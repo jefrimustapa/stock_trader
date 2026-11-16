@@ -9,7 +9,11 @@ const path = require('path');
 const fs = require('fs');
 
 const TARGET_URL = process.env.TEST_URL || 'http://stock_trading_dashboard:3000';
-const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN || 'secure-svc-token-test-2026';
+const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN;
+if (!SERVICE_TOKEN) {
+  console.error('Fatal Configuration Error: BRIDGE_SERVICE_TOKEN environment variable is required.');
+  process.exit(1);
+}
 const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || path.join(__dirname, 'playwright_screenshots');
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -207,6 +211,104 @@ async function runPlaywrightSuite() {
     assertCheck('Mobile Funnel: Final candidate count badge rendered', (await finalWatchlistBadge.count()) >= 1);
     await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '04_mobile_funnel.png'), fullPage: true });
 
+    // 7. Settings Screener Page & BVA User Acceptance Scenario (HOM-189 / HOM-190)
+    console.log('\n--- Scenario A.7: Settings Page & Hard Safety Floor Verification ---');
+    await mobilePage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await mobilePage.waitForTimeout(400);
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_mobile_settings_clean.png'), fullPage: true });
+
+    const settingsTitle = mobilePage.locator('text=Tetapan Parameter Screener');
+    assertCheck('Mobile Settings: Page header rendered', (await settingsTitle.count()) >= 1);
+
+    const minPriceInput = mobilePage.locator('#inputMinPrice');
+    assertCheck('Mobile Settings: min_price input field present', (await minPriceInput.count()) === 1);
+
+    // Test User Acceptance Scenario: User sets $5.00 and clicks Save
+    const chip5 = mobilePage.locator('#chipPrice5');
+    if ((await chip5.count()) > 0) {
+      await chip5.click();
+    } else {
+      await minPriceInput.fill('5.00');
+    }
+    await mobilePage.waitForTimeout(200);
+    const saveBtn = mobilePage.locator('#btnSaveConfig');
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(500);
+
+    const successAlert = mobilePage.locator('#configAlertSuccess');
+    assertCheck('Mobile Settings Acceptance: Success alert displayed for price $5.00', (await successAlert.count()) >= 1);
+
+    const displayMinPrice = mobilePage.locator('#displayMinPrice');
+    const displayedText = await displayMinPrice.innerText();
+    assertCheck('Mobile Settings Acceptance: Status card displays $5.00', displayedText.includes('5.00'));
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_mobile_settings_success.png'), fullPage: true });
+
+    // -------------------------------------------------------------
+    // Post-Rejection Status Card & Boundary Integrity (HOM-193 Defect 1)
+    // -------------------------------------------------------------
+    console.log('\n--- Scenario A.7b: Post-Rejection Status Card & Persistence Verification (HOM-193) ---');
+    const errorAlert = mobilePage.locator('#configAlertError');
+
+    // Case 1: Rejection with $0.99
+    await minPriceInput.fill('0.99');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for price $0.99', (await errorAlert.count()) >= 1);
+    const cardPriceAfter099 = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after $0.99 rejected', cardPriceAfter099.includes('5.00') && !cardPriceAfter099.includes('0.99'));
+
+    // Case 2: Rejection with $0.00
+    await minPriceInput.fill('0.00');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for price $0.00', (await errorAlert.count()) >= 1);
+    const cardPriceAfter000 = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after $0.00 rejected', cardPriceAfter000.includes('5.00') && !cardPriceAfter000.includes('0.00'));
+
+    // Case 3: Rejection with -$3.00
+    await minPriceInput.fill('-3.00');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for price -$3.00', (await errorAlert.count()) >= 1);
+    const cardPriceAfterNeg = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after -$3.00 rejected', cardPriceAfterNeg.includes('5.00') && !cardPriceAfterNeg.includes('-3'));
+
+    // Case 4: Rejection with empty string ""
+    await minPriceInput.fill('');
+    await mobilePage.waitForTimeout(200);
+    await saveBtn.click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile Settings BVA: Error alert displayed for empty input', (await errorAlert.count()) >= 1);
+    const cardPriceAfterEmpty = await displayMinPrice.innerText();
+    assertCheck('Status Card Integrity: Card remains $5.00 after empty input rejected', cardPriceAfterEmpty.includes('5.00'));
+
+    // Case 5: Reload persistence
+    await mobilePage.reload({ waitUntil: 'networkidle' });
+    await mobilePage.waitForTimeout(400);
+    const cardPriceAfterReload = await displayMinPrice.innerText();
+    assertCheck('Persistence: Status card persists $5.00 after full page reload', cardPriceAfterReload.includes('5.00'));
+
+    // Case 6: Cross-field min_rvol > max_rvol (10.0 > 2.0)
+    const minRvolInput = mobilePage.locator('input[type="number"]').nth(3); // min_rvol input
+    const maxRvolInput = mobilePage.locator('input[type="number"]').nth(4); // max_rvol input
+    if ((await minRvolInput.count()) >= 1 && (await maxRvolInput.count()) >= 1) {
+      await minRvolInput.fill('10.0');
+      await maxRvolInput.fill('2.0');
+      await mobilePage.waitForTimeout(200);
+      await saveBtn.click();
+      await mobilePage.waitForTimeout(400);
+      assertCheck('Mobile Settings Cross-Field: Error alert displayed for min_rvol > max_rvol', (await errorAlert.count()) >= 1);
+      const displayRvolRange = mobilePage.locator('#displayRvolRange');
+      if ((await displayRvolRange.count()) >= 1) {
+        const rvolRangeText = await displayRvolRange.innerText();
+        assertCheck('Status Card Integrity: RVOL range does NOT display inverted 10 - 2 after rejection', !rvolRangeText.includes('10 - 2') && !rvolRangeText.includes('10.0 - 2.0'));
+      }
+    }
+    await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '06_mobile_settings_rejection_integrity.png'), fullPage: true });
+
     assertCheck('Mobile Session: Clean console with zero errors', consoleErrors.length === 0);
     await mobileContext.close();
 
@@ -234,8 +336,265 @@ async function runPlaywrightSuite() {
     const desktopDrawer = desktopPage.locator('.MuiDrawer-docked');
     assertCheck('Desktop Layout: Permanent docked sidebar visible', (await desktopDrawer.count()) === 1);
 
-    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '05_desktop_overview.png'), fullPage: true });
+    // Desktop Settings Navigation
+    await desktopPage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(400);
+    const desktopSettingsTitle = desktopPage.locator('text=Tetapan Parameter Screener');
+    assertCheck('Desktop Settings: Page loaded in desktop view', (await desktopSettingsTitle.count()) >= 1);
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '07_desktop_settings.png'), fullPage: true });
+
+    // -------------------------------------------------------------
+    // Test Scenario C: Dynamic Funnel Screener Active Config Acceptance (HOM-205)
+    // -------------------------------------------------------------
+    console.log('\n--- Scenario C: Dynamic Funnel Active Config Verification (HOM-205) ---');
+
+    // 1. Desktop Funnel with active config $5.00 (from Scenario A.7 save)
+    await desktopPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(500);
+
+    const funnelStage2Stepper = desktopPage.locator('#funnel-stage2-desc');
+    assertCheck('HOM-205 Funnel Stepper: #funnel-stage2-desc element rendered', (await funnelStage2Stepper.count()) === 1);
+
+    const stepperText5 = await funnelStage2Stepper.innerText();
+    assertCheck('HOM-205 User Acceptance: Funnel Stepper Stage 2 displays active "Harga >= $5"', stepperText5.includes('Harga >= $5') && !stepperText5.includes('Harga >= $10'));
+
+    const criteriaStage2 = desktopPage.locator('#criteria-stage2-desc');
+    assertCheck('HOM-205 Criteria Card: #criteria-stage2-desc element rendered', (await criteriaStage2.count()) === 1);
+
+    const criteriaText5 = await criteriaStage2.innerText();
+    assertCheck('HOM-205 User Acceptance: Criteria Stage 2 displays active "Harga >= $5"', criteriaText5.includes('Harga >= $5') && !criteriaText5.includes('Harga >= $10'));
+
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '08_after_desktop_funnel_5usd.png'), fullPage: true });
+
+    // 2. Mobile Funnel with active config $5.00
+    const mobileFunnelContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    await mobileFunnelContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+    const mobileFunnelPage = await mobileFunnelContext.newPage();
+    await mobileFunnelPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await mobileFunnelPage.waitForTimeout(500);
+
+    const mobileStepperText5 = await mobileFunnelPage.locator('#funnel-stage2-desc').innerText();
+    assertCheck('HOM-205 Mobile Acceptance: Funnel Stepper displays "Harga >= $5" on mobile', mobileStepperText5.includes('Harga >= $5'));
+    await mobileFunnelPage.screenshot({ path: path.join(SCREENSHOT_DIR, '09_after_mobile_funnel_5usd.png'), fullPage: true });
+    await mobileFunnelContext.close();
+
+    // 3. BVA Test: Boundary min_price $1.00
+    console.log('\n--- Scenario C.2: BVA Hard Safety Floor ($1.00) Funnel Dynamic Update ---');
+    await desktopPage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(400);
+
+    const desktopMinPriceInput = desktopPage.locator('#inputMinPrice');
+    await desktopMinPriceInput.fill('1.00');
+    await desktopPage.waitForTimeout(200);
+    const desktopSaveBtn = desktopPage.locator('#btnSaveConfig');
+    await desktopSaveBtn.click();
+    await desktopPage.waitForTimeout(500);
+
+    await desktopPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(500);
+
+    const stepperText1 = await desktopPage.locator('#funnel-stage2-desc').innerText();
+    assertCheck('HOM-205 BVA Acceptance: Funnel Stepper updates to exact boundary "Harga >= $1"', stepperText1.includes('Harga >= $1'));
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '10_desktop_funnel_bva_1usd.png'), fullPage: true });
+
+    // 4. Clean Reset: Revert back to $10.00 default
+    console.log('\n--- Scenario C.3: Clean Reset to $10.00 Default ---');
+    await desktopPage.goto(`${TARGET_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(400);
+    await desktopMinPriceInput.fill('10.00');
+    await desktopPage.waitForTimeout(200);
+    await desktopSaveBtn.click();
+    await desktopPage.waitForTimeout(500);
+
+    await desktopPage.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle' });
+    await desktopPage.waitForTimeout(500);
+
+    const stepperText10 = await desktopPage.locator('#funnel-stage2-desc').innerText();
+    assertCheck('HOM-205 Reset Acceptance: Funnel cleanly returns to default "Harga >= $10"', stepperText10.includes('Harga >= $10'));
+    await desktopPage.screenshot({ path: path.join(SCREENSHOT_DIR, '11_desktop_funnel_reverted_10usd.png'), fullPage: true });
+
     await desktopContext.close();
+
+    // -------------------------------------------------------------
+    // Scenario D: K-Line Quota Acceptance Scenario (HOM-210)
+    // -------------------------------------------------------------
+    console.log('\n--- Scenario D: K-Line Quota Separate Page Acceptance (HOM-210) ---');
+    const quotaContext = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+    await quotaContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+    const quotaPage = await quotaContext.newPage();
+
+    // 1. User Acceptance Step 1: Open Overview, observe Card 4 (K-Line quota summary)
+    await quotaPage.goto(`${TARGET_URL}/#/overview`, { waitUntil: 'networkidle' });
+    await quotaPage.waitForTimeout(400);
+
+    const klineCard = quotaPage.locator('#kpi-card-kline-quota');
+    assertCheck('HOM-210 User Acceptance: Overview renders Card 4 K-Line Quota with ID #kpi-card-kline-quota', (await klineCard.count()) === 1);
+    const cardText = await klineCard.innerText();
+    assertCheck('HOM-210 User Acceptance: Card 4 displays remaining quota summary (e.g. Baki)', cardText.includes('Baki') && cardText.includes('Kuota API K-Line'));
+    assertCheck('HOM-217 User Acceptance: Card 4 does not contain label Anggaran', !cardText.includes('Anggaran'));
+
+    // 2. User Acceptance Step 2: Click Card 4 -> Navigate to #/quota
+    await klineCard.click();
+    await quotaPage.waitForTimeout(500);
+    assertCheck('HOM-210 User Acceptance: Clicking Card 4 navigates to #/quota', quotaPage.url().includes('#/quota'));
+
+    // 3. User Acceptance Step 3: Quota Page Layout & 4 KPI Cards
+    const quotaContainer = quotaPage.locator('#quota-page');
+    assertCheck('HOM-210 User Acceptance: #quota-page container rendered', (await quotaContainer.count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Page title "Penggunaan Kuota K-Line 30-Hari" rendered', (await quotaPage.locator('text=Penggunaan Kuota K-Line 30-Hari').count()) >= 1);
+    assertCheck('HOM-210 User Acceptance: Baki Kuota KPI card rendered', (await quotaPage.locator('#kpi-quota-remaining').count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Simbol Digunakan KPI card rendered', (await quotaPage.locator('#kpi-quota-used').count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Peratus Penggunaan KPI card rendered', (await quotaPage.locator('#kpi-quota-percent').count()) === 1);
+    assertCheck('HOM-210 User Acceptance: Status Kesihatan KPI card rendered', (await quotaPage.locator('#kpi-quota-status').count()) === 1);
+
+    const quotaPageText = await quotaContainer.innerText();
+    assertCheck('HOM-217 User Acceptance: QuotaPage does not contain label Anggaran', !quotaPageText.includes('Anggaran'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage KPI card displays Baki Kuota Sebenar (Moomoo)', quotaPageText.includes('Baki Kuota Sebenar (Moomoo)'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage summary does not display internal 93 / 100', !quotaPageText.includes('93 / 100'));
+    assertCheck('HOM-217 User Acceptance: QuotaPage does not leak raw ECONNREFUSED', !quotaPageText.includes('ECONNREFUSED'));
+    assertCheck('HOM-246 User Acceptance: QuotaPage table card labeled clearly as Senarai Kaunter Ditarik (Moomoo OpenAPI)', quotaPageText.includes('Senarai Kaunter Ditarik'));
+    assertCheck('HOM-246 User Acceptance: Kekerapan Panggilan column is completely removed', !quotaPageText.includes('Kekerapan Panggilan') && !quotaPageText.includes('KEKERAPAN PANGGILAN'));
+
+    // HOM-239 User Acceptance: Real Moomoo OpenAPI green banner removed, unavailable banner preserved for error state
+    const activeGreenBannerCount = await quotaPage.locator('#banner-moomoo-quota-active').count();
+    assertCheck('HOM-239 User Acceptance: Green banner-moomoo-quota-active is removed', activeGreenBannerCount === 0);
+
+    // 4. User Acceptance Step 4: Live Environment Zero-Usage Acceptance (HOM-246 AC1)
+    const emptyBox = quotaPage.locator('#quota-table-empty');
+    assertCheck('HOM-246 User Acceptance: Empty state rendered when 0 Moomoo quota used', (await emptyBox.count()) === 1);
+    assertCheck('HOM-246 User Acceptance: Empty state text states Tiada Kaunter Ditarik (0 Simbol)', (await emptyBox.innerText()).includes('Tiada Kaunter Ditarik (0 Simbol)'));
+    assertCheck('HOM-246 User Acceptance: Does not show internal screener SQLite records (0x / 180x call count is 0)', (await quotaPage.locator(':text("180x"), :text("142x")').count()) === 0);
+
+    // Desktop Screenshot of 0-usage state
+    await quotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '12_desktop_kline_quota_page_empty.png'), fullPage: true });
+
+    // 5. User Acceptance Step 5: Active Moomoo Counters Table & Search Acceptance (HOM-246)
+    console.log('\n--- Scenario D.1b: Active Moomoo Counters Table Acceptance (HOM-246) ---');
+    await quotaPage.route('**/api/screener/kline-quota', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          total_quota: 100,
+          used_quota: 2,
+          remaining_quota: 98,
+          percent_used: 2.0,
+          status: 'HEALTHY',
+          moomoo_quota: {
+            status: 'HEALTHY',
+            connected: true,
+            opend_status: 'CONNECTED',
+            used_quota: 2,
+            remain_quota: 98,
+            total_quota: 100,
+            detail_list: [
+              {
+                symbol: 'MY.1155',
+                code: 'MY.1155',
+                name: 'MAYBANK',
+                request_time: '2026-11-15 10:00:00',
+                expires_at: '2026-12-15T10:00:00.000Z',
+                days_remaining: 30,
+                status: 'ACTIVE',
+                in_watchlist: true,
+              },
+              {
+                symbol: 'US.AAPL',
+                code: 'US.AAPL',
+                name: 'Apple Inc',
+                request_time: '2026-11-14 09:30:00',
+                expires_at: '2026-12-14T09:30:00.000Z',
+                days_remaining: 29,
+                status: 'ACTIVE',
+                in_watchlist: false,
+              },
+            ],
+            error: null,
+          },
+          symbols: [],
+        }),
+      });
+    });
+
+    const refreshBtn = quotaPage.locator('#btn-refresh-quota');
+    await refreshBtn.click();
+    await quotaPage.waitForTimeout(500);
+
+    const quotaTable = quotaPage.locator('#table-kline-quota');
+    assertCheck('HOM-246 User Acceptance: K-Line quota data table rendered when counters exist', (await quotaTable.count()) === 1);
+    const tableHeaderText = await quotaTable.locator('thead').innerText();
+    assertCheck('HOM-246 User Acceptance: Table contains STATUS WATCHLIST column header', tableHeaderText.includes('STATUS WATCHLIST'));
+    assertCheck('HOM-246 User Acceptance: Table contains MASA DITARIK column header', tableHeaderText.includes('MASA DITARIK'));
+    assertCheck('HOM-246 User Acceptance: Table contains TARIKH LUPUT (+30 HARI) column header', tableHeaderText.includes('TARIKH LUPUT'));
+    assertCheck('HOM-246 User Acceptance: Table does NOT contain KEKERAPAN PANGGILAN column', !tableHeaderText.includes('KEKERAPAN PANGGILAN'));
+    assertCheck('HOM-246 User Acceptance: Table displays Watchlist status chips (DALAM WATCHLIST / TERKELUAR)', (await quotaPage.locator(':text("DALAM WATCHLIST"), :text("TERKELUAR")').count()) >= 1);
+    const maybankRow = quotaPage.locator('text=MY.1155').first();
+    assertCheck('HOM-246 User Acceptance: Table displays active Moomoo counter MY.1155', (await maybankRow.count()) === 1);
+    assertCheck('HOM-246 User Acceptance: Table displays 30-day countdown badge', (await quotaPage.locator('text=Hari Lagi').count()) >= 1);
+
+    // Search filter
+    const searchInput = quotaPage.locator('#input-search-quota-symbol');
+    assertCheck('HOM-246 User Acceptance: Counter search filter input rendered', (await searchInput.count()) === 1);
+    await searchInput.fill('1155');
+    await quotaPage.waitForTimeout(300);
+    const visibleRows = quotaPage.locator('#table-kline-quota tbody tr');
+    assertCheck('HOM-246 User Acceptance: Search isolates matching counter MY.1155', (await visibleRows.count()) === 1);
+
+    // Clear search
+    await searchInput.fill('');
+    await quotaPage.waitForTimeout(300);
+    assertCheck('HOM-246 User Acceptance: Clearing search restores full counter list (2 counters)', (await visibleRows.count()) === 2);
+
+    // Desktop Screenshot with counters
+    await quotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '12_desktop_kline_quota_page.png'), fullPage: true });
+
+    // Clean up route
+    await quotaPage.unroute('**/api/screener/kline-quota');
+
+    // 6. Mobile Viewport Verification
+    console.log('\n--- Scenario D.2: Mobile Viewport Quota Page Verification (390 x 844) ---');
+    const mobileQuotaContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    await mobileQuotaContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+    const mobileQuotaPage = await mobileQuotaContext.newPage();
+    await mobileQuotaPage.goto(`${TARGET_URL}/#/quota`, { waitUntil: 'networkidle' });
+    await mobileQuotaPage.waitForTimeout(400);
+
+    const mobileHasHorizontalOverflow = await mobileQuotaPage.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth;
+    });
+    assertCheck('HOM-210 Mobile Acceptance: No horizontal page overflow on #/quota mobile', !mobileHasHorizontalOverflow);
+    assertCheck('HOM-246 Mobile Acceptance: Quota empty state or table present on mobile', (await mobileQuotaPage.locator('#quota-table-empty, #table-kline-quota').count()) >= 1);
+    await mobileQuotaPage.screenshot({ path: path.join(SCREENSHOT_DIR, '13_mobile_kline_quota_page.png'), fullPage: true });
+
+    await mobileQuotaContext.close();
+    await quotaContext.close();
 
   } finally {
     await browser.close();

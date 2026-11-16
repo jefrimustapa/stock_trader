@@ -9,6 +9,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(express.text({ type: ['text/plain', 'text/*'] }));
 app.use(express.urlencoded({ extended: true }));
 
 const SHARED_DATA_DIR = process.env.SHARED_DATA_DIR || '/app/shared_data';
@@ -439,7 +440,636 @@ app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
     }
 });
 
-app.get('/api/data', authenticateDashboard, (req, res) => {
+// --- Screener Configuration Engine (node:sqlite) ---
+const { DatabaseSync } = require('node:sqlite');
+
+const SCREENER_CONFIG_LIMITS = {
+    min_price: { min: 1.0, max: 10000.0 },
+    min_market_cap: { min: 10000000.0, max: 10000000000000.0 }, // $10M to $10T
+    min_volume: { min: 50000.0, max: 1000000000.0 },            // 50k to 1B
+    min_rvol: { min: 0.0, max: 50.0 },
+    max_rvol: { min: 0.1, max: 100.0 }
+};
+
+let screenerDbInstance = null;
+
+function getScreenerDb() {
+    if (!screenerDbInstance) {
+        if (!fs.existsSync(SHARED_DATA_DIR)) {
+            fs.mkdirSync(SHARED_DATA_DIR, { recursive: true });
+        }
+        const dbPath = path.join(SHARED_DATA_DIR, 'screener_config.sqlite');
+        screenerDbInstance = new DatabaseSync(dbPath);
+        screenerDbInstance.exec('PRAGMA journal_mode = WAL;');
+        screenerDbInstance.exec(`
+            CREATE TABLE IF NOT EXISTS screener_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                min_price REAL NOT NULL CHECK (min_price >= 1.0),
+                min_market_cap REAL NOT NULL CHECK (min_market_cap >= 10000000.0),
+                min_volume REAL NOT NULL CHECK (min_volume >= 50000.0),
+                min_rvol REAL NOT NULL CHECK (min_rvol >= 0.0),
+                max_rvol REAL NOT NULL CHECK (max_rvol >= min_rvol),
+                updated_at TEXT NOT NULL,
+                updated_by TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS screener_config_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                user TEXT NOT NULL,
+                action TEXT NOT NULL,
+                previous_values TEXT,
+                new_values TEXT NOT NULL
+            );
+        `);
+
+        const row = screenerDbInstance.prepare('SELECT * FROM screener_config WHERE id = 1').get();
+        if (!row) {
+            const initStmt = screenerDbInstance.prepare(`
+                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, updated_at, updated_by)
+                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, ?, 'system')
+            `);
+            initStmt.run(new Date().toISOString());
+        }
+    }
+    return screenerDbInstance;
+}
+
+app.get('/api/screener/config', authenticateDashboard, (req, res) => {
+    try {
+        const db = getScreenerDb();
+        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, updated_at, updated_by FROM screener_config WHERE id = 1').get();
+        if (!row) {
+            return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
+        }
+        return res.json({
+            config: {
+                min_price: Number(row.min_price),
+                min_market_cap: Number(row.min_market_cap),
+                min_volume: Number(row.min_volume),
+                min_rvol: Number(row.min_rvol),
+                max_rvol: Number(row.max_rvol)
+            },
+            limits: SCREENER_CONFIG_LIMITS,
+            updated_at: row.updated_at,
+            updated_by: row.updated_by
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error fetching screener config:', err);
+        return res.status(500).json({ error: 'Gagal membaca konfigurasi screener: ' + err.message });
+    }
+});
+
+function parseStrictNumericField(val, fieldName) {
+    if (typeof val !== 'number' && typeof val !== 'string') {
+        return { error: `${fieldName} mestilah nombor atau string berangka yang sah.` };
+    }
+    if (typeof val === 'string' && val.trim() === '') {
+        return { error: `${fieldName} tidak boleh kosong.` };
+    }
+    const num = Number(val);
+    if (!Number.isFinite(num)) {
+        return { error: `${fieldName} mestilah nombor yang sah.` };
+    }
+    return { value: num };
+}
+
+app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
+    try {
+        if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+            return res.status(400).json({ error: 'Body mestilah objek JSON yang sah.' });
+        }
+        const body = req.body;
+        const db = getScreenerDb();
+        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol FROM screener_config WHERE id = 1').get();
+        if (!current) {
+            return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
+        }
+
+        let newMinPrice = current.min_price;
+        let newMinMarketCap = current.min_market_cap;
+        let newMinVolume = current.min_volume;
+        let newMinRvol = current.min_rvol;
+        let newMaxRvol = current.max_rvol;
+
+        if (body.min_price !== undefined) {
+            const parsed = parseStrictNumericField(body.min_price, 'Harga minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (val < SCREENER_CONFIG_LIMITS.min_price.min) {
+                return res.status(400).json({ error: 'Harga minimum tidak boleh kurang daripada $1.00 (Had Keselamatan).' });
+            }
+            if (val > SCREENER_CONFIG_LIMITS.min_price.max) {
+                return res.status(400).json({ error: `Harga minimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.min_price.max.toLocaleString()}.` });
+            }
+            newMinPrice = val;
+        }
+
+        if (body.min_market_cap !== undefined) {
+            const parsed = parseStrictNumericField(body.min_market_cap, 'Permodalan pasaran minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (val < SCREENER_CONFIG_LIMITS.min_market_cap.min) {
+                return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh kurang daripada $${SCREENER_CONFIG_LIMITS.min_market_cap.min.toLocaleString()}.` });
+            }
+            if (val > SCREENER_CONFIG_LIMITS.min_market_cap.max) {
+                return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.min_market_cap.max.toLocaleString()}.` });
+            }
+            newMinMarketCap = val;
+        }
+
+        if (body.min_volume !== undefined) {
+            const parsed = parseStrictNumericField(body.min_volume, 'Volum minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (val < SCREENER_CONFIG_LIMITS.min_volume.min) {
+                return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh kurang daripada ${SCREENER_CONFIG_LIMITS.min_volume.min.toLocaleString()} saham.` });
+            }
+            if (val > SCREENER_CONFIG_LIMITS.min_volume.max) {
+                return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh melebihi ${SCREENER_CONFIG_LIMITS.min_volume.max.toLocaleString()} saham.` });
+            }
+            newMinVolume = val;
+        }
+
+        if (body.min_rvol !== undefined) {
+            const parsed = parseStrictNumericField(body.min_rvol, 'RVOL minimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (val < SCREENER_CONFIG_LIMITS.min_rvol.min || val > SCREENER_CONFIG_LIMITS.min_rvol.max) {
+                return res.status(400).json({ error: `RVOL minimum mestilah antara ${SCREENER_CONFIG_LIMITS.min_rvol.min} dan ${SCREENER_CONFIG_LIMITS.min_rvol.max}.` });
+            }
+            newMinRvol = val;
+        }
+
+        if (body.max_rvol !== undefined) {
+            const parsed = parseStrictNumericField(body.max_rvol, 'RVOL maksimum');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (val < SCREENER_CONFIG_LIMITS.max_rvol.min || val > SCREENER_CONFIG_LIMITS.max_rvol.max) {
+                return res.status(400).json({ error: `RVOL maksimum mestilah antara ${SCREENER_CONFIG_LIMITS.max_rvol.min} dan ${SCREENER_CONFIG_LIMITS.max_rvol.max}.` });
+            }
+            newMaxRvol = val;
+        }
+
+        // Cross-field validation: min_rvol <= max_rvol
+        if (newMinRvol > newMaxRvol) {
+            return res.status(400).json({ error: 'RVOL minimum tidak boleh melebihi RVOL maksimum.' });
+        }
+
+        const hasChanges = (
+            newMinPrice !== current.min_price ||
+            newMinMarketCap !== current.min_market_cap ||
+            newMinVolume !== current.min_volume ||
+            newMinRvol !== current.min_rvol ||
+            newMaxRvol !== current.max_rvol
+        );
+
+        if (!hasChanges) {
+            return res.json({
+                message: 'Tiada perubahan konfigurasi',
+                config: {
+                    min_price: current.min_price,
+                    min_market_cap: current.min_market_cap,
+                    min_volume: current.min_volume,
+                    min_rvol: current.min_rvol,
+                    max_rvol: current.max_rvol
+                },
+                limits: SCREENER_CONFIG_LIMITS,
+                updated_at: current.updated_at,
+                updated_by: current.updated_by
+            });
+        }
+
+        const now = new Date().toISOString();
+        const user = String(req.authUser || 'anonymous').replace(/[\r\n]/g, '').slice(0, 100);
+
+        const prevValues = JSON.stringify({
+            min_price: current.min_price,
+            min_market_cap: current.min_market_cap,
+            min_volume: current.min_volume,
+            min_rvol: current.min_rvol,
+            max_rvol: current.max_rvol
+        });
+
+        const newValues = JSON.stringify({
+            min_price: newMinPrice,
+            min_market_cap: newMinMarketCap,
+            min_volume: newMinVolume,
+            min_rvol: newMinRvol,
+            max_rvol: newMaxRvol
+        });
+
+        const updateStmt = db.prepare(`
+            UPDATE screener_config
+            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, updated_at = ?, updated_by = ?
+            WHERE id = 1
+        `);
+        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, now, user);
+
+        const auditStmt = db.prepare(`
+            INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
+            VALUES (?, ?, 'UPDATE_CONFIG', ?, ?)
+        `);
+        auditStmt.run(now, user, prevValues, newValues);
+
+        return res.json({
+            message: 'Konfigurasi screener berjaya dikemas kini',
+            config: {
+                min_price: newMinPrice,
+                min_market_cap: newMinMarketCap,
+                min_volume: newMinVolume,
+                min_rvol: newMinRvol,
+                max_rvol: newMaxRvol
+            },
+            limits: SCREENER_CONFIG_LIMITS,
+            updated_at: now,
+            updated_by: user
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error updating screener config:', err);
+        return res.status(500).json({ error: 'Gagal mengemas kini konfigurasi screener: ' + err.message });
+    }
+});
+
+app.get('/api/screener/config/audit', authenticateDashboard, (req, res) => {
+    try {
+        const db = getScreenerDb();
+        const rows = db.prepare('SELECT id, timestamp, user, action, previous_values, new_values FROM screener_config_audit ORDER BY id DESC LIMIT 20').all();
+        return res.json({ audit: rows || [] });
+    } catch (err) {
+        console.error('[Dashboard] Error fetching screener config audit:', err);
+        return res.status(500).json({ error: 'Gagal membaca log audit: ' + err.message });
+    }
+});
+
+// --- K-Line Quota Reader (node:sqlite) & Moomoo Quota Normalizer ---
+function getActiveWatchlistSymbols(customWatchlistPath = null) {
+    const watchlistFilePath = customWatchlistPath || path.join(SHARED_DATA_DIR, 'watchlist.json');
+    const activeWatchlistSymbols = new Set();
+    if (fs.existsSync(watchlistFilePath)) {
+        try {
+            const rawWl = JSON.parse(fs.readFileSync(watchlistFilePath, 'utf8'));
+            const wlArr = Array.isArray(rawWl?.watchlist) ? rawWl.watchlist : [];
+            for (const item of wlArr) {
+                if (item && item.symbol) {
+                    activeWatchlistSymbols.add(String(item.symbol).trim().toUpperCase());
+                }
+            }
+        } catch (e) {
+            console.warn('[Dashboard] Could not parse watchlist.json for quota status:', e.message);
+        }
+    }
+    return activeWatchlistSymbols;
+}
+
+function enrichMoomooDetailList(detailList, activeWatchlistSymbols, referenceTime = new Date()) {
+    if (!Array.isArray(detailList)) return [];
+    const nowMs = referenceTime.getTime();
+    return detailList.map(item => {
+        const rawCode = (item && (item.code || item.symbol)) ? String(item.code || item.symbol) : '';
+        const cleanSym = rawCode.trim().toUpperCase();
+        const symWithoutPrefix = cleanSym.replace(/^[A-Z]+\./, '');
+        const inWatchlist = activeWatchlistSymbols.has(cleanSym) ||
+                            activeWatchlistSymbols.has(symWithoutPrefix) ||
+                            Array.from(activeWatchlistSymbols).some(s => s.endsWith('.' + cleanSym) || cleanSym.endsWith('.' + s));
+
+        let expiresAt = null;
+        let daysRemaining = null;
+        let isExpired = false;
+
+        const reqTime = item && item.request_time ? String(item.request_time) : null;
+        if (reqTime) {
+            const reqDate = new Date(reqTime);
+            if (!isNaN(reqDate.getTime())) {
+                const expDate = new Date(reqDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+                expiresAt = expDate.toISOString();
+                const diffMs = expDate.getTime() - nowMs;
+                daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                isExpired = diffMs <= 0;
+            }
+        }
+
+        return {
+            symbol: cleanSym,
+            code: cleanSym,
+            name: (item && item.name) ? item.name : 'N/A',
+            request_time: reqTime,
+            expires_at: expiresAt,
+            days_remaining: daysRemaining,
+            in_watchlist: inWatchlist,
+            status: isExpired ? 'EXPIRED' : 'ACTIVE'
+        };
+    });
+}
+
+function getKlineQuotaData(customDbPath = null, customWatchlistPath = null) {
+    const quotaDbPath = customDbPath || path.join(SHARED_DATA_DIR, 'quota_tracker.sqlite');
+    const TOTAL_QUOTA = 100;
+    const now = new Date();
+    const nowMs = now.getTime();
+    const activeWatchlistSymbols = getActiveWatchlistSymbols(customWatchlistPath);
+
+    if (!fs.existsSync(quotaDbPath)) {
+        return {
+            total_quota: TOTAL_QUOTA,
+            used_quota: 0,
+            remaining_quota: TOTAL_QUOTA,
+            percent_used: 0.0,
+            status: 'HEALTHY',
+            as_of: now.toISOString(),
+            symbols: [],
+            db_exists: false
+        };
+    }
+
+    let db;
+    try {
+        db = new DatabaseSync(quotaDbPath, { readOnly: true });
+        const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='kline_quota_history'").get();
+        if (!tableCheck) {
+            db.close();
+            return {
+                total_quota: TOTAL_QUOTA,
+                used_quota: 0,
+                remaining_quota: TOTAL_QUOTA,
+                percent_used: 0.0,
+                status: 'HEALTHY',
+                as_of: now.toISOString(),
+                symbols: [],
+                db_exists: false
+            };
+        }
+
+        const rows = db.prepare(`
+            SELECT symbol, first_requested_at, expires_at, request_count
+            FROM kline_quota_history
+            ORDER BY expires_at ASC, symbol ASC
+        `).all();
+
+        db.close();
+
+        const symbols = (rows || []).map(row => {
+            const expDate = new Date(row.expires_at);
+            const expMs = expDate.getTime();
+            const diffMs = expMs - nowMs;
+            const daysRemaining = Number.isFinite(expMs)
+                ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+                : 0;
+            const isExpired = Number.isFinite(expMs) ? (diffMs <= 0) : true;
+
+            const cleanSym = String(row.symbol || '').trim().toUpperCase();
+            const symWithoutPrefix = cleanSym.replace(/^[A-Z]+\./, '');
+            const inWatchlist = activeWatchlistSymbols.has(cleanSym) ||
+                                activeWatchlistSymbols.has(symWithoutPrefix) ||
+                                Array.from(activeWatchlistSymbols).some(s => s.endsWith('.' + cleanSym) || cleanSym.endsWith('.' + s));
+
+            return {
+                symbol: row.symbol,
+                first_requested_at: row.first_requested_at,
+                expires_at: row.expires_at,
+                request_count: Number(row.request_count) || 1,
+                days_remaining: daysRemaining,
+                status: isExpired ? 'EXPIRED' : 'ACTIVE',
+                in_watchlist: inWatchlist
+            };
+        });
+
+        const activeSymbols = symbols.filter(s => s.status === 'ACTIVE');
+        const usedQuota = activeSymbols.length;
+        const remainingQuota = Math.max(0, TOTAL_QUOTA - usedQuota);
+        const percentUsed = Number(((usedQuota / TOTAL_QUOTA) * 100).toFixed(1));
+
+        let status = 'HEALTHY';
+        if (percentUsed >= 90) {
+            status = 'CRITICAL';
+        } else if (percentUsed >= 75) {
+            status = 'WARNING';
+        }
+
+        return {
+            total_quota: TOTAL_QUOTA,
+            used_quota: usedQuota,
+            remaining_quota: remainingQuota,
+            percent_used: percentUsed,
+            status,
+            as_of: now.toISOString(),
+            symbols,
+            db_exists: true
+        };
+    } catch (err) {
+        if (db) {
+            try { db.close(); } catch (e) {}
+        }
+        console.error('[Dashboard] Error reading kline quota db:', err);
+        throw err;
+    }
+}
+
+let moomooQuotaCache = {
+    data: null,
+    cachedAt: 0
+};
+
+async function getMoomooOpenApiQuota(customBridgeUrl = null) {
+    const now = Date.now();
+    if (moomooQuotaCache.data && (now - moomooQuotaCache.cachedAt < 30000)) {
+        return moomooQuotaCache.data;
+    }
+    const targetUrl = customBridgeUrl || BRIDGE_URL;
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return {
+            status: 'UNAVAILABLE',
+            connected: false,
+            used_quota: null,
+            remain_quota: null,
+            total_quota: null,
+            detail_list: [],
+            error: 'Bridge service token not configured'
+        };
+    }
+    try {
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/screener/moomoo-quota`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 2500
+        });
+        const result = bridgeRes.data;
+        moomooQuotaCache = {
+            data: result,
+            cachedAt: now
+        };
+        return result;
+    } catch (err) {
+        let errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        if (/ECONNREFUSED|Connection refused|not reachable|ENOTFOUND|EAI_AGAIN|connect/i.test(errMsg)) {
+            errMsg = 'Moomoo OpenD tidak dapat dihubungi';
+        } else if (/ETIMEDOUT|timeout/i.test(errMsg)) {
+            errMsg = 'Sambungan ke Moomoo OpenD tamat masa';
+        }
+        return {
+            status: 'UNAVAILABLE',
+            connected: false,
+            used_quota: null,
+            remain_quota: null,
+            total_quota: null,
+            detail_list: [],
+            error: errMsg
+        };
+    }
+}
+
+app.get('/api/screener/kline-quota', authenticateDashboard, async (req, res) => {
+    try {
+        const quotaData = getKlineQuotaData();
+        const moomooQuota = await getMoomooOpenApiQuota();
+        const activeWatchlistSymbols = getActiveWatchlistSymbols();
+
+        let enrichedMoomooQuota = { ...moomooQuota };
+        if (moomooQuota && moomooQuota.connected && Array.isArray(moomooQuota.detail_list)) {
+            enrichedMoomooQuota.detail_list = enrichMoomooDetailList(moomooQuota.detail_list, activeWatchlistSymbols);
+        } else {
+            enrichedMoomooQuota.detail_list = [];
+        }
+
+        return res.json({
+            ...quotaData,
+            moomoo_quota: enrichedMoomooQuota,
+            moomoo_counters: enrichedMoomooQuota.detail_list,
+            opend_connected: Boolean(moomooQuota && moomooQuota.connected)
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error fetching kline quota data:', err);
+        return res.status(500).json({ error: 'Gagal membaca data kuota K-line: ' + err.message });
+    }
+});
+
+// In-Memory K-Line Cache
+const klineCacheMap = new Map();
+
+function getKlineTtlMs(interval) {
+    if (interval === 'day') {
+        return 30 * 1000; // 30s
+    }
+    return 10 * 1000; // 10s for 15m, 5m, 1m
+}
+
+app.get('/api/kline', authenticateDashboard, async (req, res) => {
+    try {
+        const symbol = req.query.symbol;
+        if (!symbol || typeof symbol !== 'string') {
+            return res.status(400).json({ error: 'Parameter symbol diperlukan' });
+        }
+        const interval = String(req.query.interval || 'day').toLowerCase();
+        const num = parseInt(req.query.num || '100', 10) || 100;
+
+        const cacheKey = `${symbol.toUpperCase()}:${interval}`;
+        const cached = klineCacheMap.get(cacheKey);
+        const ttl = getKlineTtlMs(interval);
+        const now = Date.now();
+
+        if (cached && (now - cached.timestamp < ttl)) {
+            return res.json({
+                ...cached.data,
+                cached: true
+            });
+        }
+
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(503).json({
+                status: 'UNAVAILABLE',
+                connected: false,
+                symbol,
+                interval,
+                candles: [],
+                error: 'Bridge service token tidak dikonfigurasi'
+            });
+        }
+
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/kline`, {
+            params: { symbol, interval, num },
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 6000
+        });
+
+        const result = bridgeRes.data;
+        if (result.status === 'HEALTHY') {
+            klineCacheMap.set(cacheKey, {
+                data: result,
+                timestamp: now
+            });
+        }
+
+        return res.json({
+            ...result,
+            cached: false
+        });
+    } catch (err) {
+        let errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        if (/ECONNREFUSED|Connection refused|not reachable|ENOTFOUND|EAI_AGAIN|connect/i.test(errMsg)) {
+            errMsg = 'Moomoo OpenD tidak dapat dihubungi';
+        } else if (/ETIMEDOUT|timeout/i.test(errMsg)) {
+            errMsg = 'Sambungan ke Moomoo OpenD tamat masa';
+        }
+        return res.status(200).json({
+            status: 'UNAVAILABLE',
+            connected: false,
+            symbol: req.query.symbol || '',
+            interval: req.query.interval || 'day',
+            candles: [],
+            error: errMsg
+        });
+    }
+});
+
+app.post('/api/kline/release', authenticateDashboard, async (req, res) => {
+    try {
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) {}
+        }
+        const { symbol, interval } = body || {};
+        if (!symbol || typeof symbol !== 'string') {
+            return res.status(400).json({ error: 'Parameter symbol diperlukan' });
+        }
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(200).json({ status: 'OK', released: symbol, active: false });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.post(`${targetUrl}/api/v1/kline/release`, {
+            symbol,
+            interval: interval || 'day'
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Service-Token': BRIDGE_SERVICE_TOKEN
+            },
+            timeout: 4000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        return res.status(200).json({ status: 'OK', released: req.body?.symbol, error: err.message });
+    }
+});
+
+app.get('/api/kline/subscriptions', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/kline/subscriptions`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 4000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching kline subscriptions from bridge:', err.message);
+        return res.status(502).json({
+            error: 'Gagal menghubungi pelayan Bridge K-line: ' + (err.response?.data?.error || err.message)
+        });
+    }
+});
+
+app.get('/api/data', authenticateDashboard, async (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
 
@@ -458,10 +1088,13 @@ app.get('/api/data', authenticateDashboard, (req, res) => {
         } catch (e) {}
     }
 
+    const moomooQuota = await getMoomooOpenApiQuota();
+
     res.json({
         user: req.authUser,
         watchlist,
         sentinel,
+        moomoo_quota: moomooQuota,
         timestamp: new Date().toISOString()
     });
 });
@@ -479,6 +1112,17 @@ app.get("*", authenticateDashboard, (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`[Dashboard] Trading Dashboard running on port ${port}`);
-});
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`[Dashboard] Trading Dashboard running on port ${port}`);
+    });
+}
+
+module.exports = {
+    app,
+    getKlineQuotaData,
+    getMoomooOpenApiQuota,
+    getActiveWatchlistSymbols,
+    enrichMoomooDetailList
+};
+

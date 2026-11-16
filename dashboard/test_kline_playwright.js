@@ -1,0 +1,372 @@
+/**
+ * test_kline_playwright.js
+ * E2E Playwright test suite for Watchlist K-line Chart Drawer (HOM-248).
+ * Runs in container playwright-inno-x per SOP HOM-237.
+ */
+
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+const TARGET_URL = process.env.TEST_URL || 'http://stock_trading_dashboard:3000';
+const SERVICE_TOKEN = process.env.BRIDGE_SERVICE_TOKEN;
+if (!SERVICE_TOKEN) {
+  console.error('Fatal Configuration Error: BRIDGE_SERVICE_TOKEN environment variable is required.');
+  process.exit(1);
+}
+const QA_DIR = '/qa';
+
+if (!fs.existsSync(QA_DIR)) {
+  fs.mkdirSync(QA_DIR, { recursive: true });
+}
+
+console.log('================================================================');
+console.log('  Watchlist K-line Chart Drawer E2E Playwright Suite (HOM-248)');
+console.log(`  Target: ${TARGET_URL}`);
+console.log('================================================================\n');
+
+let totalTests = 0;
+let passedTests = 0;
+
+function assertCheck(desc, condition) {
+  totalTests++;
+  if (condition) {
+    console.log(`  ✓ PASS [${totalTests}]: ${desc}`);
+    passedTests++;
+  } else {
+    console.error(`  ✗ FAIL [${totalTests}]: ${desc}`);
+    process.exitCode = 1;
+  }
+}
+
+async function runSuite() {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    // -------------------------------------------------------------------------
+    // Scenario 1: Desktop Viewport (1280 x 800) - Watchlist Row Click & K-line Drawer
+    // -------------------------------------------------------------------------
+    console.log('\n--- Scenario 1: Desktop Watchlist Click & K-line Drawer ---');
+    const desktopContext = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+
+    const parsedTarget = new URL(TARGET_URL);
+    await desktopContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+
+    const page = await desktopContext.newPage();
+    const consoleErrors = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    // 1. Navigate to Watchlist
+    await page.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(500);
+
+    // Verify Watchlist table rendered
+    const rows = page.locator('table tbody tr');
+    const rowCount = await rows.count();
+    assertCheck('Watchlist table has rows', rowCount > 0);
+
+    // Verify row pointer cursor & hint chip
+    const hintChip = page.locator('text=Klik baris untuk K-line');
+    assertCheck('Hint chip "Klik baris untuk K-line" rendered in toolbar', (await hintChip.count()) >= 1);
+
+    // 2. Click a valid trading watchlist row (e.g. US.VVVV or first non-OTC row)
+    const validRow = page.locator('tr:has-text("US.VVVV")');
+    if ((await validRow.count()) > 0) {
+      console.log('  Clicking US.VVVV row to test active candlestick chart...');
+      await validRow.first().click();
+    } else {
+      console.log('  Clicking first watchlist row to open K-line drawer...');
+      await rows.first().click();
+    }
+    await page.waitForTimeout(1000);
+
+    // 3. Verify Drawer opened
+    const drawer = page.locator('.MuiDrawer-paperAnchorRight');
+    assertCheck('MUI Right Drawer paper is visible', await drawer.isVisible());
+
+    // Verify Drawer Header has stock symbol
+    const drawerSymbol = await drawer.locator('h6').first().textContent();
+    assertCheck(`Drawer displays stock symbol (${drawerSymbol})`, drawerSymbol && drawerSymbol.length > 0);
+
+    // Verify Timeframe buttons exist
+    const btn1D = drawer.getByRole('button', { name: '1D', exact: true });
+    const btn15M = drawer.getByRole('button', { name: '15M', exact: true });
+    const btn5M = drawer.getByRole('button', { name: '5M', exact: true });
+    const btn1M = drawer.getByRole('button', { name: '1M', exact: true });
+
+    assertCheck('Timeframe 1D button visible', await btn1D.isVisible());
+    assertCheck('Timeframe 15M button visible', await btn15M.isVisible());
+    assertCheck('Timeframe 5M button visible', await btn5M.isVisible());
+    assertCheck('Timeframe 1M button visible', await btn1M.isVisible());
+
+    // 4. Verify Chart Canvas or Fallback Warning Card
+    const chartContainer = page.locator('#kline-chart-container');
+    const isChartVisible = await chartContainer.isVisible();
+    const isWarningVisible = (await drawer.locator('text=Data Graf K-line').count() > 0) ||
+                             (await drawer.locator('text=Pasaran OTC Tidak Disokong').count() > 0);
+
+    assertCheck(
+      'Drawer either rendered TradingView chart canvas OR fail-closed/OTC info card',
+      isChartVisible || isWarningVisible
+    );
+
+    if (isChartVisible) {
+      const canvasElements = chartContainer.locator('canvas');
+      const canvasCount = await canvasElements.count();
+      assertCheck('TradingView Lightweight Charts HTML5 canvas elements instantiated', canvasCount > 0);
+      const ohlcHud = (await drawer.locator('text=Vol').count() > 0) || (await drawer.locator('text=Arahkan kursor').count() > 0);
+      assertCheck('Interactive OHLC HUD bar rendered above chart', ohlcHud);
+      const zoomBtnRecent = drawer.locator('button:has-text("40 Lilin")');
+      assertCheck('Zoom control "40 Lilin" button rendered', (await zoomBtnRecent.count()) > 0);
+
+      // Screenshot 1D view for US.VVVV showing new IPO notice and proportional single candle
+      const vvvvScreenshotPath = path.join(QA_DIR, 'kline-watchlist-vvvv-1d.png');
+      await page.screenshot({ path: vvvvScreenshotPath });
+      assertCheck(`Captured US.VVVV 1D screenshot to ${vvvvScreenshotPath}`, fs.existsSync(vvvvScreenshotPath));
+    }
+
+    // 5. Test switching timeframe to 15M
+    console.log('  Switching timeframe to 15M...');
+    await btn15M.click();
+    await page.waitForTimeout(1000);
+    assertCheck('Timeframe switched to 15M without leaving page', page.url().includes('/#/watchlist'));
+
+    // 6. Screenshot Desktop Drawer
+    const desktopScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-desktop.png');
+    await page.screenshot({ path: desktopScreenshotPath });
+    assertCheck(`Captured desktop screenshot to ${desktopScreenshotPath}`, fs.existsSync(desktopScreenshotPath));
+
+    // 7. Close drawer
+    const closeBtn = drawer.locator('button[title="Tutup panel"]');
+    await closeBtn.click();
+    await page.waitForTimeout(500);
+
+    // Verify drawer closed
+    const isDrawerClosed = !(await drawer.isVisible());
+    assertCheck('Drawer closed when close button clicked', isDrawerClosed);
+
+    // Also test opening US.SMA on 1D timeframe if row is present in table
+    const smaRow = page.locator('tr:has-text("US.SMA")');
+    if ((await smaRow.count()) > 0) {
+      console.log('  Opening US.SMA 1D candlestick chart...');
+      await smaRow.first().click();
+      await page.waitForTimeout(1500);
+      const smaScreenshotPath = path.join(QA_DIR, 'kline-watchlist-sma-desktop.png');
+      await page.screenshot({ path: smaScreenshotPath });
+      assertCheck(`Captured US.SMA screenshot to ${smaScreenshotPath}`, fs.existsSync(smaScreenshotPath));
+      await drawer.locator('button[title="Tutup panel"]').click();
+      await page.waitForTimeout(400);
+    }
+
+    await desktopContext.close();
+
+    // -------------------------------------------------------------------------
+    // Scenario 2: Mobile Viewport (390 x 844) - Bottom Drawer Layout
+    // -------------------------------------------------------------------------
+    console.log('\n--- Scenario 2: Mobile Bottom Drawer Layout (390 x 844) ---');
+    const mobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    await mobileContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+
+    const mobilePage = await mobileContext.newPage();
+    await mobilePage.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
+    await mobilePage.waitForTimeout(500);
+
+    const mobileSmaRow = mobilePage.locator('tr:has-text("US.SMA")');
+    if ((await mobileSmaRow.count()) > 0) {
+      console.log('  Clicking US.SMA row in mobile portrait to test active candlestick chart...');
+      await mobileSmaRow.first().click();
+    } else {
+      const mobileRows = mobilePage.locator('table tbody tr');
+      await mobileRows.first().click();
+    }
+    await mobilePage.waitForTimeout(1000);
+
+    const mobileDrawer = mobilePage.locator('.MuiDrawer-paperAnchorBottom');
+    assertCheck('Mobile: Bottom Drawer opened on row click', await mobileDrawer.isVisible());
+
+    // Verify mobile drawer anchor bottom style / height
+    const drawerHeight = await mobileDrawer.evaluate((el) => el.getBoundingClientRect().height);
+    assertCheck(`Mobile: Drawer height occupies majority of screen (${Math.round(drawerHeight)}px)`, drawerHeight > 500);
+
+    // Verify chart container rendered
+    const mobileChart = mobileDrawer.locator('#kline-chart-container');
+    assertCheck('Mobile: Chart container rendered', await mobileChart.isVisible());
+    const mobileChartHeight = await mobileChart.evaluate((el) => el.clientHeight);
+    console.log(`  Mobile chart canvas height: ${mobileChartHeight}px`);
+    assertCheck(`Mobile: Chart canvas has usable height (${mobileChartHeight}px >= 200px)`, mobileChartHeight >= 200);
+
+    // Verify bottom info bar is visible and within the drawer viewport (not cropped!)
+    const bottomBar = mobileDrawer.locator('text=Sumber: Moomoo OpenAPI');
+    assertCheck('Mobile: Bottom status bar is visible and not cropped', await bottomBar.isVisible());
+
+    const mobileScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-mobile.png');
+    await mobilePage.screenshot({ path: mobileScreenshotPath });
+    assertCheck(`Captured mobile screenshot to ${mobileScreenshotPath}`, fs.existsSync(mobileScreenshotPath));
+
+    await mobileDrawer.locator('button[title="Tutup panel"]').click();
+    await mobilePage.waitForTimeout(400);
+    assertCheck('Mobile: Drawer closed on close button click', !(await mobileDrawer.isVisible()));
+
+    await mobileContext.close();
+
+    // -------------------------------------------------------------------------
+    // Scenario 2B: Mobile Landscape Viewport (844 x 390) - Fullscreen Compact Mode
+    // -------------------------------------------------------------------------
+    console.log('\n--- Scenario 2B: Mobile Landscape Viewport (844 x 390) ---');
+    const landscapeContext = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+    });
+    await landscapeContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+
+    const landscapePage = await landscapeContext.newPage();
+    await landscapePage.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
+    await landscapePage.waitForTimeout(500);
+
+    const validLandscapeRow = landscapePage.locator('tr:has-text("US.VVVV")');
+    if ((await validLandscapeRow.count()) > 0) {
+      console.log('  Clicking US.VVVV row in landscape to test active candlestick chart...');
+      await validLandscapeRow.first().click();
+    } else {
+      const landscapeRows = landscapePage.locator('table tbody tr');
+      await landscapeRows.first().click();
+    }
+    await landscapePage.waitForTimeout(1000);
+
+    const landscapeDrawer = landscapePage.locator('.MuiDrawer-paperAnchorRight');
+    assertCheck('Mobile Landscape: Drawer opened on row click', await landscapeDrawer.isVisible());
+
+    const landscapeBounds = await landscapeDrawer.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    console.log(`  Landscape drawer dimensions: ${Math.round(landscapeBounds.width)}x${Math.round(landscapeBounds.height)}px`);
+    assertCheck(`Landscape: Drawer width covers full viewport (${Math.round(landscapeBounds.width)}px >= 840px)`, landscapeBounds.width >= 840);
+    assertCheck(`Landscape: Drawer height covers full viewport (${Math.round(landscapeBounds.height)}px >= 380px)`, landscapeBounds.height >= 380);
+
+    // Verify chart container exists and has valid height without vertical overflow
+    const landscapeChart = landscapeDrawer.locator('#kline-chart-container');
+    assertCheck('Landscape: Chart container rendered', await landscapeChart.isVisible());
+    const chartHeight = await landscapeChart.evaluate((el) => el.clientHeight);
+    console.log(`  Landscape chart canvas height: ${chartHeight}px`);
+    assertCheck(`Landscape: Chart canvas has usable height (${chartHeight}px >= 140px)`, chartHeight >= 140);
+
+    // Verify HUD bar rendered
+    const hudBar = landscapeDrawer.locator('text=Vol');
+    assertCheck('Landscape: Interactive HUD bar visible', (await hudBar.count()) >= 1);
+
+    const landscapeScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-landscape.png');
+    await landscapePage.screenshot({ path: landscapeScreenshotPath });
+    assertCheck(`Captured landscape screenshot to ${landscapeScreenshotPath}`, fs.existsSync(landscapeScreenshotPath));
+
+    await landscapeDrawer.locator('button[title="Tutup panel"]').click();
+    await landscapePage.waitForTimeout(400);
+    assertCheck('Landscape: Drawer closed on close button click', !(await landscapeDrawer.isVisible()));
+
+    await landscapeContext.close();
+
+    // -------------------------------------------------------------------------
+    // Scenario 3: OTC Market Stock Handling (US.MGCLY)
+    // -------------------------------------------------------------------------
+    console.log('\n--- Scenario 3: OTC Market Stock Handling (US.MGCLY) ---');
+    const otcContext = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+    await otcContext.addCookies([
+      {
+        name: 'authentik_service_token',
+        value: SERVICE_TOKEN,
+        domain: parsedTarget.hostname,
+        path: '/',
+      },
+    ]);
+
+    const otcPage = await otcContext.newPage();
+    await otcPage.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle' });
+    await otcPage.waitForTimeout(500);
+
+    // Locate the row with US.MGCLY
+    const mgclyRow = otcPage.locator('tr:has-text("US.MGCLY")');
+    if ((await mgclyRow.count()) > 0) {
+      console.log('  Found US.MGCLY row in Watchlist table...');
+      assertCheck('US.MGCLY row present in Watchlist table', (await mgclyRow.count()) >= 1);
+      const otcChipInTable = mgclyRow.locator('text=OTC');
+      assertCheck('OTC remark badge preserved in table row for US.MGCLY', (await otcChipInTable.count()) >= 1);
+
+      console.log('  Clicking US.MGCLY row to open drawer...');
+      await mgclyRow.first().click();
+      await otcPage.waitForTimeout(1000);
+
+      const otcDrawer = otcPage.locator('.MuiDrawer-paperAnchorRight');
+      assertCheck('Drawer opened for US.MGCLY', await otcDrawer.isVisible());
+
+      // Verify OTC title
+      const otcTitle = otcDrawer.locator('text=Pasaran OTC Tidak Disokong Moomoo OpenAPI');
+      assertCheck('Drawer displays accurate title "Pasaran OTC Tidak Disokong Moomoo OpenAPI"', (await otcTitle.count()) >= 1);
+
+      // Verify OTC chip
+      const otcChipInDrawer = otcDrawer.locator('text=US OTC Market · Tiada Suapan Data Moomoo');
+      assertCheck('Drawer displays "US OTC Market · Tiada Suapan Data Moomoo" chip', (await otcChipInDrawer.count()) >= 1);
+
+      // Verify NO misleading "Buka Panel Kawalan OpenD" button
+      const openDButton = otcDrawer.locator('text=Buka Panel Kawalan OpenD');
+      assertCheck('Does NOT display misleading "Buka Panel Kawalan OpenD" button', (await openDButton.count()) === 0);
+
+      // Verify "Tutup Panel" and "Lihat di Yahoo Finance" buttons exist
+      const closePanelBtn = otcDrawer.getByRole('button', { name: 'Tutup Panel', exact: true });
+      const yahooBtn = otcDrawer.getByRole('link', { name: /Yahoo Finance/i });
+      assertCheck('"Tutup Panel" action button visible', await closePanelBtn.isVisible());
+      assertCheck('"Lihat di Yahoo Finance" link visible', await yahooBtn.isVisible());
+
+      const otcScreenshotPath = path.join(QA_DIR, 'kline-watchlist-drawer-otc.png');
+      await otcPage.screenshot({ path: otcScreenshotPath });
+      assertCheck(`Captured OTC drawer screenshot to ${otcScreenshotPath}`, fs.existsSync(otcScreenshotPath));
+
+      await closePanelBtn.click();
+      await otcPage.waitForTimeout(400);
+      assertCheck('Drawer closed when "Tutup Panel" clicked', !(await otcDrawer.isVisible()));
+    } else {
+      console.log('  US.MGCLY not found in current watchlist; skipping row click test.');
+    }
+
+    await otcContext.close();
+
+    console.log('\n================================================================');
+    console.log(`  E2E Test Suite Completed: ${passedTests}/${totalTests} Passed`);
+    console.log('================================================================\n');
+
+  } catch (err) {
+    console.error('Test run error:', err);
+    process.exitCode = 1;
+  } finally {
+    await browser.close();
+  }
+}
+
+runSuite();

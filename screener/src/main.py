@@ -375,6 +375,16 @@ def main():
     while running:
         try:
             logger.info("Starting market universe scan cycle...")
+            # Hot-read active configuration from SQLite database before screening
+            active_cfg = ScreenerConfig.load_active_config()
+            logger.info(
+                "Active Screener Parameters: min_price=$%.2f, min_market_cap=$%.0f, min_adv20=%.0f, min_rvol=%.2f, max_rvol=%.2f",
+                ScreenerConfig.CLOUD_MIN_PRICE,
+                ScreenerConfig.CLOUD_MIN_MARKET_CAP,
+                ScreenerConfig.CLOUD_MIN_ADV20,
+                ScreenerConfig.MOM_MIN_RVOL,
+                ScreenerConfig.MOM_MAX_RVOL
+            )
             market_status, is_live = determine_market_status()
             logger.info("Current market session: %s (is_live=%s)", market_status, is_live)
 

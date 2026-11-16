@@ -61,3 +61,18 @@ def get_metrics(caller: str = Depends(authenticate_request)):
         "quota_tracker_attached": True,
         "caller": caller
     }
+
+
+@router.get("/api/v1/screener/moomoo-quota")
+def get_moomoo_quota(caller: str = Depends(authenticate_request)):
+    """
+    Returns real 30-day K-line quota from Moomoo OpenAPI (OpenQuoteContext).
+    Strict fail-closed semantics:
+    - If OpenD is disconnected or unauthenticated, returns status UNAVAILABLE and null quotas.
+    """
+    moomoo_client = get_moomoo_client()
+    quota_res = moomoo_client.get_kline_quota()
+    quota_res["caller"] = caller
+    quota_res["timestamp"] = datetime.now(timezone.utc).isoformat()
+    return quota_res
+

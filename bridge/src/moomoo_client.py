@@ -1,12 +1,18 @@
 import concurrent.futures
 import logging
 import socket
+import threading
+import time
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 try:
-    from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK, SysConfig
+    from moomoo import (
+        OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK, SysConfig,
+        OpenQuoteContext, SubType, KLType
+    )
     from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
     # Patch OpenContextBase._init_connect_sync to avoid infinite while loop on auth failure
     _orig_init_connect_sync = OpenContextBase._init_connect_sync
@@ -24,11 +30,363 @@ try:
     ReqInfo.wait = _fast_req_info_wait
 except ImportError:
     OpenSecTradeContext = None
+    OpenQuoteContext = None
+    SubType = None
+    KLType = None
     TrdEnv = None
     TrdMarket = None
     RET_OK = 0
     ContextStatus = None
     SysConfig = None
+
+
+class SubscriptionManager:
+    """
+    Manages active Moomoo OpenAPI K-line subscriptions.
+    - Max 100 concurrent subscription slots.
+    - 60-second minimum subscription hold time (enforced by Moomoo OpenD).
+    - Ref counting when multiple requests view the same symbol+interval.
+    - Delayed unsubscribe cleanup worker (cooldown 65s).
+    - LRU eviction of pending unsubscriptions when approaching limit (>= 80 slots).
+    """
+
+    INTERVAL_MAP = {
+        "day": ("day", "K_DAY"),
+        "1d": ("day", "K_DAY"),
+        "15m": ("15m", "K_15M"),
+        "5m": ("5m", "K_5M"),
+        "1m": ("1m", "K_1M"),
+    }
+
+    def __init__(self, client: "MoomooClient"):
+        self.client = client
+        self.subscriptions: Dict[str, Dict[str, Any]] = {}
+        self.lock = threading.RLock()
+
+    @staticmethod
+    def normalize_symbol(symbol: Optional[str]) -> str:
+        if not symbol or not isinstance(symbol, str):
+            return ""
+        s = symbol.strip().upper()
+        if not s:
+            return ""
+        if "." not in s:
+            s = f"US.{s}"
+        return s
+
+    @classmethod
+    def normalize_interval(cls, interval: Optional[str]) -> Tuple[str, Any, Any]:
+        """
+        Returns (normalized_interval_str, SubType_val, KLType_val).
+        Defaults to 'day' if unrecognized.
+        """
+        raw = str(interval or "day").strip().lower()
+        norm_key, sdk_key = cls.INTERVAL_MAP.get(raw, ("day", "K_DAY"))
+        sub_type_val = getattr(SubType, sdk_key, sdk_key) if SubType else sdk_key
+        kl_type_val = getattr(KLType, sdk_key, sdk_key) if KLType else sdk_key
+        return norm_key, sub_type_val, kl_type_val
+
+    def get_subscriptions(self) -> List[Dict[str, Any]]:
+        with self.lock:
+            now = time.time()
+            res = []
+            for k, v in self.subscriptions.items():
+                res.append({
+                    "key": k,
+                    "symbol": v["symbol"],
+                    "interval": v["interval"],
+                    "ref_count": v["ref_count"],
+                    "pending_unsub": v["pending_unsub"],
+                    "hold_duration_sec": round(now - v["subscribed_at"], 1),
+                    "can_unsubscribe": (now - v["subscribed_at"]) >= 60.0
+                })
+            return res
+
+    def _evict_expired_unsub(self) -> int:
+        """
+        LRU eviction for slots marked pending_unsub that have passed the 60s minimum hold.
+        Must be called under self.lock.
+        """
+        now = time.time()
+        evicted = 0
+        to_remove = []
+        for key, entry in self.subscriptions.items():
+            if entry["pending_unsub"] and (now - entry["subscribed_at"]) >= 60.0:
+                to_remove.append((key, entry))
+
+        if to_remove:
+            ctx = self.client.get_quote_context()
+            for key, entry in to_remove:
+                if ctx is not None:
+                    try:
+                        ctx.unsubscribe([entry["symbol"]], [entry["subtype"]])
+                    except Exception as e:
+                        logger.warning("Error unsubscribing %s during LRU eviction: %s", key, e)
+                del self.subscriptions[key]
+                evicted += 1
+                logger.info("Evicted expired K-line subscription slot for %s", key)
+        return evicted
+
+    def cleanup_expired_subscriptions(self) -> int:
+        """
+        Called by periodic background worker to clean up pending unsubscriptions.
+        Only unbinds if hold duration >= 65s (grace period over 60s OpenD minimum).
+        Also reaps orphaned subscriptions where ref_count > 0 but last_accessed >= 300s (5 minutes).
+        """
+        with self.lock:
+            now = time.time()
+            to_remove = []
+            for key, entry in self.subscriptions.items():
+                # Server-side orphan reaper: mark abandoned subscriptions as pending_unsub
+                if not entry["pending_unsub"] and (now - entry.get("last_accessed", entry["subscribed_at"])) >= 300.0:
+                    logger.warning(
+                        "Reaping orphaned subscription %s (idle for %.1fs with ref_count %d)",
+                        key, now - entry.get("last_accessed", entry["subscribed_at"]), entry["ref_count"]
+                    )
+                    entry["ref_count"] = 0
+                    entry["pending_unsub"] = True
+                    entry["release_time"] = now
+
+                if entry["pending_unsub"] and (now - entry["subscribed_at"]) >= 65.0:
+                    to_remove.append((key, entry))
+
+            if not to_remove:
+                return 0
+
+            ctx = self.client.get_quote_context()
+            evicted = 0
+            for key, entry in to_remove:
+                if ctx is not None:
+                    try:
+                        ctx.unsubscribe([entry["symbol"]], [entry["subtype"]])
+                    except Exception as e:
+                        logger.warning("Background cleanup unsubscribe error for %s: %s", key, e)
+                del self.subscriptions[key]
+                evicted += 1
+                logger.info("Cleaned up expired subscription slot for %s (held %.1fs)", key, now - entry["subscribed_at"])
+            return evicted
+
+    def release_subscription(self, symbol: str, interval: str = "day") -> Dict[str, Any]:
+        norm_sym = self.normalize_symbol(symbol)
+        norm_int, subtype, _ = self.normalize_interval(interval)
+        if not norm_sym:
+            return {"status": "ERROR", "error": "Simbol kaunter diperlukan"}
+
+        key = f"{norm_sym}:{norm_int}"
+        with self.lock:
+            if key not in self.subscriptions:
+                return {"status": "OK", "released": norm_sym, "interval": norm_int, "active": False}
+
+            sub = self.subscriptions[key]
+            sub["ref_count"] = max(0, sub["ref_count"] - 1)
+            now = time.time()
+            if sub["ref_count"] == 0:
+                sub["pending_unsub"] = True
+                sub["release_time"] = now
+                if (now - sub["subscribed_at"]) >= 65.0:
+                    ctx = self.client.get_quote_context()
+                    if ctx is not None:
+                        try:
+                            ctx.unsubscribe([sub["symbol"]], [sub["subtype"]])
+                        except Exception as e:
+                            logger.warning("Immediate unsubscribe error for %s: %s", key, e)
+                    del self.subscriptions[key]
+                    logger.info("Immediately unsubscribed %s after release (held %.1fs)", key, now - sub["subscribed_at"])
+                    return {"status": "OK", "released": norm_sym, "interval": norm_int, "active": False}
+                else:
+                    logger.info("Marked %s pending_unsub (held %.1fs, waiting for 65s cooldown)", key, now - sub["subscribed_at"])
+            return {"status": "OK", "released": norm_sym, "interval": norm_int, "active": sub["ref_count"] > 0}
+
+    def get_kline(self, symbol: str, interval: str = "day", num: int = 100) -> Dict[str, Any]:
+        norm_sym = self.normalize_symbol(symbol)
+        if not norm_sym:
+            return {
+                "status": "ERROR",
+                "connected": False,
+                "symbol": symbol,
+                "interval": interval,
+                "candles": [],
+                "error": "Simbol kaunter diperlukan"
+            }
+
+        norm_int, subtype, kltype = self.normalize_interval(interval)
+        try:
+            num = int(num)
+        except (ValueError, TypeError):
+            num = 100
+        num = max(10, min(1000, num))
+
+        # Check OpenD connectivity
+        conn_status = self.client.get_connection_status()
+        if conn_status not in ("CONNECTED", "IDLE"):
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "interval": norm_int,
+                "candles": [],
+                "error": f"OpenD gateway is not authenticated (status: {conn_status})"
+            }
+
+        key = f"{norm_sym}:{norm_int}"
+        with self.lock:
+            # Manage subscription slot
+            if key in self.subscriptions:
+                sub = self.subscriptions[key]
+                sub["last_accessed"] = time.time()
+                sub["pending_unsub"] = False
+                sub["ref_count"] = max(1, sub["ref_count"] + 1)
+            else:
+                if len(self.subscriptions) >= 80:
+                    self._evict_expired_unsub()
+
+                if len(self.subscriptions) >= 100:
+                    return {
+                        "status": "ERROR",
+                        "connected": True,
+                        "symbol": norm_sym,
+                        "interval": norm_int,
+                        "candles": [],
+                        "error": "Had kuota langganan OpenD penuh (100 slot serentak)"
+                    }
+
+                ctx = self.client.get_quote_context()
+                if ctx is None:
+                    return {
+                        "status": "UNAVAILABLE",
+                        "connected": False,
+                        "opend_status": conn_status,
+                        "symbol": norm_sym,
+                        "interval": norm_int,
+                        "candles": [],
+                        "error": "OpenQuoteContext tidak dapat diinisialisasi"
+                    }
+
+                ret, sub_data = ctx.subscribe([norm_sym], [subtype])
+                if ret != RET_OK:
+                    err_str = str(sub_data or "")
+                    is_otc = "OTC" in err_str.upper()
+                    is_not_avail = "NOT AVAILABLE" in err_str.upper()
+                    if is_otc:
+                        return {
+                            "status": "UNSUPPORTED",
+                            "error_type": "OTC_MARKET",
+                            "connected": True,
+                            "opend_status": conn_status,
+                            "symbol": norm_sym,
+                            "interval": norm_int,
+                            "candles": [],
+                            "error": f"Kaunter pasaran OTC ({norm_sym}) tidak disokong untuk data K-line oleh Moomoo OpenAPI"
+                        }
+                    elif is_not_avail:
+                        return {
+                            "status": "UNSUPPORTED",
+                            "error_type": "QUOTE_NOT_AVAILABLE",
+                            "connected": True,
+                            "opend_status": conn_status,
+                            "symbol": norm_sym,
+                            "interval": norm_int,
+                            "candles": [],
+                            "error": f"Sebut harga K-line tidak tersedia untuk {norm_sym}: {err_str}"
+                        }
+                    return {
+                        "status": "ERROR",
+                        "error_type": "SUBSCRIPTION_FAILED",
+                        "connected": True,
+                        "opend_status": conn_status,
+                        "symbol": norm_sym,
+                        "interval": norm_int,
+                        "candles": [],
+                        "error": f"Gagal melanggan data K-line untuk {norm_sym}: {sub_data}"
+                    }
+
+                self.subscriptions[key] = {
+                    "symbol": norm_sym,
+                    "interval": norm_int,
+                    "subtype": subtype,
+                    "kltype": kltype,
+                    "subscribed_at": time.time(),
+                    "last_accessed": time.time(),
+                    "ref_count": 1,
+                    "pending_unsub": False,
+                    "release_time": None
+                }
+                logger.info("Subscribed to %s (%s). Active slots: %d", norm_sym, norm_int, len(self.subscriptions))
+
+        # Query candle data
+        ctx = self.client.get_quote_context()
+        if ctx is None:
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "interval": norm_int,
+                "candles": [],
+                "error": "OpenQuoteContext tidak tersedia"
+            }
+
+        try:
+            ret, kl_data = ctx.get_cur_kline(norm_sym, num=num, ktype=kltype)
+            if ret != RET_OK:
+                return {
+                    "status": "ERROR",
+                    "connected": True,
+                    "opend_status": "CONNECTED",
+                    "symbol": norm_sym,
+                    "interval": norm_int,
+                    "candles": [],
+                    "error": f"get_cur_kline returned {ret}: {kl_data}"
+                }
+
+            candles = []
+            if kl_data is not None and hasattr(kl_data, "iterrows"):
+                for _, row in kl_data.iterrows():
+                    time_raw = str(row.get("time_key", ""))
+                    t_val = time_raw
+                    try:
+                        if len(time_raw) == 10:
+                            dt = datetime.strptime(time_raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                            t_unix = int(dt.timestamp())
+                        else:
+                            dt = datetime.strptime(time_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                            t_unix = int(dt.timestamp())
+                    except Exception:
+                        t_unix = None
+
+                    candle_obj = {
+                        "time": t_unix if norm_int != "day" else time_raw.split(" ")[0],
+                        "timestamp": t_unix,
+                        "time_str": time_raw,
+                        "open": float(row.get("open", 0.0)),
+                        "high": float(row.get("high", 0.0)),
+                        "low": float(row.get("low", 0.0)),
+                        "close": float(row.get("close", 0.0)),
+                        "volume": float(row.get("volume", 0.0))
+                    }
+                    candles.append(candle_obj)
+
+            return {
+                "status": "HEALTHY",
+                "connected": True,
+                "opend_status": "CONNECTED",
+                "symbol": norm_sym,
+                "interval": norm_int,
+                "count": len(candles),
+                "candles": candles,
+                "error": None
+            }
+        except Exception as e:
+            logger.error("Error fetching K-line data for %s: %s", norm_sym, e)
+            return {
+                "status": "ERROR",
+                "connected": True,
+                "symbol": norm_sym,
+                "interval": norm_int,
+                "candles": [],
+                "error": str(e)
+            }
 
 
 class MoomooClient:
@@ -61,6 +419,40 @@ class MoomooClient:
         self._last_error: Optional[str] = None
         self._available_accounts: List[Dict[str, Any]] = []
         self._opend_manager: Any = None
+        self._quote_ctx: Any = None
+        self.subscription_manager = SubscriptionManager(self)
+
+    def get_quote_context(self) -> Any:
+        """Returns or creates a shared OpenQuoteContext for live subscriptions."""
+        if OpenQuoteContext is None:
+            return None
+        if self._quote_ctx is None:
+            try:
+                if self.is_encrypt and SysConfig is not None:
+                    try:
+                        from .config import BridgeConfig
+                        rsa_path = str(BridgeConfig.ensure_rsa_key())
+                        SysConfig.enable_proto_encrypt(True)
+                        SysConfig.set_init_rsa_file(rsa_path)
+                    except Exception as rsa_err:
+                        logger.warning("RSA key warning: %s", rsa_err)
+                self._quote_ctx = OpenQuoteContext(
+                    host=self.host,
+                    port=self.port,
+                    is_encrypt=self.is_encrypt
+                )
+            except Exception as e:
+                logger.error("Failed to create OpenQuoteContext: %s", e)
+                self._quote_ctx = None
+        return self._quote_ctx
+
+    def get_cur_kline_with_sub(self, symbol: str, interval: str = "day", num: int = 100) -> Dict[str, Any]:
+        """Fetches current K-line candles using live subscription without burning 30-day quota."""
+        return self.subscription_manager.get_kline(symbol=symbol, interval=interval, num=num)
+
+    def release_kline_subscription(self, symbol: str, interval: str = "day") -> Dict[str, Any]:
+        """Decrements ref count and triggers delayed unsubscribe cooldown."""
+        return self.subscription_manager.release_subscription(symbol=symbol, interval=interval)
 
     def set_opend_manager(self, manager: Any) -> None:
         self._opend_manager = manager
@@ -409,6 +801,119 @@ class MoomooClient:
             return 0
         return 0
 
+    def get_kline_quota(self) -> Dict[str, Any]:
+        """
+        Retrieves real Moomoo OpenAPI K-line quota using OpenQuoteContext.get_history_kl_quota(get_detail=True).
+        Strict fail-closed semantics:
+        - If OpenD is disconnected or unauthenticated, returns status UNAVAILABLE and null quotas.
+        - Never returns a fake 100 remaining.
+        - If call succeeds, returns status HEALTHY, connected True, used_quota, remain_quota, detail_list.
+        """
+        try:
+            with socket.create_connection((self.host, self.port), timeout=1.0):
+                pass
+        except Exception as e:
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": "DISCONNECTED",
+                "used_quota": None,
+                "remain_quota": None,
+                "total_quota": None,
+                "detail_list": [],
+                "error": f"OpenD daemon not reachable: {e}"
+            }
+
+        conn_status = self.get_connection_status()
+        if conn_status not in ("CONNECTED", "IDLE"):
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "used_quota": None,
+                "remain_quota": None,
+                "total_quota": None,
+                "detail_list": [],
+                "error": f"OpenD gateway is not authenticated (status: {conn_status})"
+            }
+
+        ctx = None
+        try:
+            from moomoo import OpenQuoteContext, SysConfig, RET_OK
+            if self.is_encrypt and SysConfig is not None:
+                try:
+                    from .config import BridgeConfig
+                    rsa_path = str(BridgeConfig.ensure_rsa_key())
+                    SysConfig.enable_proto_encrypt(True)
+                    SysConfig.set_init_rsa_file(rsa_path)
+                except Exception as rsa_err:
+                    logger.warning("RSA key initialization warning: %s", rsa_err)
+
+            ctx = OpenQuoteContext(
+                host=self.host,
+                port=self.port,
+                is_encrypt=self.is_encrypt
+            )
+            ret_code, quota_data = ctx.get_history_kl_quota(get_detail=True)
+            if ret_code == RET_OK and quota_data is not None:
+                used = int(quota_data[0]) if len(quota_data) > 0 else 0
+                remain = int(quota_data[1]) if len(quota_data) > 1 else 0
+                details = quota_data[2] if len(quota_data) > 2 else []
+                formatted_details = []
+                for item in details:
+                    if isinstance(item, dict):
+                        d = dict(item)
+                        if "code" in d and "symbol" not in d:
+                            d["symbol"] = d["code"]
+                        formatted_details.append(d)
+                    elif hasattr(item, '__dict__'):
+                        d = dict(item.__dict__)
+                        if "code" in d and "symbol" not in d:
+                            d["symbol"] = d["code"]
+                        formatted_details.append(d)
+                    else:
+                        formatted_details.append({"code": str(item), "symbol": str(item), "name": "N/A", "request_time": None})
+
+                return {
+                    "status": "HEALTHY",
+                    "connected": True,
+                    "opend_status": "CONNECTED",
+                    "used_quota": used,
+                    "remain_quota": remain,
+                    "total_quota": used + remain,
+                    "detail_list": formatted_details,
+                    "error": None
+                }
+            else:
+                return {
+                    "status": "UNAVAILABLE",
+                    "connected": False,
+                    "opend_status": conn_status,
+                    "used_quota": None,
+                    "remain_quota": None,
+                    "total_quota": None,
+                    "detail_list": [],
+                    "error": f"OpenQuoteContext get_history_kl_quota returned {ret_code}: {quota_data}"
+                }
+        except Exception as e:
+            logger.error("Failed to fetch Moomoo K-line quota: %s", e)
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "used_quota": None,
+                "remain_quota": None,
+                "total_quota": None,
+                "detail_list": [],
+                "error": str(e)
+            }
+        finally:
+            if ctx is not None:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
+
     def close(self) -> None:
         self._connected = False
         self._last_status = "DISCONNECTED"
@@ -417,6 +922,15 @@ class MoomooClient:
         self._cash_balance = None
         self._total_equity = None
         self._available_accounts = []
+        if self._quote_ctx is not None:
+            try:
+                self._quote_ctx.close()
+            except Exception:
+                pass
+            self._quote_ctx = None
+        if hasattr(self, "subscription_manager"):
+            with self.subscription_manager.lock:
+                self.subscription_manager.subscriptions.clear()
 
 
 _shared_client: Optional[MoomooClient] = None

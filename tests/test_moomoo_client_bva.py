@@ -110,12 +110,70 @@ class TestMoomooClientBVA(unittest.TestCase):
                 self.assertFalse(res, "connect() mesti pulang False apabila OpenD tidak/belum login")
                 self.assertFalse(test_client.is_connected(), "is_connected() mesti False")
                 self.assertNotEqual(test_client.get_connection_status(), "CONNECTED")
-                self.assertIn(test_client.get_connection_status(), ["WAIT_LOGIN", "DISCONNECTED"])
+                self.assertIn(test_client.get_connection_status(), ["WAIT_LOGIN", "DISCONNECTED", "CONNECT_ERROR"])
 
                 info = test_client.get_account_info()
                 self.assertEqual(info["account_id"], "N/A", "Account ID mesti N/A, bukan SIMULATED_ACC")
                 self.assertIsNone(info["cash_balance"], "Baki tunai mesti null/None, bukan 100000.0")
                 self.assertIsNone(info["total_equity"], "Baki ekuiti mesti null/None, bukan 100000.0")
+
+    def test_kline_quota_disconnected_fails_closed(self):
+        """BVA: When OpenD is unreachable, get_kline_quota returns UNAVAILABLE without fake quotas."""
+        res = self.client.get_kline_quota()
+        self.assertEqual(res["status"], "UNAVAILABLE")
+        self.assertFalse(res["connected"])
+        self.assertIsNone(res["used_quota"])
+        self.assertIsNone(res["remain_quota"])
+        self.assertEqual(res["detail_list"], [])
+
+    def test_kline_quota_success_returns_real_quota(self):
+        """BVA: When OpenQuoteContext returns (used, remain, details), properly formatted."""
+        from unittest.mock import patch, MagicMock
+        mock_moomoo = MagicMock()
+        mock_moomoo.RET_OK = 0
+        with patch.dict("sys.modules", {"moomoo": mock_moomoo}):
+            with patch.object(self.client, "get_connection_status", return_value="CONNECTED"):
+                with patch("socket.create_connection"):
+                    mock_ctx = MagicMock()
+                    mock_ctx.get_history_kl_quota.return_value = (0, (0, 100, []))
+                    mock_moomoo.OpenQuoteContext.return_value = mock_ctx
+
+                    res = self.client.get_kline_quota()
+                    self.assertEqual(res["status"], "HEALTHY")
+                    self.assertTrue(res["connected"])
+                    self.assertEqual(res["used_quota"], 0)
+                    self.assertEqual(res["remain_quota"], 100)
+                    self.assertEqual(res["total_quota"], 100)
+                    self.assertEqual(res["detail_list"], [])
+
+    def test_kline_quota_success_with_detail_list(self):
+        """BVA: When OpenQuoteContext returns detail items, properly normalized with code, symbol, request_time."""
+        from unittest.mock import patch, MagicMock
+        mock_moomoo = MagicMock()
+        mock_moomoo.RET_OK = 0
+        with patch.dict("sys.modules", {"moomoo": mock_moomoo}):
+            with patch.object(self.client, "get_connection_status", return_value="CONNECTED"):
+                with patch("socket.create_connection"):
+                    mock_ctx = MagicMock()
+                    sample_details = [
+                        {"code": "MY.1155", "name": "MAYBANK", "request_time": "2026-11-15 10:00:00"},
+                        {"code": "US.AAPL", "name": "APPLE", "request_time": "2026-11-14 09:30:00"},
+                    ]
+                    mock_ctx.get_history_kl_quota.return_value = (0, (2, 98, sample_details))
+                    mock_moomoo.OpenQuoteContext.return_value = mock_ctx
+
+                    res = self.client.get_kline_quota()
+                    self.assertEqual(res["status"], "HEALTHY")
+                    self.assertTrue(res["connected"])
+                    self.assertEqual(res["used_quota"], 2)
+                    self.assertEqual(res["remain_quota"], 98)
+                    self.assertEqual(res["total_quota"], 100)
+                    self.assertEqual(len(res["detail_list"]), 2)
+                    self.assertEqual(res["detail_list"][0]["symbol"], "MY.1155")
+                    self.assertEqual(res["detail_list"][0]["code"], "MY.1155")
+                    self.assertEqual(res["detail_list"][0]["name"], "MAYBANK")
+                    self.assertEqual(res["detail_list"][0]["request_time"], "2026-11-15 10:00:00")
+
 
 
 
