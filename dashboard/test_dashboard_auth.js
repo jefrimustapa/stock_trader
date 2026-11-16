@@ -277,16 +277,16 @@ async function runDashboardTests() {
             assert.strictEqual(wrongIssRes.statusCode, 401, `Expected 401 for wrong issuer, got ${wrongIssRes.statusCode}`);
             console.log('✓ PASS: RS256 JWT with mismatched issuer rejected with 401');
 
-            // Test 2f (HOM-156 & HOM-158): GET /logout endpoint must redirect to Authentik SSO invalidation flow
-            // with ?next=https%3A%2F%2Fstock-trader.beta.julietmike.net%2F post-logout redirect
-            const expectedLogoutRedirect = 'https://auth.julietmike.net/flows/-/default/invalidation/?next=https%3A%2F%2Fstock-trader.beta.julietmike.net%2F';
+            // Test 2f (HOM-156, HOM-158 & HOM-159): GET /logout endpoint must redirect to Authentik SSO invalidation flow
+            // with ?next=%2Fapplication%2Fo%2Fstock-trader%2F post-logout redirect
+            const expectedLogoutRedirect = 'https://auth.julietmike.net/flows/-/default/invalidation/?next=%2Fapplication%2Fo%2Fstock-trader%2F';
             const logoutRes = await makeRequest(testPort2, {
                 cookie: 'authentik_proxy_session=mock-proxy-cookie; authentik_jwt=mock-jwt; paperclip_session=safe-paperclip-token; CF_Authorization=safe-cf-token; other_user_cookie=keep-me; ; =malformed'
             }, '/logout');
             assert.strictEqual(logoutRes.statusCode, 302, `Expected 302 for /logout, got ${logoutRes.statusCode}`);
             assert.ok(logoutRes.headers.location, 'Location header must be present');
             assert.strictEqual(logoutRes.headers.location, expectedLogoutRedirect,
-                `HOM-158: Expected redirect to Authentik SSO invalidation flow with next param, got: ${logoutRes.headers.location}`);
+                `HOM-159: Expected redirect to Authentik SSO invalidation flow with next param, got: ${logoutRes.headers.location}`);
             assert.ok(logoutRes.headers['clear-site-data'], 'Clear-Site-Data header must be set');
             assert.ok(!logoutRes.headers['clear-site-data'].includes('cookies'),
                 `Security violation (HOM-154): Clear-Site-Data must NOT include "cookies", got: ${logoutRes.headers['clear-site-data']}`);
@@ -313,12 +313,35 @@ async function runDashboardTests() {
             assert.ok(bvaCookies.some(c => c.startsWith('x_service_token=')), 'Must still clear x_service_token');
             console.log('✓ PASS: BVA - /logout handles request with no cookie header safely and preserves next param');
 
-            // Test 2f-2 (HOM-156 & HOM-158): Authentik SSO invalidation flow appends ?next parameter if missing from raw config
+            // Test 2f-2 (HOM-156, HOM-158 & HOM-159): Authentik SSO invalidation flow appends ?next parameter if missing from raw config
             const ssoLogoutRes = await makeRequest(testPort, {}, '/logout');
             assert.strictEqual(ssoLogoutRes.statusCode, 302, `Expected 302 for /logout, got ${ssoLogoutRes.statusCode}`);
             assert.strictEqual(ssoLogoutRes.headers.location, expectedLogoutRedirect,
-                `HOM-158: Configured invalidation URL without next param must automatically append next param, got: ${ssoLogoutRes.headers.location}`);
+                `HOM-159: Configured invalidation URL without next param must automatically append next param, got: ${ssoLogoutRes.headers.location}`);
             console.log('✓ PASS: Authentik SSO invalidation flow automatically appends ?next parameter if missing');
+
+            // Test 2f-3 (HOM-159): Old next URL pointing to external stock-trader domain is normalized to /application/o/stock-trader/
+            const testPortLegacy = 3995;
+            const legacyLogoutProc = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+                env: {
+                    ...process.env,
+                    PORT: String(testPortLegacy),
+                    AUTHENTIK_CLIENT_ID: testClientId,
+                    AUTHENTIK_ISSUER_URL: testIssuer,
+                    AUTHENTIK_LOGOUT_URL: 'https://auth.julietmike.net/flows/-/default/invalidation/?next=https%3A%2F%2Fstock-trader.beta.julietmike.net%2F',
+                    AUTHENTIK_TEST_PUBLIC_KEY: publicKey
+                }
+            });
+            await new Promise(r => setTimeout(r, 1000));
+            try {
+                const legacyLogoutRes = await makeRequest(testPortLegacy, {}, '/logout');
+                assert.strictEqual(legacyLogoutRes.statusCode, 302);
+                assert.strictEqual(legacyLogoutRes.headers.location, expectedLogoutRedirect,
+                    `HOM-159: Configured invalidation URL with legacy external next param must normalize to /application/o/stock-trader/, got: ${legacyLogoutRes.headers.location}`);
+                console.log('✓ PASS: Legacy external next URL is normalized to /application/o/stock-trader/');
+            } finally {
+                legacyLogoutProc.kill();
+            }
 
             // Test 2h (SDLC #8 defect regression): 401 on invalid/expired JWT must NOT leak err.message
             const expiredJwt = jwt.sign(
