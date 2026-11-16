@@ -65,8 +65,8 @@ class TestScreenerSchema(unittest.TestCase):
 
         self.assertEqual(output.total_screened_cloud, 3)
         self.assertEqual(output.stage1_passed, 3)
-        self.assertEqual(output.stage2_passed, 3)
-        self.assertEqual(len(output.watchlist), 2)  # US.LOWRVOL filtered out in stage 3
+        self.assertEqual(output.stage2_passed, 2)
+        self.assertEqual(len(output.watchlist), 2)  # US.LOWRVOL filtered out in stage 2 routing
 
         # Verify physical JSON file on disk
         self.assertTrue(self.output_file.exists())
@@ -78,6 +78,53 @@ class TestScreenerSchema(unittest.TestCase):
         self.assertEqual(len(validated.watchlist), 2)
         self.assertEqual(validated.quota_status.kline_30d_used, 2)
         self.assertEqual(validated.quota_status.kline_30d_remaining, 98)
+        self.assertEqual(validated.source, "REAL")
+        self.assertIsNone(validated.warning)
+
+    def test_opend_unavailable_produces_empty_watchlist_and_warning(self):
+        """
+        Kecacatan Terlepas (HOM-162): Bila OpenD belum auth, screener mesti menghasilkan
+        watchlist kosong dengan source='OPEND_UNAVAILABLE' dan mesej amaran yang jelas.
+        """
+        output = self.screener.process_and_save(
+            raw_stocks=[{"symbol": "US.MOCK", "price": 10.0}],
+            spy_change_pct=0.0,
+            source="OPEND_UNAVAILABLE",
+            warning="OpenD gateway belum log masuk (menunggu kredensial broker)."
+        )
+        self.assertEqual(output.source, "OPEND_UNAVAILABLE")
+        self.assertIn("belum log masuk", output.warning)
+        self.assertEqual(len(output.watchlist), 0)
+        self.assertEqual(output.total_screened_cloud, 0)
+        self.assertEqual(output.stage1_passed, 0)
+        self.assertEqual(output.stage2_passed, 0)
+
+        # Semak pada fail fizikal JSON
+        with open(self.output_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["source"], "OPEND_UNAVAILABLE")
+        self.assertEqual(data["watchlist"], [])
+        self.assertIsNotNone(data["warning"])
+
+    def test_fetch_market_universe_unauthenticated_fails_closed(self):
+        """
+        Ujian integriti fungsi fetch_market_universe: Bila OpenQuoteContext belum ready/auth,
+        ia mesti memulangkan senarai kosong dengan source 'OPEND_UNAVAILABLE', bukan 8 simbol rekaan.
+        """
+        from unittest.mock import patch, MagicMock
+        from screener.src.main import fetch_market_universe
+
+        with patch("screener.src.main.OpenQuoteContext") as mock_ctx_cls:
+            mock_ctx = MagicMock()
+            mock_ctx._status = 0 # Not ContextStatus.READY
+            mock_ctx_cls.return_value = mock_ctx
+
+            stocks, spy_pct, source, warning, skipped = fetch_market_universe("127.0.0.1", 11111)
+            self.assertEqual(len(stocks), 0, "Tiada simbol fallback rekaan dibenarkan")
+            self.assertEqual(source, "OPEND_UNAVAILABLE")
+            self.assertIsNotNone(warning)
+            self.assertIn("belum log masuk", warning)
+
 
 
 if __name__ == "__main__":

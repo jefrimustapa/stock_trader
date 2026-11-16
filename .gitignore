@@ -40,6 +40,8 @@ shared_data/*.json
 # Session data & secrets
 .env
 opend_session_data/
+*.pem
+*.key
 *.log
 
 # Node.js

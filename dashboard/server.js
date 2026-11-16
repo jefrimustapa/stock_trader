@@ -291,7 +291,7 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
         try {
             const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
                 headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
-                timeout: 3000
+                timeout: 5000
             });
             bridgeStatus = bridgeRes.data;
         } catch (err) {
@@ -305,6 +305,138 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
         bridge: bridgeStatus,
         timestamp: new Date().toISOString()
     });
+});
+
+app.post('/api/telnet/otp', authenticateDashboard, async (req, res) => {
+    const { otp_code } = req.body || {};
+    if (!otp_code || typeof otp_code !== 'string') {
+        return res.status(400).json({ error: 'Kod OTP diperlukan' });
+    }
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/otp`, {
+            otp_code: otp_code.trim()
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
+});
+
+// Seksyen 3.5.B Blueprint: OpenD Session Sign-Out, Dynamic Account Switch, and Login Switch
+app.post('/api/opend/sign-out', authenticateDashboard, async (req, res) => {
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/sign-out`, {}, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 10000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
+});
+
+app.get('/api/opend/accounts', authenticateDashboard, async (req, res) => {
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+    try {
+        const bridgeRes = await axios.get(`${BRIDGE_URL}/api/v1/trade/accounts`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
+});
+
+app.post('/api/opend/switch-account', authenticateDashboard, async (req, res) => {
+    const { account_id } = req.body || {};
+    if (!account_id || typeof account_id !== 'string' || !account_id.trim()) {
+        return res.status(400).json({ error: 'Account ID diperlukan' });
+    }
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/trade/switch-account`, {
+            account_id: account_id.trim()
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
+});
+
+app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
+    const { login_account, password } = req.body || {};
+    if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
+        return res.status(400).json({ error: 'Login account ID diperlukan' });
+    }
+
+    if (!password || typeof password !== 'string' || !password.trim()) {
+        return res.status(400).json({ error: 'Kata laluan diperlukan untuk log masuk' });
+    }
+
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/sign-in`, {
+            login_account: login_account.trim(),
+            password: password.trim()
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 25000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
+});
+
+app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
+    const { login_account, password } = req.body || {};
+    if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
+        return res.status(400).json({ error: 'Login account ID diperlukan' });
+    }
+    if (!password || typeof password !== 'string' || !password.trim()) {
+        return res.status(400).json({ error: 'Kata laluan diperlukan untuk tukar akaun' });
+    }
+    if (!BRIDGE_SERVICE_TOKEN) {
+        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+    }
+    try {
+        const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/switch-login`, {
+            login_account: login_account.trim(),
+            password: password.trim()
+        }, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 25000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        const msg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
+        return res.status(err.response ? err.response.status : 502).json({ error: msg });
+    }
 });
 
 app.get('/api/data', authenticateDashboard, (req, res) => {
@@ -334,7 +466,7 @@ app.get('/api/data', authenticateDashboard, (req, res) => {
     });
 });
 
-app.get('/', authenticateDashboard, (req, res) => {
+app.get('/', authenticateDashboard, async (req, res) => {
     const watchlistFile = path.join(SHARED_DATA_DIR, 'watchlist.json');
     const sentinelFile = path.join(SHARED_DATA_DIR, 'sentinel_status.json');
 
@@ -348,6 +480,101 @@ app.get('/', authenticateDashboard, (req, res) => {
         try { sentinelData = JSON.parse(fs.readFileSync(sentinelFile, 'utf8')); } catch (e) {}
     }
 
+    // Query live OpenD connection and account metrics from Bridge
+    // Fail-closed defaults: UNKNOWN/N/A and Sentinel OFFLINE
+    let opendStatus = 'UNKNOWN';
+    let opendEnv = 'N/A';
+    let accountId = 'N/A';
+    let cashBalance = null;
+    let totalEquity = null;
+
+    let availableAccounts = [];
+    let opendErrorMessage = null;
+    if (BRIDGE_SERVICE_TOKEN) {
+        try {
+            const bridgeRes = await axios.get(`${BRIDGE_URL}/status`, {
+                headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+                timeout: 5000
+            });
+            if (bridgeRes.data) {
+                if (bridgeRes.data.opend_status) opendStatus = bridgeRes.data.opend_status;
+                if (bridgeRes.data.environment) opendEnv = bridgeRes.data.environment;
+                if (bridgeRes.data.account_id) accountId = bridgeRes.data.account_id;
+                if (bridgeRes.data.cash_balance != null) cashBalance = Number(bridgeRes.data.cash_balance);
+                if (bridgeRes.data.total_equity != null) totalEquity = Number(bridgeRes.data.total_equity);
+                if (bridgeRes.data.sentinel && bridgeRes.data.sentinel.status) {
+                    sentinelData.status = bridgeRes.data.sentinel.status;
+                }
+                if (bridgeRes.data.account_info) {
+                    if (Array.isArray(bridgeRes.data.account_info.available_accounts)) {
+                        availableAccounts = bridgeRes.data.account_info.available_accounts;
+                    }
+                    if (bridgeRes.data.account_info.error_message) {
+                        opendErrorMessage = bridgeRes.data.account_info.error_message;
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[Dashboard] Could not query Bridge status for dashboard render (marking UNREACHABLE):', err.message);
+            opendStatus = 'UNREACHABLE';
+        }
+    } else {
+        opendStatus = 'UNKNOWN';
+    }
+
+    const safeUser = escapeHtml(req.authUser);
+    const safeOpendStatus = escapeHtml(opendStatus);
+    const safeOpendEnv = escapeHtml(opendEnv);
+    const safeAccountId = escapeHtml(accountId);
+    const safeCash = cashBalance != null ? '$' + cashBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const safeEquity = totalEquity != null ? '$' + totalEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const sentinelStatus = escapeHtml(sentinelData.status || 'OFFLINE');
+    const managedPositions = Number(sentinelData.managed_positions || 0);
+    const klineUsed = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_used : 0);
+    const klineRemaining = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_remaining : 100);
+
+    // Color definitions
+    let opendColor = '#f87171';
+    if (safeOpendStatus === 'CONNECTED') {
+        opendColor = 'var(--success)';
+    } else if (safeOpendStatus === 'UNREACHABLE' || safeOpendStatus === 'CONNECT_ERROR') {
+        opendColor = 'var(--danger)';
+    } else if (safeOpendStatus === 'WAIT_OTP') {
+        opendColor = '#fbbf24';
+    } else if (safeOpendStatus === 'WAIT_LOGIN') {
+        opendColor = '#f59e0b';
+    } else if (safeOpendStatus === 'IDLE' || safeOpendStatus === 'SIGNED_OUT') {
+        opendColor = '#94a3b8';
+    }
+
+    let sentinelColor = '#94a3b8';
+    if (sentinelStatus === 'ACTIVE') {
+        sentinelColor = 'var(--success)';
+    } else if (sentinelStatus === 'CIRCUIT_BREAKER_TRIGGERED' || sentinelStatus === 'EMERGENCY_STOP') {
+        sentinelColor = 'var(--danger)';
+    }
+
+    const isOpendUnavailable = (watchlistData.source === 'OPEND_UNAVAILABLE') || (safeOpendStatus !== 'CONNECTED');
+    const marketStatus = escapeHtml(watchlistData.market_status || 'OPEN');
+    const isMarketLive = watchlistData.is_live !== false;
+    const funnel = watchlistData.funnel || {
+        cloud_raw_returned: watchlistData.total_screened_cloud || 0,
+        stage0_quality_passed: watchlistData.stage1_passed || 0,
+        lane_momentum_candidates: (watchlistData.watchlist || []).filter(s => s.lane === 'MOMENTUM').length,
+        lane_setup_candidates: (watchlistData.watchlist || []).filter(s => s.lane === 'SETUP').length,
+        kline_analyzed_count: (watchlistData.watchlist || []).length,
+        final_watchlist_count: (watchlistData.watchlist || []).length
+    };
+
+    const warningMessage = watchlistData.warning || (
+        safeOpendStatus === 'CONNECT_ERROR' ? `Ralat sambungan OpenD API: ${escapeHtml(opendErrorMessage || 'Gagal memulakan sesi dagangan rentas rangkaian.')}` :
+        safeOpendStatus === 'WAIT_OTP' ? 'OpenD daemon memerlukan kod pengesahan 2FA (OTP SMS/Emel). Sila masukkan kod OTP 4-8 digit pada kotak OTP di bawah untuk melengkapkan sambungan.' :
+        safeOpendStatus === 'WAIT_LOGIN' ? 'OpenD daemon sedang menunggu log masuk broker yang sah daripada pemohon. Sila lengkapkan Account ID dan kata laluan di bawah.' :
+        safeOpendStatus === 'IDLE' || safeOpendStatus === 'SIGNED_OUT' ? 'Sesi OpenD telah di-sign-out (mod idle). Masukkan Account ID dan kata laluan untuk memulakan sesi baharu.' :
+        safeOpendStatus === 'UNREACHABLE' ? 'Sambungan ke MCP Bridge gagal (UNREACHABLE). Semak kontena Bridge.' :
+        safeOpendStatus === 'DISCONNECTED' ? 'OpenD daemon tidak bersambung (DISCONNECTED).' : null
+    );
+
     const rows = (watchlistData.watchlist || []).map(stock => {
         const symbol = escapeHtml(stock.symbol || 'N/A');
         const name = escapeHtml(stock.name || '');
@@ -356,26 +583,46 @@ app.get('/', authenticateDashboard, (req, res) => {
         const adv20Millions = (Number(stock.adv_20 || 0) / 1e6).toFixed(1);
         const rsSpy = Number(stock.rs_spy || 0).toFixed(2);
         const rvol15m = Number(stock.rvol_15m || 0).toFixed(2);
+        const lane = escapeHtml(stock.lane || 'MOMENTUM');
+        const laneScore = Number(stock.lane_score != null ? stock.lane_score : 80.0).toFixed(1);
         const status = escapeHtml(stock.status || 'READY');
+
+        const laneBadge = lane === 'SETUP'
+            ? `<span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid #fbbf24;">SETUP</span>`
+            : `<span class="badge" style="background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid #c084fc;">MOMENTUM</span>`;
+
+        let metricsDetail = '';
+        if (stock.setup_metrics) {
+            const dist = Number(stock.setup_metrics.dist_to_52w_high_pct || 0).toFixed(1);
+            metricsDetail = `<div style="font-size: 11px; color: #94a3b8;">52W: -${dist}%</div>`;
+        }
 
         return `
         <tr>
             <td style="font-weight: bold; color: #38bdf8;">${symbol}</td>
             <td>${name}</td>
+            <td>${laneBadge}</td>
+            <td style="font-weight: bold; color: #e2e8f0;">${laneScore}</td>
             <td>$${price}</td>
             <td style="color: ${changePct >= 0 ? '#4ade80' : '#f87171'}">${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%</td>
             <td>${adv20Millions}M</td>
-            <td style="color: #4ade80;">+${rsSpy}%</td>
+            <td style="color: ${rsSpy >= 0 ? '#4ade80' : '#f87171'}">${rsSpy >= 0 ? '+' : ''}${rsSpy}%</td>
             <td>${rvol15m}x</td>
-            <td><span class="badge badge-ready">${status}</span></td>
+            <td><span class="badge badge-ready">${status}</span>${metricsDetail}</td>
         </tr>`;
-    }).join('') || '<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">No stocks currently in watchlist.</td></tr>';
+    }).join('') || `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 20px;">${isOpendUnavailable ? 'Tiada data kaunter (OpenD belum sah / fail-closed aktif)' : 'No stocks currently in watchlist.'}</td></tr>`;
 
-    const safeUser = escapeHtml(req.authUser);
-    const sentinelStatus = escapeHtml(sentinelData.status || 'OFFLINE');
-    const managedPositions = Number(sentinelData.managed_positions || 0);
-    const klineUsed = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_used : 0);
-    const klineRemaining = Number(watchlistData.quota_status ? watchlistData.quota_status.kline_30d_remaining : 100);
+    const accountOptions = (availableAccounts.length > 0 ? availableAccounts : [
+        { account_id: safeAccountId !== 'N/A' ? safeAccountId : '1001', sim_acc_type: 'Paper Trading 1 (US Equities)' },
+        { account_id: '1002', sim_acc_type: 'Paper Trading 2 (US Equities)' }
+    ]).map(acc => {
+        const accId = escapeHtml(acc.account_id);
+        const envLabel = acc.trd_env ? escapeHtml(acc.trd_env) : 'SIMULATE';
+        const typeLabel = acc.sim_acc_type && acc.sim_acc_type !== 'N/A' ? ` - ${escapeHtml(acc.sim_acc_type)}` : '';
+        const label = `${accId} [${envLabel}${typeLabel}]`;
+        const isSelected = String(acc.account_id) === String(safeAccountId) ? 'selected' : '';
+        return `<option value="${accId}" ${isSelected}>${label}</option>`;
+    }).join('');
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -450,8 +697,18 @@ app.get('/', authenticateDashboard, (req, res) => {
 
         <div class="grid">
             <div class="card">
+                <h3>OpenD Gateway</h3>
+                <div class="value" style="color: ${opendColor};">${safeOpendStatus}</div>
+                <div class="meta">Mode: <strong style="color: var(--accent);">${safeOpendEnv}</strong></div>
+            </div>
+            <div class="card">
+                <h3>Moomoo Account</h3>
+                <div class="value" style="color: var(--accent); font-size: 20px; margin: 10px 0;">ID: ${safeAccountId}</div>
+                <div class="meta">Cash: <strong>${safeCash}</strong> | Equity: <strong>${safeEquity}</strong></div>
+            </div>
+            <div class="card">
                 <h3>Sentinel L4 Status</h3>
-                <div class="value" style="color: var(--success);">${sentinelStatus}</div>
+                <div class="value" style="color: ${sentinelColor};">${sentinelStatus}</div>
                 <div class="meta">${managedPositions} managed positions</div>
             </div>
             <div class="card">
@@ -466,18 +723,123 @@ app.get('/', authenticateDashboard, (req, res) => {
             </div>
         </div>
 
-        <h2 style="font-size: 18px; margin-bottom: 12px;">Active Watchlist (Stage 1 & 2 Screens)</h2>
+        ${warningMessage ? `
+        <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 24px; background: rgba(239, 68, 68, 0.1);">
+            <h3 style="color: #f87171; margin-bottom: 6px;">Amaran Integriti OpenD (Fail-Closed)</h3>
+            <div style="color: #fca5a5; font-size: 14px; line-height: 1.5;">${escapeHtml(warningMessage)}</div>
+        </div>` : ''}
+
+        <div class="card" style="margin-bottom: 24px; border: 1px solid #0284c7;">
+            <h3 style="color: #38bdf8; font-size: 15px; margin-bottom: 12px;">Pengurusan Sesi & Akaun OpenD (Seksyen 3.5.B Blueprint)</h3>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                <!-- 1. Tukar acc_id dinamik tanpa restart -->
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 6px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; color: var(--accent);">Tukar Akaun Dagangan (acc_id)</h4>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 0 0 10px 0;">
+                        Tukar antara Paper Trading 1 dan 2 terus melalui SDK tanpa me-restart kontena.
+                    </p>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="accSelect" style="flex: 1; padding: 8px 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+                            ${accountOptions}
+                        </select>
+                        <button onclick="handleSwitchAccount()" style="padding: 8px 14px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;">Tukar Akaun</button>
+                    </div>
+                    <div id="switchAccResult" style="margin-top: 8px; font-size: 12px; min-height: 16px;"></div>
+                </div>
+
+                <!-- 2. Sign-Out Sesi OpenD -->
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 6px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #f87171;">Sign-Out Sesi OpenD (Telnet & Idle Reset)</h4>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 0 0 10px 0;">
+                        Menamatkan sesi broker, membersihkan fail token sesi sementara, dan restart OpenD ke mod idle terputus.
+                    </p>
+                    <button id="btnOpenDSignOut" onclick="handleOpenDSignOut()" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;">Sign-Out Sesi OpenD</button>
+                    <div id="signOutResult" style="margin-top: 8px; font-size: 12px; min-height: 16px;"></div>
+                </div>
+
+                <!-- 3. Tukar Akaun Log Masuk / Sign-In Moomoo -->
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 6px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #f59e0b;">Log Masuk / Tukar Akaun Moomoo</h4>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 0 0 10px 0;">
+                        Konfigurasi Moomoo Account ID dan kata laluan. Hash MD5 dijana di pelayan; kata laluan plaintext tidak disimpan atau di-log.
+                    </p>
+                    <form onsubmit="handleOpenDSignIn(event)" style="display: flex; flex-direction: column; gap: 8px;">
+                        <input type="text" id="loginAccInput" placeholder="Moomoo Login Account ID..." style="padding: 8px 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;" required />
+                        <input type="password" id="loginPwdInput" placeholder="Kata Laluan Moomoo..." style="padding: 8px 10px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;" required />
+                        <button type="submit" id="btnOpenDSignIn" style="padding: 8px 14px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;">Log Masuk OpenD</button>
+                    </form>
+                    <div id="switchLoginResult" style="margin-top: 8px; font-size: 12px; min-height: 16px;"></div>
+                    <div id="signInResult" style="margin-top: 4px; font-size: 12px; min-height: 16px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="otpCard" class="card" style="margin-bottom: 24px; ${safeOpendStatus === 'WAIT_OTP' ? 'border: 2px solid #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);' : ''}">
+            <h3 style="${safeOpendStatus === 'WAIT_OTP' ? 'color: #fbbf24;' : ''}">Moomoo OpenD 2FA OTP Relay (Port 22222)</h3>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 6px 0 12px 0;">
+                Kredensial broker diurus terus ke OpenD tanpa rekod peribadi. Masukkan kod pengesahan SMS/Emel (4-8 digit) di sini untuk disambung ke OpenD Telnet CLI secara selamat.
+            </p>
+            <form onsubmit="handleOtpSubmit(event)" style="display: flex; gap: 10px; max-width: 440px;">
+                <input type="text" id="otpInput" placeholder="Masukkan 4-8 digit kod OTP..." maxlength="8" style="flex: 1; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 14px;" required />
+                <button type="submit" id="btnSubmitOtp" style="padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Hantar OTP</button>
+            </form>
+            <div id="otpResult" style="margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
+        </div>
+
+        ${(!isMarketLive || marketStatus === 'CLOSED') ? `
+        <div style="background-color: #78350f; border: 1px solid #f59e0b; color: #fef3c7; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 20px;">⚠️</div>
+            <div>
+                <strong>Sesi Pasaran US Ditutup (${marketStatus}):</strong> Screener beroperasi menyaring calon Lorong SETUP untuk persediaan sesi seterusnya. Di bawah Hard Rule 6, sebarang pesanan dagangan baharu disekat secara automatik sehingga sesi pasaran New York dibuka semula.
+            </div>
+        </div>` : ''}
+
+        <div class="card" style="margin-bottom: 24px;">
+            <h3>Funnel Saringan Pasaran (5-Peringkat Bertingkat)</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px;">
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">1. Cloud Universe</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--accent); margin-top: 4px;">${funnel.cloud_raw_returned}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Pecahan Awan (0 K-line)</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">2. Kualiti Stage 0</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--accent); margin-top: 4px;">${funnel.stage0_quality_passed}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">&gt;=$10, &gt;=$1B, ADV&gt;=1M</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">3. Momentum / Setup</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #c084fc; margin-top: 4px;">${funnel.lane_momentum_candidates} <span style="font-size: 12px; color: var(--text-muted);">/</span> <span style="color: #fbbf24;">${funnel.lane_setup_candidates}</span></div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Dwi-Lorong Ditapis</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">4. Enriched K-Line</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--success); margin-top: 4px;">${funnel.kline_analyzed_count}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Top 3-5 Calon Per Lorong</div>
+                </div>
+                <div style="background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">5. Watchlist Akhir</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--success); margin-top: 4px;">${funnel.final_watchlist_count}</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Sedia untuk Tariq & Nawwar</div>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="font-size: 18px; margin-bottom: 12px;">Active Watchlist (Saluran Bertingkat Dua Lorong)</h2>
         <table>
             <thead>
                 <tr>
                     <th>Symbol</th>
                     <th>Name</th>
+                    <th>Lorong</th>
+                    <th>Skor</th>
                     <th>Price</th>
                     <th>Change</th>
                     <th>ADV20</th>
                     <th>RS vs SPY</th>
                     <th>RVOL 15m</th>
-                    <th>Status</th>
+                    <th>Status / Metrik</th>
                 </tr>
             </thead>
             <tbody>
@@ -485,6 +847,145 @@ app.get('/', authenticateDashboard, (req, res) => {
             </tbody>
         </table>
     </div>
+
+    <script>
+        async function handleOtpSubmit(e) {
+            e.preventDefault();
+            const otp = document.getElementById('otpInput').value.trim();
+            const resDiv = document.getElementById('otpResult');
+            if (!otp) return;
+            resDiv.innerText = "Menghantar OTP ke OpenD...";
+            resDiv.style.color = "var(--accent)";
+            try {
+                const resp = await fetch('/api/telnet/otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp_code: otp })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    resDiv.innerText = "OTP berjaya dihantar ke OpenD: " + (data.message || 'OK');
+                    resDiv.style.color = "var(--success)";
+                    document.getElementById('otpInput').value = '';
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    resDiv.innerText = "Gagal: " + (data.error || data.detail || 'Ralat');
+                    resDiv.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                resDiv.innerText = "Ralat komunikasi: " + err.message;
+                resDiv.style.color = "var(--danger)";
+            }
+        }
+
+        async function handleSwitchAccount() {
+            const accSelect = document.getElementById('accSelect');
+            const targetAcc = accSelect ? accSelect.value : '';
+            const resDiv = document.getElementById('switchAccResult');
+            if (!targetAcc) return;
+            resDiv.innerText = "Menukar akaun dagangan via SDK...";
+            resDiv.style.color = "var(--accent)";
+            try {
+                const resp = await fetch('/api/opend/switch-account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_id: targetAcc })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    resDiv.innerText = "Akaun berjaya ditukar: " + (data.message || 'OK');
+                    resDiv.style.color = "var(--success)";
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    resDiv.innerText = "Gagal: " + (data.error || 'Ralat');
+                    resDiv.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                resDiv.innerText = "Ralat komunikasi: " + err.message;
+                resDiv.style.color = "var(--danger)";
+            }
+        }
+
+        async function handleOpenDSignOut() {
+            if (!confirm("Adakah anda pasti mahu Sign-Out sesi OpenD? Tindakan ini akan memutuskan sambungan broker, membersihkan fail token sesi, dan me-restart OpenD ke mod idle.")) {
+                return;
+            }
+            const resDiv = document.getElementById('signOutResult');
+            resDiv.innerText = "Menjalankan sign-out sesi OpenD & pembersihan token...";
+            resDiv.style.color = "var(--accent)";
+            try {
+                const resp = await fetch('/api/opend/sign-out', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    resDiv.innerText = "Sesi OpenD berjaya ditamatkan & direstart ke mod idle: " + (data.message || 'OK');
+                    resDiv.style.color = "var(--success)";
+                    setTimeout(() => window.location.reload(), 2500);
+                } else {
+                    resDiv.innerText = "Gagal: " + (data.error || 'Ralat');
+                    resDiv.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                resDiv.innerText = "Ralat komunikasi: " + err.message;
+                resDiv.style.color = "var(--danger)";
+            }
+        }
+
+        async function handleOpenDSignIn(e) {
+            e.preventDefault();
+            const loginAcc = document.getElementById('loginAccInput').value.trim();
+            const loginPwd = document.getElementById('loginPwdInput') ? document.getElementById('loginPwdInput').value.trim() : '';
+            const resDiv = document.getElementById('signInResult') || document.getElementById('switchLoginResult');
+            if (!loginAcc || !loginPwd) {
+                resDiv.innerText = "Sila lengkapkan Account ID dan kata laluan.";
+                resDiv.style.color = "var(--danger)";
+                return;
+            }
+            resDiv.innerText = "Menghubungi OpenD Telnet gateway & memulakan proses log masuk...";
+            resDiv.style.color = "var(--accent)";
+            try {
+                const resp = await fetch('/api/opend/sign-in', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login_account: loginAcc, password: loginPwd })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    if (document.getElementById('loginPwdInput')) document.getElementById('loginPwdInput').value = '';
+                    if (data.status === 'WAIT_OTP') {
+                        resDiv.innerText = "Kredensial disahkan! Kod SMS/OTP 2FA diperlukan. Sila masukkan kod OTP dalam borang di bawah.";
+                        resDiv.style.color = "#f59e0b";
+                        const otpCard = document.getElementById('otpCard');
+                        if (otpCard) {
+                            otpCard.scrollIntoView({ behavior: 'smooth' });
+                            const otpInput = document.getElementById('otpInput');
+                            if (otpInput) otpInput.focus();
+                        }
+                    } else if (data.status === 'CONNECTED') {
+                        resDiv.innerText = "Log masuk berjaya! Status OpenD kini CONNECTED.";
+                        resDiv.style.color = "var(--success)";
+                        setTimeout(() => window.location.reload(), 2000);
+                    } else {
+                        resDiv.innerText = data.message || "Status OpenD dikemas kini: " + (data.status || 'OK');
+                        resDiv.style.color = "var(--accent)";
+                        setTimeout(() => window.location.reload(), 2500);
+                    }
+                } else {
+                    resDiv.innerText = "Log masuk gagal: " + (data.error || data.detail || 'Kata laluan atau akaun tidak sepadan.');
+                    resDiv.style.color = "var(--danger)";
+                }
+            } catch (err) {
+                resDiv.innerText = "Ralat komunikasi: " + err.message;
+                resDiv.style.color = "var(--danger)";
+            }
+        }
+
+        async function handleSwitchLogin(e) {
+            return handleOpenDSignIn(e);
+        }
+    </script>
 </body>
 </html>`;
 

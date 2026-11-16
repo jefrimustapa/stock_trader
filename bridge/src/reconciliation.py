@@ -23,7 +23,7 @@ class PositionReconciler:
         self._running = False
         self._positions: Dict[str, Dict[str, Any]] = {}
 
-    def emit_heartbeat(self, status: str = "HEALTHY") -> None:
+    def emit_heartbeat(self, status: str = "ACTIVE") -> None:
         """Writes 5s sentinel pulse."""
         self.status_file.parent.mkdir(parents=True, exist_ok=True)
         data = {
@@ -80,7 +80,7 @@ class PositionReconciler:
         """Background task emitting heartbeats every 5 seconds."""
         while self._running:
             try:
-                self.emit_heartbeat("HEALTHY")
+                self.emit_heartbeat("ACTIVE")
             except Exception as e:
                 logger.error("Heartbeat error: %s", e)
             await asyncio.sleep(self.heartbeat_interval)
