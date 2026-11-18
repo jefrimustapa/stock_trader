@@ -16,11 +16,13 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TuneIcon from '@mui/icons-material/Tune';
+import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { sneatTokens } from '../theme';
 import { FunnelStepper } from '../components/FunnelStepper';
 import { WatchlistTable } from '../components/WatchlistTable';
 
-export function L0Page({ dataPayload, screenerConfig, configLoading, configError }) {
+export function L0Page({ dataPayload, screenerConfig, configLoading, configError, onRefresh }) {
   const [localConfig, setLocalConfig] = useState(
     screenerConfig || dataPayload?.screenerConfig || null
   );
@@ -101,6 +103,53 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
   const totalCount = items.length;
   const momentumPercent = totalCount > 0 ? Math.round((momentumCount / totalCount) * 100) : 0;
   const setupPercent = totalCount > 0 ? Math.round((setupCount / totalCount) * 100) : 0;
+
+  // Countdown timer calculation (L0 Screener runs every 300 seconds / 5 minutes)
+  const scanIntervalSeconds = 300;
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    const rawTime = watchlist.generated_at || watchlist.data_as_of || dataPayload?.timestamp;
+    if (!rawTime) return 300;
+    const genMs = new Date(rawTime).getTime();
+    if (isNaN(genMs)) return 300;
+    const elapsed = Math.floor((Date.now() - genMs) / 1000);
+    if (elapsed < 0) return 300;
+    const rem = scanIntervalSeconds - (elapsed % scanIntervalSeconds);
+    return rem > 0 ? rem : scanIntervalSeconds;
+  });
+
+  useEffect(() => {
+    const rawTime = watchlist.generated_at || watchlist.data_as_of || dataPayload?.timestamp;
+    const calculateSecondsLeft = () => {
+      if (!rawTime) return 300;
+      const genMs = new Date(rawTime).getTime();
+      if (isNaN(genMs)) return 300;
+      const elapsed = Math.floor((Date.now() - genMs) / 1000);
+      if (elapsed < 0) return 300;
+      const rem = scanIntervalSeconds - (elapsed % scanIntervalSeconds);
+      return rem > 0 ? rem : scanIntervalSeconds;
+    };
+
+    setSecondsLeft(calculateSecondsLeft());
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          if (typeof onRefresh === 'function') {
+            onRefresh();
+          }
+          return scanIntervalSeconds;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [watchlist.generated_at, watchlist.data_as_of, dataPayload?.timestamp, onRefresh]);
+
+  const countdownMinutes = Math.floor(secondsLeft / 60);
+  const countdownSeconds = secondsLeft % 60;
+  const countdownFormatted = `${String(countdownMinutes).padStart(2, '0')}:${String(countdownSeconds).padStart(2, '0')}`;
+  const countdownProgressPct = Math.min(100, Math.max(0, Math.round(((scanIntervalSeconds - secondsLeft) / scanIntervalSeconds) * 100)));
 
   return (
     <Box id="page-l0" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2.5, sm: 3 } }}>
@@ -217,6 +266,21 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
               height: 28,
             }}
           />
+          <Chip
+            id="chip-watchlist-countdown"
+            size="small"
+            icon={<TimerOutlinedIcon sx={{ fontSize: '14px !important', color: `${sneatTokens.warning.main} !important` }} />}
+            label={`Watchlist Seterusnya: ${countdownFormatted}`}
+            sx={{
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              backgroundColor: sneatTokens.warning.soft,
+              color: sneatTokens.warning.main,
+              border: `1px solid ${sneatTokens.warning.main}40`,
+              borderRadius: 1.5,
+              height: 28,
+            }}
+          />
         </Box>
       </Box>
 
@@ -227,6 +291,93 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
         configLoading={loading}
         configError={error}
       />
+
+      {/* Countdown Card / Bar until Next Watchlist */}
+      <Paper
+        id="card-watchlist-countdown"
+        elevation={0}
+        sx={{
+          p: { xs: 2, sm: 2.5 },
+          borderRadius: '10px',
+          border: (t) => `1px solid ${t.palette.divider}`,
+          backgroundColor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.06)' : 'rgba(255, 171, 0, 0.04)',
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: { xs: 'flex-start', md: 'center' },
+          justifyContent: 'space-between',
+          gap: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: '10px',
+              backgroundColor: sneatTokens.warning.soft,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: sneatTokens.warning.main,
+              boxShadow: '0 4px 12px 0 rgba(255, 171, 0, 0.25)',
+              flexShrink: 0,
+            }}
+          >
+            <TimerOutlinedIcon sx={{ fontSize: 26 }} />
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Countdown Imbasan L0 Screener (Kitaran 5 Minit / 300s)
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.2 }}>
+              <Typography
+                id="text-watchlist-countdown"
+                variant="h4"
+                sx={{
+                  fontWeight: 800,
+                  color: sneatTokens.warning.main,
+                  fontFamily: 'monospace',
+                  letterSpacing: 1,
+                  lineHeight: 1,
+                  fontSize: { xs: '1.75rem', sm: '2.1rem' },
+                }}
+              >
+                {countdownFormatted}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                sehingga kemas kini senarai pantau seterusnya
+              </Typography>
+            </Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.4, display: 'block' }}>
+              Cap masa semasa: <strong>{dataAsOf}</strong> • Status pasaran: <strong>{marketStatus}</strong> ({isMarketOpen ? 'Dibuka' : 'Ditutup'})
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ width: { xs: '100%', md: 260 }, display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+              Kemajuan kitaran imbasan
+            </Typography>
+            <Typography variant="caption" sx={{ color: sneatTokens.warning.main, fontWeight: 700 }}>
+              {countdownProgressPct}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={countdownProgressPct}
+            sx={{
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.15)' : 'rgba(255, 171, 0, 0.12)',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: sneatTokens.warning.main,
+                borderRadius: 4,
+              },
+            }}
+          />
+        </Box>
+      </Paper>
 
       {/* Watchlist KPI Metric Cards */}
       <Grid container spacing={2}>

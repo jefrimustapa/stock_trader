@@ -284,6 +284,18 @@ async function runSuite() {
     assertCheck('L0 Page contains 5-stage Funnel Stepper', l0Text.includes('STAGE 1') || l0Text.includes('Cloud Universe'));
     assertCheck('L0 Page contains Watchlist Table component', l0Text.includes('LORONG MOMENTUM') || l0Text.includes('Watchlist'));
 
+    // Verify countdown timer until next watchlist
+    const chipCountdown = page.locator('#chip-watchlist-countdown');
+    assertCheck('L0 Page header contains countdown chip (#chip-watchlist-countdown)', (await chipCountdown.count()) >= 1);
+    const chipCountdownText = await chipCountdown.innerText();
+    assertCheck('Countdown chip text matches "Watchlist Seterusnya: MM:SS"', /Watchlist Seterusnya: \d{2}:\d{2}/.test(chipCountdownText));
+
+    const cardCountdown = page.locator('#card-watchlist-countdown');
+    assertCheck('L0 Page contains countdown card (#card-watchlist-countdown)', (await cardCountdown.count()) >= 1);
+    const textCountdown = page.locator('#text-watchlist-countdown');
+    const countdownVal = await textCountdown.innerText();
+    assertCheck('Countdown timer display formatted as MM:SS (e.g. 04:59)', /^\d{2}:\d{2}$/.test(countdownVal.trim()));
+
     // Test legacy hash fallback (#/funnel and #/watchlist)
     await page.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForTimeout(800);
@@ -296,6 +308,10 @@ async function runSuite() {
     const l0Shot = path.join(QA_DIR, 'hom305-unified-l0-desktop.png');
     await page.screenshot({ path: l0Shot, fullPage: true });
     assertCheck('Screenshot captured: hom305-unified-l0-desktop.png', fs.existsSync(l0Shot));
+
+    const l0CountdownShot = path.join(QA_DIR, 'hom305-unified-l0-countdown-desktop.png');
+    await page.screenshot({ path: l0CountdownShot, fullPage: true });
+    assertCheck('Screenshot captured: hom305-unified-l0-countdown-desktop.png', fs.existsSync(l0CountdownShot));
 
     // -----------------------------------------------------------------------
     // Part G: Settings Tab 3 (Paparan Aktiviti Ejen & Paginasi Konfigurasi)

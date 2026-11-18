@@ -150,6 +150,7 @@ export function App() {
             screenerConfig={screenerConfig}
             configLoading={configLoading}
             configError={configError}
+            onRefresh={fetchDashboardData}
           />
         );
       case 'settings':
