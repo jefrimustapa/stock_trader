@@ -283,6 +283,7 @@ async function runSuite() {
     assertCheck('L0 Page contains header "L0: Saringan & Watchlist Dwi-Lorong"', l0Text.includes('L0: Saringan & Watchlist Dwi-Lorong'));
     assertCheck('L0 Page contains 5-stage Funnel Stepper', l0Text.includes('STAGE 1') || l0Text.includes('Cloud Universe'));
     assertCheck('L0 Page contains Watchlist Table component', l0Text.includes('LORONG MOMENTUM') || l0Text.includes('Watchlist'));
+    assertCheck('Cliché chips removed from Funnel Stepper (no "Aliran Progresif")', !l0Text.includes('Aliran Progresif'));
 
     // Verify redundant header chips are removed per user request ("buang ni sebab dah ada ni")
     const chipTimestamp = page.locator('#chip-watchlist-timestamp');
