@@ -21,6 +21,7 @@ import {
   Paper,
   Tabs,
   Tab,
+  TablePagination,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -39,7 +40,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { sneatTokens } from '../theme';
 
-export function AgentsPage() {
+export function AgentsPage({ screenerConfig }) {
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -49,17 +50,24 @@ export function AgentsPage() {
   };
 
   const [loading, setLoading] = useState(true);
-  const [runningSim, setRunningSim] = useState(false);
   const [activityData, setActivityData] = useState(null);
   const [selectedSymbolIndex, setSelectedSymbolIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
   const [cancellingOrder, setCancellingOrder] = useState(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(() => Number(screenerConfig?.agent_orders_per_page || 10));
+
+  useEffect(() => {
+    if (screenerConfig?.agent_orders_per_page) {
+      setRowsPerPage(Number(screenerConfig.agent_orders_per_page));
+    }
+  }, [screenerConfig?.agent_orders_per_page]);
 
   const fetchActivity = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/agents/activity?limit=10');
+      const res = await fetch('/api/agents/activity?limit=50');
       if (!res.ok) {
         throw new Error(`HTTP error ${res.status}`);
       }
@@ -79,33 +87,6 @@ export function AgentsPage() {
     const interval = setInterval(fetchActivity, 10000);
     return () => clearInterval(interval);
   }, [fetchActivity]);
-
-  const handleTriggerSimulate = async () => {
-    try {
-      setRunningSim(true);
-      setErrorMsg(null);
-      setSuccessMsg(null);
-      const res = await fetch('/api/agents/simulate-run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          force_simulation: true,
-          mock_market_window: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
-      }
-      setSuccessMsg(`Simulasi ${data.cycle_id} berjaya! ${data.summary?.orders_placed || 0} pesanan dijana.`);
-      await fetchActivity();
-      setSelectedSymbolIndex(0);
-    } catch (err) {
-      setErrorMsg('Ralat mencetuskan simulasi: ' + err.message);
-    } finally {
-      setRunningSim(false);
-    }
-  };
 
   const handleCancelOrder = async (orderId) => {
     if (!orderId) return;
@@ -156,7 +137,7 @@ export function AgentsPage() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <PsychologyIcon sx={{ color: sneatTokens.primary.main, fontSize: 32 }} />
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              Aktiviti Pasukan Ejen & Paper Trading
+              L1 -&gt; L4: Aktiviti Pasukan Ejen
             </Typography>
             <Chip
               label="SIMULATE MODE"
@@ -170,7 +151,7 @@ export function AgentsPage() {
             />
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Saluran Paip Keputusan Ejen L0 Screener → L1 Tariq & Nawwar → L2 Haziq → L3 Danial → L4 Moomoo OpenD
+            Saluran Paip Keputusan Ejen L0 Screener → L1 Tariq &amp; Nawwar → L2 Haziq → L3 Danial → L4 Moomoo OpenD
           </Typography>
         </Box>
 
@@ -180,27 +161,10 @@ export function AgentsPage() {
             size="medium"
             startIcon={<RefreshIcon />}
             onClick={fetchActivity}
-            disabled={loading || runningSim}
+            disabled={loading}
             sx={{ borderRadius: 2 }}
           >
             Segarkan
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            size="medium"
-            id="btn-run-simulation"
-            startIcon={runningSim ? <CircularProgress size={18} color="inherit" /> : <PlayArrowIcon />}
-            onClick={handleTriggerSimulate}
-            disabled={runningSim}
-            sx={{
-              borderRadius: 2,
-              px: 3,
-              fontWeight: 600,
-              boxShadow: '0 4px 12px rgba(105, 108, 255, 0.4)',
-            }}
-          >
-            {runningSim ? 'Menjalankan Simulasi...' : 'Jalankan Simulasi Pipeline'}
           </Button>
         </Box>
       </Box>
@@ -875,7 +839,7 @@ export function AgentsPage() {
       ) : (
         <Card sx={{ p: 4, textAlign: 'center', mb: 3, borderRadius: 2 }}>
           <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            Tiada data deliberasi kitaran simulasi. Sila klik butang <strong>"Jalankan Simulasi Pipeline"</strong> untuk memulakan analisis ejen.
+            Tiada data deliberasi kitaran simulasi. Sistem saluran paip ejen beroperasi secara automatik di latar belakang mengikut jadual pasaran US (09:45 – 15:45 NY).
           </Typography>
         </Card>
       )}
@@ -891,107 +855,127 @@ export function AgentsPage() {
           </Box>
 
           {orders.length > 0 ? (
-            <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-              <Table size="small">
-                <TableHead sx={{ bgcolor: 'action.hover' }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>ORDER ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>SIMBOL</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>ARAH</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>KUANTITI</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>HARGA ENTRI</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>STOP LOSS</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>TAKE PROFIT</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>STATUS OPEND</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>CAP MASA</TableCell>
-                    <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>TINDAKAN</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {orders.map((ord, oIdx) => {
-                    const orderKey = ord.order_id || ord.client_order_id;
-                    const isPendingOrSubmitted = ord.status === 'SUBMITTED' || ord.status === 'PENDING';
-                    return (
-                      <TableRow key={ord.client_order_id || oIdx} hover>
-                        <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                          {ord.order_id || ord.client_order_id?.substring(0, 8)}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>{ord.symbol}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={ord.order_side || 'BUY'}
-                            size="small"
-                            sx={{
-                              fontWeight: 700,
-                              bgcolor: sneatTokens.success.soft,
-                              color: sneatTokens.success.main,
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} unit</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>${Number(ord.entry_price || 0).toFixed(2)}</TableCell>
-                        <TableCell sx={{ color: 'error.main', fontWeight: 600 }}>
-                          ${Number(ord.stop_loss_price || 0).toFixed(2)}
-                        </TableCell>
-                        <TableCell sx={{ color: 'success.main', fontWeight: 600 }}>
-                          ${Number(ord.take_profit_price || 0).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={ord.status || 'SUBMITTED'}
-                            size="small"
-                            color={
-                              ord.status?.includes('REJECT')
-                                ? 'error'
-                                : ord.status === 'CANCELLED'
-                                ? 'default'
-                                : ord.status === 'FILLED'
-                                ? 'success'
-                                : 'warning'
-                            }
-                            sx={{ fontWeight: 600 }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                          {ord.created_at ? new Date(ord.created_at).toLocaleString() : '-'}
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          {isPendingOrSubmitted ? (
-                            <Button
+            <>
+              <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>ORDER ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>SIMBOL</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>ARAH</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>KUANTITI</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>HARGA ENTRI</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>STOP LOSS</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>TAKE PROFIT</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>STATUS OPEND</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>CAP MASA</TableCell>
+                      <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>TINDAKAN</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {orders.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((ord, oIdx) => {
+                      const orderKey = ord.order_id || ord.client_order_id;
+                      const isCancellable =
+                        ord.status === 'SUBMITTED' ||
+                        ord.status === 'PENDING' ||
+                        ord.status === 'SUBMITTED_PAPER_SIM';
+                      return (
+                        <TableRow key={ord.client_order_id || oIdx} hover>
+                          <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                            {ord.order_id || ord.client_order_id?.substring(0, 8)}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>{ord.symbol}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={ord.order_side || 'BUY'}
                               size="small"
-                              variant="outlined"
-                              color="error"
-                              id={`btn-cancel-order-${orderKey}`}
-                              disabled={cancellingOrder === orderKey}
-                              onClick={() => handleCancelOrder(orderKey)}
                               sx={{
-                                fontSize: '0.72rem',
-                                py: 0.25,
-                                px: 1,
-                                minWidth: 64,
-                                borderRadius: 1.5,
-                                textTransform: 'none',
-                                fontWeight: 600,
+                                fontWeight: 700,
+                                bgcolor: sneatTokens.success.soft,
+                                color: sneatTokens.success.main,
                               }}
-                            >
-                              {cancellingOrder === orderKey ? (
-                                <CircularProgress size={14} color="inherit" />
-                              ) : (
-                                'Batal'
-                              )}
-                            </Button>
-                          ) : (
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              -
-                            </Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            />
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} unit</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>${Number(ord.entry_price || 0).toFixed(2)}</TableCell>
+                          <TableCell sx={{ color: 'error.main', fontWeight: 600 }}>
+                            ${Number(ord.stop_loss_price || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell sx={{ color: 'success.main', fontWeight: 600 }}>
+                            ${Number(ord.take_profit_price || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={ord.status || 'SUBMITTED'}
+                              size="small"
+                              color={
+                                ord.status?.includes('REJECT')
+                                  ? 'error'
+                                  : ord.status === 'CANCELLED'
+                                  ? 'default'
+                                  : ord.status === 'FILLED'
+                                  ? 'success'
+                                  : 'warning'
+                              }
+                              sx={{ fontWeight: 600 }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            {ord.created_at ? new Date(ord.created_at).toLocaleString() : '-'}
+                          </TableCell>
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            {isCancellable ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                id={`btn-cancel-order-${orderKey}`}
+                                disabled={cancellingOrder === orderKey}
+                                onClick={() => handleCancelOrder(orderKey)}
+                                sx={{
+                                  fontSize: '0.72rem',
+                                  py: 0.25,
+                                  px: 1,
+                                  minWidth: 64,
+                                  borderRadius: 1.5,
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {cancellingOrder === orderKey ? (
+                                  <CircularProgress size={14} color="inherit" />
+                                ) : (
+                                  'Batal'
+                                )}
+                              </Button>
+                            ) : (
+                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                {ord.status === 'CANCELLED' ? 'Dibatalkan' : (ord.status === 'FILLED' ? 'Selesai' : '-')}
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                component="div"
+                count={orders.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={(event, newPage) => setPage(newPage)}
+                onRowsPerPageChange={(event) => {
+                  setRowsPerPage(parseInt(event.target.value, 10));
+                  setPage(0);
+                }}
+                labelRowsPerPage="Baris per halaman:"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} daripada ${count !== -1 ? count : `lebih daripada ${to}`}`}
+                sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+              />
+            </>
           ) : (
             <Alert severity="info" sx={{ borderRadius: 2 }}>
               Belum ada transaksi pesanan simulasi yang direkodkan dalam sesi ini.

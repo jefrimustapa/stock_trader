@@ -236,7 +236,7 @@ async function runSuite() {
     assertCheck('Screenshot captured: hom305-settings-tab1-mobile.png', fs.existsSync(mobileTab1Shot));
 
     // -----------------------------------------------------------------------
-    // Part E: Agents Page Feedback Verification (Real Data, Passed Counters, Color Coding)
+    // Part E: Agents Page Feedback Verification (Real Data, Passed Counters, Color Coding, Removal of Simulation Button, Rebranding & Pagination)
     // -----------------------------------------------------------------------
     console.log('\n[Part E: Agents Page Verification & Color Coding]');
     await page.goto(`${TARGET_URL}/#/agents`, { waitUntil: 'networkidle', timeout: 30000 });
@@ -247,9 +247,103 @@ async function runSuite() {
     assertCheck('Agents Page removed cliché labels "L1: " / "L2: "', !agentsText.includes('L1: 1 Lulus') && !agentsText.includes('L2: 1 Lulus'));
     assertCheck('Agents Page removed cliché chips "(L1_TECHNICAL)" / "(L4_DISPATCH)"', !agentsText.includes('(L1_TECHNICAL)') && !agentsText.includes('(L4_DISPATCH)'));
 
+    // Requirement 1: Simulation Button Removed
+    const btnSim = page.locator('#btn-run-simulation');
+    assertCheck('Simulation button (#btn-run-simulation) is COMPLETELY REMOVED', (await btnSim.count()) === 0);
+
+    // Requirement 4: Rebranded L1 -> L4
+    assertCheck('Agents Page header contains "L1 -> L4: Aktiviti Pasukan Ejen"', agentsText.includes('L1 -> L4: Aktiviti Pasukan Ejen'));
+    const sidebarAgents = await page.innerText('#nav-item-agents');
+    assertCheck('Sidebar navigation displays "L1 -> L4: Aktiviti Pasukan Ejen"', sidebarAgents.includes('L1 -> L4: Aktiviti Pasukan Ejen'));
+
+    // Requirement 5: Table Pagination
+    const pagination = page.locator('.MuiTablePagination-root');
+    assertCheck('Orders table includes TablePagination component', (await pagination.count()) >= 1);
+
     const agentsScreenshot = path.join(QA_DIR, 'hom305-agents-passed-counters.png');
     await page.screenshot({ path: agentsScreenshot, fullPage: true });
     assertCheck('Screenshot captured: hom305-agents-passed-counters.png', fs.existsSync(agentsScreenshot));
+
+    // -----------------------------------------------------------------------
+    // Part F: Unified L0 (Saringan & Watchlist) Page Verification
+    // -----------------------------------------------------------------------
+    console.log('\n[Part F: Unified L0 (Saringan & Watchlist) Page]');
+    const tabL0 = page.locator('#nav-item-l0');
+    assertCheck('Sidebar contains unified navigation item #nav-item-l0', (await tabL0.count()) >= 1);
+    const l0NavText = await tabL0.first().innerText();
+    assertCheck('Sidebar #nav-item-l0 is labeled "L0: Saringan & Watchlist"', l0NavText.includes('L0: Saringan & Watchlist'));
+
+    await tabL0.first().click();
+    await page.waitForTimeout(1000);
+
+    const l0Page = page.locator('#page-l0');
+    assertCheck('Unified L0 Page (#page-l0) is rendered', (await l0Page.count()) === 1);
+
+    const l0Text = await l0Page.innerText();
+    assertCheck('L0 Page contains header "L0: Saringan & Watchlist Dwi-Lorong"', l0Text.includes('L0: Saringan & Watchlist Dwi-Lorong'));
+    assertCheck('L0 Page contains 5-stage Funnel Stepper', l0Text.includes('STAGE 1') || l0Text.includes('Cloud Universe'));
+    assertCheck('L0 Page contains Watchlist Table component', l0Text.includes('LORONG MOMENTUM') || l0Text.includes('Watchlist'));
+
+    // Test legacy hash fallback (#/funnel and #/watchlist)
+    await page.goto(`${TARGET_URL}/#/funnel`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(800);
+    assertCheck('Legacy route #/funnel renders unified L0 page', (await page.locator('#page-l0').count()) === 1);
+
+    await page.goto(`${TARGET_URL}/#/watchlist`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(800);
+    assertCheck('Legacy route #/watchlist renders unified L0 page', (await page.locator('#page-l0').count()) === 1);
+
+    const l0Shot = path.join(QA_DIR, 'hom305-unified-l0-desktop.png');
+    await page.screenshot({ path: l0Shot, fullPage: true });
+    assertCheck('Screenshot captured: hom305-unified-l0-desktop.png', fs.existsSync(l0Shot));
+
+    // -----------------------------------------------------------------------
+    // Part G: Settings Tab 3 (Paparan Aktiviti Ejen & Paginasi Konfigurasi)
+    // -----------------------------------------------------------------------
+    console.log('\n[Part G: Settings Tab 3 Paparan Aktiviti Ejen & Paginasi]');
+    await page.goto(`${TARGET_URL}/#/settings?tab=display`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(1000);
+
+    const tab3 = page.locator('#tab-agent-display');
+    assertCheck('Settings Tab 3 (#tab-agent-display) exists', (await tab3.count()) === 1);
+    const isTab3Selected = await tab3.getAttribute('aria-selected');
+    assertCheck('Tab 3 is selected via #/settings?tab=display', isTab3Selected === 'true');
+
+    const displayPanel = page.locator('#tab-panel-display');
+    assertCheck('Tab 3 panel (#tab-panel-display) is visible', await displayPanel.isVisible());
+
+    // Verify pagination choices (5, 10, 25, 50)
+    const chip5 = page.locator('#chip-orders-page-5');
+    const chip10 = page.locator('#chip-orders-page-10');
+    const chip25 = page.locator('#chip-orders-page-25');
+    const chip50 = page.locator('#chip-orders-page-50');
+
+    assertCheck('Pagination option 5 exists', await chip5.isVisible());
+    assertCheck('Pagination option 10 exists', await chip10.isVisible());
+    assertCheck('Pagination option 25 exists', await chip25.isVisible());
+    assertCheck('Pagination option 50 exists', await chip50.isVisible());
+
+    // Test selecting 25 and saving
+    await chip25.click();
+    await page.waitForTimeout(300);
+
+    const btnSaveDisplay = page.locator('#btnSaveAgentDisplayConfig');
+    assertCheck('Button #btnSaveAgentDisplayConfig is present', await btnSaveDisplay.isVisible());
+
+    const [displayPatchRes] = await Promise.all([
+      page.waitForResponse(res => res.url().includes('/api/screener/config') && res.request().method() === 'PATCH'),
+      btnSaveDisplay.click(),
+    ]);
+    assertCheck('PATCH response for display config returns HTTP 200', displayPatchRes.status() === 200);
+
+    await page.waitForTimeout(800);
+    const displayPanelText = await displayPanel.innerText();
+    assertCheck('Success alert displayed on Tab 3', displayPanelText.includes('Konfigurasi paginasi berjaya disimpan'));
+    assertCheck('Summary displays 25 entries per page', displayPanelText.includes('25 entri per halaman'));
+
+    const tab3Shot = path.join(QA_DIR, 'hom305-tab3-display-desktop.png');
+    await page.screenshot({ path: tab3Shot, fullPage: true });
+    assertCheck('Screenshot captured: hom305-tab3-display-desktop.png', fs.existsSync(tab3Shot));
 
     console.log('\n================================================================');
     console.log(`  HOM-305 Playwright Suite Finished: ${passedTests} / ${totalTests} passed`);

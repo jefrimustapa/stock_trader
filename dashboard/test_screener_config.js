@@ -296,6 +296,38 @@ async function runTests() {
         const verifyBpGet = await makeRequest('/api/screener/config', 'GET', authHeader);
         check('Persistence: GET /api/screener/config confirms max_buying_power is 50000.0', verifyBpGet.data.config.max_buying_power === 50000.0);
 
+        // Test 6e: BVA agent_orders_per_page (4 vs 5 vs 10 vs 25 vs 50 vs 51 vs invalid) (HOM-305)
+        console.log('\n--- 6e. BVA: agent_orders_per_page (5, 10, 25, 50) (HOM-305) ---');
+        const bvaPageBelow = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 4 });
+        check('BVA: agent_orders_per_page 4 rejected with HTTP 400', bvaPageBelow.statusCode === 400);
+
+        const bvaPageNeg = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: -5 });
+        check('BVA: Negative agent_orders_per_page rejected with HTTP 400', bvaPageNeg.statusCode === 400);
+
+        const bvaPageOver = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 51 });
+        check('BVA: agent_orders_per_page 51 rejected with HTTP 400', bvaPageOver.statusCode === 400);
+
+        const bvaPageDecimal = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 10.5 });
+        check('BVA: Decimal agent_orders_per_page rejected with HTTP 400', bvaPageDecimal.statusCode === 400);
+
+        const bvaPageStr = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 'invalid' });
+        check('BVA: String agent_orders_per_page rejected with HTTP 400', bvaPageStr.statusCode === 400);
+
+        const bvaPage5 = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 5 });
+        check('BVA: Option 5 accepted with HTTP 200', bvaPage5.statusCode === 200);
+        check('BVA: Config updated agent_orders_per_page to 5', bvaPage5.data.config.agent_orders_per_page === 5);
+
+        const bvaPage25 = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 25 });
+        check('BVA: Option 25 accepted with HTTP 200', bvaPage25.statusCode === 200);
+        check('BVA: Config updated agent_orders_per_page to 25', bvaPage25.data.config.agent_orders_per_page === 25);
+
+        const bvaPage50 = await makeRequest('/api/screener/config', 'PATCH', authHeader, { agent_orders_per_page: 50 });
+        check('BVA: Option 50 accepted with HTTP 200', bvaPage50.statusCode === 200);
+        check('BVA: Config updated agent_orders_per_page to 50', bvaPage50.data.config.agent_orders_per_page === 50);
+
+        const verifyPageGet = await makeRequest('/api/screener/config', 'GET', authHeader);
+        check('Persistence: GET /api/screener/config confirms agent_orders_per_page is 50', verifyPageGet.data.config.agent_orders_per_page === 50);
+
         // Test 7: Audit Trail & Data Integrity
         console.log('\n--- 7. Audit Trail & SQLite Persistence Verification ---');
         const auditRes = await makeRequest('/api/screener/config/audit', 'GET', authHeader);

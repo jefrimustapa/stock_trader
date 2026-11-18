@@ -33,6 +33,7 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import GavelIcon from '@mui/icons-material/Gavel';
 import SyncIcon from '@mui/icons-material/Sync';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import { sneatTokens } from '../theme';
 import { OpendControlPanel } from '../components/OpendControlPanel';
 
@@ -44,6 +45,7 @@ const DEFAULT_CONFIG = {
   max_rvol: 20.00,
   max_candidates_per_lane: 5,
   max_buying_power: 100000.0,
+  agent_orders_per_page: 10,
 };
 
 export function SettingsPage({ statusData, onRefresh, initialTab }) {
@@ -51,6 +53,7 @@ export function SettingsPage({ statusData, onRefresh, initialTab }) {
     if (typeof initialTab === 'number') return initialTab;
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || '';
+      if (hash.includes('tab=display') || hash.includes('tab=pagination') || hash.includes('tab=agent')) return 3;
       if (hash.includes('tab=opend') || hash.includes('opend')) return 2;
       if (hash.includes('tab=capital') || hash.includes('tab=risk') || hash.includes('tab=modal') || hash.includes('capital') || hash.includes('risk')) return 1;
     }
@@ -63,7 +66,9 @@ export function SettingsPage({ statusData, onRefresh, initialTab }) {
     const checkHashTab = () => {
       if (typeof window !== 'undefined') {
         const hash = window.location.hash || '';
-        if (hash.includes('tab=opend') || hash.includes('opend')) {
+        if (hash.includes('tab=display') || hash.includes('tab=pagination') || hash.includes('tab=agent')) {
+          setActiveTab(3);
+        } else if (hash.includes('tab=opend') || hash.includes('opend')) {
           setActiveTab(2);
         } else if (hash.includes('tab=capital') || hash.includes('tab=risk') || hash.includes('tab=modal') || hash.includes('capital') || hash.includes('risk')) {
           setActiveTab(1);
@@ -81,7 +86,9 @@ export function SettingsPage({ statusData, onRefresh, initialTab }) {
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
     if (typeof window !== 'undefined') {
-      if (newValue === 2) {
+      if (newValue === 3) {
+        window.location.hash = '#/settings?tab=display';
+      } else if (newValue === 2) {
         window.location.hash = '#/settings?tab=opend';
       } else if (newValue === 1) {
         window.location.hash = '#/settings?tab=capital';
@@ -516,8 +523,171 @@ export function SettingsPage({ statusData, onRefresh, initialTab }) {
             iconPosition="start"
             label="Pengurusan Gerbang OpenD"
           />
+          <Tab
+            id="tab-agent-display"
+            icon={<ViewListIcon sx={{ fontSize: 18 }} />}
+            iconPosition="start"
+            label="Paparan Aktiviti Ejen"
+          />
         </Tabs>
       </Box>
+
+      {/* Tab 3: Paparan Aktiviti Ejen (Paginasi) */}
+      {activeTab === 3 && (
+        <Box id="tab-panel-display" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 0.5 }}>
+          {successMsg && (
+            <Alert
+              id="displayAlertSuccess"
+              severity="success"
+              icon={<CheckCircleOutlineIcon fontSize="inherit" />}
+              onClose={() => setSuccessMsg('')}
+              sx={{ borderRadius: 2 }}
+            >
+              {successMsg}
+            </Alert>
+          )}
+          {errorMsg && (
+            <Alert
+              id="displayAlertError"
+              severity="error"
+              onClose={() => setErrorMsg('')}
+              sx={{ borderRadius: 2 }}
+            >
+              {errorMsg}
+            </Alert>
+          )}
+
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={8}>
+              <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '8px',
+                        backgroundColor: sneatTokens.primary.soft,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: sneatTokens.primary.main,
+                      }}
+                    >
+                      <ViewListIcon sx={{ fontSize: 24 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        Konfigurasi Paginasi Jadual Aktiviti Ejen
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Tetapkan bilangan entri lalai bagi jadual pesanan transaksi di halaman Aktiviti Pasukan Ejen.
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                    Bilangan Entri Per Halaman (Pilihan: 5, 10, 25, 50):
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}>
+                    {[5, 10, 25, 50].map((pageSize) => {
+                      const isSelected = Number(config.agent_orders_per_page || 10) === pageSize;
+                      return (
+                        <Chip
+                          key={pageSize}
+                          id={`chip-orders-page-${pageSize}`}
+                          label={`${pageSize} entri / halaman`}
+                          clickable
+                          onClick={() => setConfig({ ...config, agent_orders_per_page: pageSize })}
+                          sx={{
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            py: 2.2,
+                            px: 1.5,
+                            borderRadius: 2,
+                            backgroundColor: isSelected ? sneatTokens.primary.main : 'action.hover',
+                            color: isSelected ? '#FFFFFF' : 'text.primary',
+                            border: isSelected ? 'none' : '1px solid',
+                            borderColor: 'divider',
+                            '&:hover': {
+                              backgroundColor: isSelected ? sneatTokens.primary.main : sneatTokens.primary.soft,
+                            },
+                          }}
+                        />
+                      );
+                    })}
+                  </Box>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 4 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Nilai semasa: <strong id="displayAgentOrdersPerPage">{config.agent_orders_per_page || 10}</strong> entri per halaman
+                    </Typography>
+
+                    <Button
+                      id="btnSaveAgentDisplayConfig"
+                      variant="contained"
+                      color="primary"
+                      startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                      disabled={saving}
+                      onClick={async () => {
+                        try {
+                          setSaving(true);
+                          setSuccessMsg('');
+                          setErrorMsg('');
+                          const res = await fetch('/api/screener/config', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              agent_orders_per_page: Number(config.agent_orders_per_page || 10),
+                            }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            throw new Error(data.error || `HTTP ${res.status}`);
+                          }
+                          setSuccessMsg('Konfigurasi paginasi berjaya disimpan.');
+                          if (data.config) {
+                            setConfig(data.config);
+                            setOriginalConfig(data.config);
+                          }
+                        } catch (err) {
+                          setErrorMsg('Ralat menyimpan konfigurasi paginasi: ' + err.message);
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      sx={{
+                        borderRadius: 2,
+                        px: 3,
+                        fontWeight: 700,
+                        textTransform: 'none',
+                      }}
+                    >
+                      Simpan Tetapan Paginasi
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                <CardContent sx={{ p: 2.5 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                    Panduan Paginasi Ejen
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
+                    Konfigurasi ini disegerakkan ke pangkalan data SQLite <code>screener_config.sqlite</code>. Nilai ini menjadi bilangan entri lalai pada komponen jadual <strong>L1 -&gt; L4: Aktiviti Pasukan Ejen</strong>.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
+      )}
 
       {/* Tab 2: OpenD Gateway Control Panel */}
       {activeTab === 2 && (

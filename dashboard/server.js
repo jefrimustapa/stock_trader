@@ -409,7 +409,8 @@ const SCREENER_CONFIG_LIMITS = {
     min_rvol: { min: 0.0, max: 50.0 },
     max_rvol: { min: 0.1, max: 100.0 },
     max_candidates_per_lane: { min: 1, max: 20 },
-    max_buying_power: { min: 500.0, max: 100000000.0, default: 100000.0 }
+    max_buying_power: { min: 500.0, max: 100000000.0, default: 100000.0 },
+    agent_orders_per_page: { options: [5, 10, 25, 50], default: 10 }
 };
 
 let screenerDbInstance = null;
@@ -457,11 +458,17 @@ function getScreenerDb() {
             screenerDbInstance.exec('ALTER TABLE screener_config ADD COLUMN max_buying_power REAL NOT NULL DEFAULT 100000.0 CHECK (max_buying_power >= 500.0);');
         }
 
+        // Migration check: ensure agent_orders_per_page exists in screener_config (HOM-305)
+        const hasAgentOrdersPerPage = tableCols.some(col => col.name === 'agent_orders_per_page');
+        if (!hasAgentOrdersPerPage) {
+            screenerDbInstance.exec('ALTER TABLE screener_config ADD COLUMN agent_orders_per_page INTEGER NOT NULL DEFAULT 10 CHECK (agent_orders_per_page IN (5, 10, 25, 50));');
+        }
+
         const row = screenerDbInstance.prepare('SELECT * FROM screener_config WHERE id = 1').get();
         if (!row) {
             const initStmt = screenerDbInstance.prepare(`
-                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, updated_at, updated_by)
-                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, 5, 100000.0, ?, 'system')
+                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, updated_at, updated_by)
+                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, 5, 100000.0, 10, ?, 'system')
             `);
             initStmt.run(new Date().toISOString());
         }
@@ -472,7 +479,7 @@ function getScreenerDb() {
 app.get('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
         const db = getScreenerDb();
-        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, updated_at, updated_by FROM screener_config WHERE id = 1').get();
+        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, updated_at, updated_by FROM screener_config WHERE id = 1').get();
         if (!row) {
             return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
         }
@@ -484,7 +491,8 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
                 min_rvol: Number(row.min_rvol),
                 max_rvol: Number(row.max_rvol),
                 max_candidates_per_lane: Number(row.max_candidates_per_lane ?? 5),
-                max_buying_power: Number(row.max_buying_power ?? 100000.0)
+                max_buying_power: Number(row.max_buying_power ?? 100000.0),
+                agent_orders_per_page: Number(row.agent_orders_per_page ?? 10)
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: row.updated_at,
@@ -531,7 +539,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
         const body = req.body;
         const db = getScreenerDb();
-        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power FROM screener_config WHERE id = 1').get();
+        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page FROM screener_config WHERE id = 1').get();
         if (!current) {
             return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
         }
@@ -543,6 +551,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         let newMaxRvol = current.max_rvol;
         let newMaxCandidatesPerLane = current.max_candidates_per_lane ?? 5;
         let newMaxBuyingPower = current.max_buying_power ?? 100000.0;
+        let newAgentOrdersPerPage = current.agent_orders_per_page ?? 10;
 
         if (body.min_price !== undefined) {
             const parsed = parseStrictNumericField(body.min_price, 'Harga minimum');
@@ -633,6 +642,16 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             newMaxBuyingPower = val;
         }
 
+        if (body.agent_orders_per_page !== undefined) {
+            const parsed = parseStrictIntegerField(body.agent_orders_per_page, 'Bilangan entri per halaman');
+            if (parsed.error) return res.status(400).json({ error: parsed.error });
+            const val = parsed.value;
+            if (![5, 10, 25, 50].includes(val)) {
+                return res.status(400).json({ error: 'Bilangan entri per halaman mestilah salah satu daripada: 5, 10, 25, atau 50.' });
+            }
+            newAgentOrdersPerPage = val;
+        }
+
         const hasChanges = (
             newMinPrice !== current.min_price ||
             newMinMarketCap !== current.min_market_cap ||
@@ -640,7 +659,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             newMinRvol !== current.min_rvol ||
             newMaxRvol !== current.max_rvol ||
             newMaxCandidatesPerLane !== (current.max_candidates_per_lane ?? 5) ||
-            newMaxBuyingPower !== (current.max_buying_power ?? 100000.0)
+            newMaxBuyingPower !== (current.max_buying_power ?? 100000.0) ||
+            newAgentOrdersPerPage !== (current.agent_orders_per_page ?? 10)
         );
 
         if (!hasChanges) {
@@ -653,7 +673,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                     min_rvol: current.min_rvol,
                     max_rvol: current.max_rvol,
                     max_candidates_per_lane: current.max_candidates_per_lane ?? 5,
-                    max_buying_power: current.max_buying_power ?? 100000.0
+                    max_buying_power: current.max_buying_power ?? 100000.0,
+                    agent_orders_per_page: current.agent_orders_per_page ?? 10
                 },
                 limits: SCREENER_CONFIG_LIMITS,
                 updated_at: current.updated_at,
@@ -671,7 +692,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             min_rvol: current.min_rvol,
             max_rvol: current.max_rvol,
             max_candidates_per_lane: current.max_candidates_per_lane ?? 5,
-            max_buying_power: current.max_buying_power ?? 100000.0
+            max_buying_power: current.max_buying_power ?? 100000.0,
+            agent_orders_per_page: current.agent_orders_per_page ?? 10
         });
 
         const newValues = JSON.stringify({
@@ -681,15 +703,16 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             min_rvol: newMinRvol,
             max_rvol: newMaxRvol,
             max_candidates_per_lane: newMaxCandidatesPerLane,
-            max_buying_power: newMaxBuyingPower
+            max_buying_power: newMaxBuyingPower,
+            agent_orders_per_page: newAgentOrdersPerPage
         });
 
         const updateStmt = db.prepare(`
             UPDATE screener_config
-            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, max_buying_power = ?, updated_at = ?, updated_by = ?
+            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, max_buying_power = ?, agent_orders_per_page = ?, updated_at = ?, updated_by = ?
             WHERE id = 1
         `);
-        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, newMaxBuyingPower, now, user);
+        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, newMaxBuyingPower, newAgentOrdersPerPage, now, user);
 
         const auditStmt = db.prepare(`
             INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
@@ -706,7 +729,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                 min_rvol: newMinRvol,
                 max_rvol: newMaxRvol,
                 max_candidates_per_lane: newMaxCandidatesPerLane,
-                max_buying_power: newMaxBuyingPower
+                max_buying_power: newMaxBuyingPower,
+                agent_orders_per_page: newAgentOrdersPerPage
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: now,
