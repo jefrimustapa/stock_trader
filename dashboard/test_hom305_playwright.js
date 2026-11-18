@@ -284,11 +284,24 @@ async function runSuite() {
     assertCheck('L0 Page contains 5-stage Funnel Stepper', l0Text.includes('STAGE 1') || l0Text.includes('Cloud Universe'));
     assertCheck('L0 Page contains Watchlist Table component', l0Text.includes('LORONG MOMENTUM') || l0Text.includes('Watchlist'));
 
-    // Verify countdown timer until next watchlist
+    // Verify countdown timer and last watchlist timestamp in header
+    const chipTimestamp = page.locator('#chip-watchlist-timestamp');
+    assertCheck('L0 Page header contains timestamp chip (#chip-watchlist-timestamp)', (await chipTimestamp.count()) >= 1);
+    const chipTimestampText = await chipTimestamp.innerText();
+    assertCheck('Timestamp chip text matches "Watchlist Terakhir: ..."', chipTimestampText.includes('Watchlist Terakhir:'));
+
     const chipCountdown = page.locator('#chip-watchlist-countdown');
     assertCheck('L0 Page header contains countdown chip (#chip-watchlist-countdown)', (await chipCountdown.count()) >= 1);
     const chipCountdownText = await chipCountdown.innerText();
     assertCheck('Countdown chip text matches "Watchlist Seterusnya: MM:SS"', /Watchlist Seterusnya: \d{2}:\d{2}/.test(chipCountdownText));
+
+    // Verify clutter chips are removed from L0 header per feedback
+    const headerEl = page.locator('#page-l0 > .MuiBox-root').first();
+    const headerText = await headerEl.innerText();
+    assertCheck('Clutter chips removed from L0 header (no "Pasaran US:" in header chip bar)', !headerText.includes('Pasaran US:'));
+    assertCheck('Clutter chips removed from L0 header (no "Data Langsung" in header chip bar)', !headerText.includes('Data Langsung'));
+    assertCheck('Clutter chips removed from L0 header (no "Kadar Pilihan:" in header chip bar)', !headerText.includes('Kadar Pilihan:'));
+    assertCheck('Clutter chips removed from L0 header (no "Calon Akhir" in header chip bar)', !headerText.includes('Calon Akhir'));
 
     const cardCountdown = page.locator('#card-watchlist-countdown');
     assertCheck('L0 Page contains countdown card (#card-watchlist-countdown)', (await cardCountdown.count()) >= 1);

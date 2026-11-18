@@ -12,7 +12,6 @@ import {
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -206,79 +205,37 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Chip
-            size="small"
-            icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important' }} />}
-            label={`Pasaran US: ${marketStatus}`}
+            id="chip-watchlist-timestamp"
+            icon={<AccessTimeIcon sx={{ fontSize: '18px !important', color: `${sneatTokens.primary.main} !important` }} />}
+            label={`Watchlist Terakhir: ${dataAsOf}`}
             sx={{
               fontWeight: 700,
-              fontSize: '0.75rem',
-              backgroundColor: isMarketOpen ? sneatTokens.success.soft : sneatTokens.secondary.soft,
-              color: isMarketOpen ? sneatTokens.success.main : sneatTokens.secondary.main,
-              borderRadius: 1.5,
-              height: 28,
-            }}
-          />
-          <Chip
-            size="small"
-            label={isLive ? 'Data Langsung' : 'Data Sedia Ada'}
-            sx={{
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              backgroundColor: isLive ? sneatTokens.info.soft : sneatTokens.secondary.soft,
-              color: isLive ? sneatTokens.info.main : sneatTokens.secondary.main,
-              borderRadius: 1.5,
-              height: 28,
-            }}
-          />
-          <Chip
-            size="small"
-            label={`Kadar Pilihan: ${conversionPct}%`}
-            sx={{
-              fontWeight: 700,
+              fontSize: { xs: '0.85rem', sm: '0.95rem' },
+              fontFamily: 'monospace',
               backgroundColor: sneatTokens.primary.soft,
               color: sneatTokens.primary.main,
-              borderRadius: 1.5,
-              height: 28,
-            }}
-          />
-          <Chip
-            size="small"
-            label={`${finalCount} Calon Akhir`}
-            sx={{
-              fontWeight: 700,
-              backgroundColor: sneatTokens.success.soft,
-              color: sneatTokens.success.main,
-              borderRadius: 1.5,
-              height: 28,
-            }}
-          />
-          <Chip
-            size="small"
-            icon={<AccessTimeIcon sx={{ fontSize: '12px !important' }} />}
-            label={`Cap Masa: ${dataAsOf}`}
-            sx={{
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              backgroundColor: 'action.hover',
-              borderRadius: 1.5,
-              height: 28,
+              border: `1px solid ${sneatTokens.primary.main}50`,
+              borderRadius: 2,
+              height: 38,
+              px: 0.75,
             }}
           />
           <Chip
             id="chip-watchlist-countdown"
-            size="small"
-            icon={<TimerOutlinedIcon sx={{ fontSize: '14px !important', color: `${sneatTokens.warning.main} !important` }} />}
+            icon={<TimerOutlinedIcon sx={{ fontSize: '18px !important', color: `${sneatTokens.warning.main} !important` }} />}
             label={`Watchlist Seterusnya: ${countdownFormatted}`}
             sx={{
-              fontWeight: 700,
-              fontSize: '0.75rem',
+              fontWeight: 800,
+              fontSize: { xs: '0.85rem', sm: '0.95rem' },
+              fontFamily: 'monospace',
               backgroundColor: sneatTokens.warning.soft,
               color: sneatTokens.warning.main,
-              border: `1px solid ${sneatTokens.warning.main}40`,
-              borderRadius: 1.5,
-              height: 28,
+              border: `1px solid ${sneatTokens.warning.main}50`,
+              borderRadius: 2,
+              height: 38,
+              px: 0.75,
             }}
           />
         </Box>
