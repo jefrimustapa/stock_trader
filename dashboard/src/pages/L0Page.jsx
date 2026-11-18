@@ -12,7 +12,6 @@ import {
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TuneIcon from '@mui/icons-material/Tune';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
@@ -203,41 +202,6 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
               Seni bina saringan hybrid (L0 Screener): penapisan progresif corong 5-peringkat dan pemantauan aktif kaunter MOMENTUM &amp; SETUP.
             </Typography>
           </Box>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Chip
-            id="chip-watchlist-timestamp"
-            icon={<AccessTimeIcon sx={{ fontSize: '18px !important', color: `${sneatTokens.primary.main} !important` }} />}
-            label={`Watchlist Terakhir: ${dataAsOf}`}
-            sx={{
-              fontWeight: 700,
-              fontSize: { xs: '0.85rem', sm: '0.95rem' },
-              fontFamily: 'monospace',
-              backgroundColor: sneatTokens.primary.soft,
-              color: sneatTokens.primary.main,
-              border: `1px solid ${sneatTokens.primary.main}50`,
-              borderRadius: 2,
-              height: 38,
-              px: 0.75,
-            }}
-          />
-          <Chip
-            id="chip-watchlist-countdown"
-            icon={<TimerOutlinedIcon sx={{ fontSize: '18px !important', color: `${sneatTokens.warning.main} !important` }} />}
-            label={`Watchlist Seterusnya: ${countdownFormatted}`}
-            sx={{
-              fontWeight: 800,
-              fontSize: { xs: '0.85rem', sm: '0.95rem' },
-              fontFamily: 'monospace',
-              backgroundColor: sneatTokens.warning.soft,
-              color: sneatTokens.warning.main,
-              border: `1px solid ${sneatTokens.warning.main}50`,
-              borderRadius: 2,
-              height: 38,
-              px: 0.75,
-            }}
-          />
         </Box>
       </Box>
 

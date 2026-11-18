@@ -284,27 +284,26 @@ async function runSuite() {
     assertCheck('L0 Page contains 5-stage Funnel Stepper', l0Text.includes('STAGE 1') || l0Text.includes('Cloud Universe'));
     assertCheck('L0 Page contains Watchlist Table component', l0Text.includes('LORONG MOMENTUM') || l0Text.includes('Watchlist'));
 
-    // Verify countdown timer and last watchlist timestamp in header
+    // Verify redundant header chips are removed per user request ("buang ni sebab dah ada ni")
     const chipTimestamp = page.locator('#chip-watchlist-timestamp');
-    assertCheck('L0 Page header contains timestamp chip (#chip-watchlist-timestamp)', (await chipTimestamp.count()) >= 1);
-    const chipTimestampText = await chipTimestamp.innerText();
-    assertCheck('Timestamp chip text matches "Watchlist Terakhir: ..."', chipTimestampText.includes('Watchlist Terakhir:'));
+    assertCheck('Redundant header chip (#chip-watchlist-timestamp) is removed', (await chipTimestamp.count()) === 0);
 
     const chipCountdown = page.locator('#chip-watchlist-countdown');
-    assertCheck('L0 Page header contains countdown chip (#chip-watchlist-countdown)', (await chipCountdown.count()) >= 1);
-    const chipCountdownText = await chipCountdown.innerText();
-    assertCheck('Countdown chip text matches "Watchlist Seterusnya: MM:SS"', /Watchlist Seterusnya: \d{2}:\d{2}/.test(chipCountdownText));
+    assertCheck('Redundant header chip (#chip-watchlist-countdown) is removed', (await chipCountdown.count()) === 0);
 
-    // Verify clutter chips are removed from L0 header per feedback
+    // Verify all clutter chips are removed from L0 header
     const headerEl = page.locator('#page-l0 > .MuiBox-root').first();
     const headerText = await headerEl.innerText();
-    assertCheck('Clutter chips removed from L0 header (no "Pasaran US:" in header chip bar)', !headerText.includes('Pasaran US:'));
-    assertCheck('Clutter chips removed from L0 header (no "Data Langsung" in header chip bar)', !headerText.includes('Data Langsung'));
-    assertCheck('Clutter chips removed from L0 header (no "Kadar Pilihan:" in header chip bar)', !headerText.includes('Kadar Pilihan:'));
-    assertCheck('Clutter chips removed from L0 header (no "Calon Akhir" in header chip bar)', !headerText.includes('Calon Akhir'));
+    assertCheck('Clutter chips removed from L0 header (no "Pasaran US:" in header)', !headerText.includes('Pasaran US:'));
+    assertCheck('Clutter chips removed from L0 header (no "Data Langsung" in header)', !headerText.includes('Data Langsung'));
+    assertCheck('Clutter chips removed from L0 header (no "Kadar Pilihan:" in header)', !headerText.includes('Kadar Pilihan:'));
+    assertCheck('Clutter chips removed from L0 header (no "Calon Akhir" in header)', !headerText.includes('Calon Akhir'));
 
+    // Verify countdown card (#card-watchlist-countdown) renders countdown and last watchlist timestamp
     const cardCountdown = page.locator('#card-watchlist-countdown');
-    assertCheck('L0 Page contains countdown card (#card-watchlist-countdown)', (await cardCountdown.count()) >= 1);
+    assertCheck('L0 Page contains dedicated countdown card (#card-watchlist-countdown)', (await cardCountdown.count()) >= 1);
+    const cardText = await cardCountdown.innerText();
+    assertCheck('Countdown card displays "Cap masa semasa:"', cardText.includes('Cap masa semasa:'));
     const textCountdown = page.locator('#text-watchlist-countdown');
     const countdownVal = await textCountdown.innerText();
     assertCheck('Countdown timer display formatted as MM:SS (e.g. 04:59)', /^\d{2}:\d{2}$/.test(countdownVal.trim()));
