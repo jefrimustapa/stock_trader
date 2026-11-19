@@ -145,6 +145,93 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
         self.assertEqual(delib2["stage_reached"], "L3_RISK")
         self.assertIn("Rule 4", delib2["final_decision"])
 
+    def test_e2e_broker_order_sync_and_cancellation(self):
+        """
+        E2E: Tests broker order placement, two-way reconciliation sync, and cancellation flow.
+        """
+        from unittest.mock import MagicMock, patch
+        import pandas as pd
+        from bridge.src.moomoo_client import get_moomoo_client
+
+        client = get_moomoo_client()
+        client._connected = True
+        client._account_id = "SIM_12345"
+        client._total_equity = 100000.0
+
+        mock_trade_ctx = MagicMock()
+        # Mock place_order returning RET_OK
+        mock_trade_ctx.place_order.return_value = (0, pd.DataFrame([{"order_id": "OPEND-ORD-9999"}]))
+        # Mock modify_order (cancel) returning RET_OK
+        mock_trade_ctx.modify_order.return_value = (0, pd.DataFrame([{"order_id": "OPEND-ORD-9999"}]))
+        # Mock order_list_query returning FILLED
+        mock_trade_ctx.order_list_query.return_value = (0, pd.DataFrame([{
+            "order_id": "OPEND-ORD-9999",
+            "code": "US.MSFT",
+            "order_status": "FILLED_ALL",
+            "qty": 10,
+            "price": 150.0
+        }]))
+        client._trade_ctx = mock_trade_ctx
+
+        candidates = [{
+            "symbol": "US.MSFT",
+            "price": 150.0,
+            "change_pct": 3.5,
+            "adv_20": 25000000.0,
+            "rs_spy": 1.45,
+            "lane": "MOMENTUM",
+            "lane_score": 92.0,
+            "setup_metrics": {
+                "dist_to_52w_high_pct": 0.8,
+                "atr_14_pct": 2.0
+            }
+        }]
+
+        # 1. Run simulation cycle with connected broker client
+        result = self.pipeline.run_simulation_cycle(
+            candidates=candidates,
+            force_simulation=False,
+            mock_market_window=True
+        )
+        self.assertEqual(result["summary"]["orders_placed"], 1)
+        placed_order = result["orders"][0]
+        self.assertEqual(placed_order["order_id"], "OPEND-ORD-9999")
+        self.assertEqual(placed_order["status"], "SUBMITTED")
+
+        # 2. Test two-way sync from broker
+        sync_res = self.pipeline.sync_broker_orders()
+        self.assertTrue(sync_res["synced"])
+        self.assertGreaterEqual(sync_res["updated_count"], 1)
+
+        # Verify status in DB updated to FILLED
+        orders = self.pipeline.get_paper_orders(limit=10)
+        msft_order = next(o for o in orders if o["order_id"] == "OPEND-ORD-9999")
+        self.assertEqual(msft_order["status"], "FILLED")
+
+        # 3. Test cancellation on active order
+        # Insert a pending test order to cancel
+        with self.pipeline._get_connection() as conn:
+            conn.execute("""
+                INSERT INTO paper_orders (
+                    client_order_id, order_id, cycle_id, symbol, order_side,
+                    quantity, entry_price, stop_loss_price, take_profit_price,
+                    status, opend_status, message, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                "client-can-1", "OPEND-ORD-CAN-1", "CYC-CAN", "US.AMD", "BUY",
+                10, 150.0, 140.0, 170.0, "SUBMITTED", "CONNECTED", "Test Active", "2026-11-19T00:00:00"
+            ))
+            conn.commit()
+
+        cancel_res = self.pipeline.cancel_paper_order("OPEND-ORD-CAN-1")
+        self.assertTrue(cancel_res["success"])
+        self.assertEqual(cancel_res["status"], "CANCELLED")
+
+        # Verify DB updated to CANCELLED
+        orders_after = self.pipeline.get_paper_orders(limit=10)
+        can_order = next(o for o in orders_after if o["order_id"] == "OPEND-ORD-CAN-1")
+        self.assertEqual(can_order["status"], "CANCELLED")
+
 
 if __name__ == "__main__":
     unittest.main()

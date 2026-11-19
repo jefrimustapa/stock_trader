@@ -121,7 +121,7 @@ export function AgentsPage({ screenerConfig }) {
   const totalCandidatesCount = deliberations.length || latestCycle?.total_candidates || 0;
 
   return (
-    <Box sx={{ width: '100%', py: 1 }}>
+    <Box sx={{ width: '100%', maxWidth: '100%', overflowX: 'hidden', py: 1 }}>
       {/* Top Header */}
       <Box
         sx={{
@@ -134,13 +134,13 @@ export function AgentsPage({ screenerConfig }) {
         }}
       >
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <PsychologyIcon sx={{ color: sneatTokens.primary.main, fontSize: 32 }} />
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               L1 -&gt; L4: Aktiviti Pasukan Ejen
             </Typography>
             <Chip
-              label="SIMULATE MODE"
+              label="Moomoo OpenD Paper Trading (SIMULATE)"
               size="small"
               sx={{
                 bgcolor: sneatTokens.info.soft,
@@ -150,7 +150,7 @@ export function AgentsPage({ screenerConfig }) {
               }}
             />
           </Box>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, wordBreak: 'break-word' }}>
             Saluran Paip Keputusan Ejen L0 Screener → L1 Tariq &amp; Nawwar → L2 Haziq → L3 Danial → L4 Moomoo OpenD
           </Typography>
         </Box>
@@ -567,22 +567,22 @@ export function AgentsPage({ screenerConfig }) {
                     </Typography>
                   </Box>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, my: 1.5 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, my: 1.5 }}>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Fasa Wyckoff</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{selectedDelib.tariq?.wyckoff_phase || '-'}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{selectedDelib.tariq?.wyckoff_phase || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Elliott / SMC FVG</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{selectedDelib.tariq?.smc_fvg_confluence || '-'}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{selectedDelib.tariq?.smc_fvg_confluence || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Zon Sokongan</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>${selectedDelib.tariq?.support_level || '-'}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>${selectedDelib.tariq?.support_level || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Zon Rintangan</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>${selectedDelib.tariq?.resistance_level || '-'}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>${selectedDelib.tariq?.resistance_level || '-'}</Typography>
                     </Box>
                   </Box>
 
@@ -639,26 +639,26 @@ export function AgentsPage({ screenerConfig }) {
                     </Typography>
                   </Box>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, my: 1.5 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, my: 1.5 }}>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Skor Mentah</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
                         {selectedDelib.nawwar?.s_sent_raw != null ? (selectedDelib.nawwar.s_sent_raw > 0 ? `+${selectedDelib.nawwar.s_sent_raw}` : selectedDelib.nawwar.s_sent_raw) : '-'} / ±100
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Label Sentimen</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{selectedDelib.nawwar?.sentiment_label || '-'}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{selectedDelib.nawwar?.sentiment_label || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Risiko Earnings (5 Hari)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: selectedDelib.nawwar?.earnings_within_5d ? 'error.main' : 'success.main' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word', color: selectedDelib.nawwar?.earnings_within_5d ? 'error.main' : 'success.main' }}>
                         {selectedDelib.nawwar?.earnings_within_5d ? 'ADA RISIKO' : 'BERSIH'}
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Risiko Makro FOMC</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: selectedDelib.nawwar?.fomc_macro_risk ? 'error.main' : 'success.main' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word', color: selectedDelib.nawwar?.fomc_macro_risk ? 'error.main' : 'success.main' }}>
                         {selectedDelib.nawwar?.fomc_macro_risk ? 'BERISIKO' : 'BERSIH'}
                       </Typography>
                     </Box>
@@ -736,32 +736,32 @@ export function AgentsPage({ screenerConfig }) {
                     </Typography>
                   </Box>
 
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, my: 1.5 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, my: 1.5 }}>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Harga Entri</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>${selectedDelib.haziq?.entry_price?.toFixed(2)}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word' }}>${selectedDelib.haziq?.entry_price?.toFixed(2)}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Stop Loss (1.5x ATR)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word', color: 'error.main' }}>
                         ${selectedDelib.haziq?.stop_loss_price?.toFixed(2)}
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Sasaran TP1 (1:1.5 R:R)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word', color: 'success.main' }}>
                         ${selectedDelib.haziq?.take_profit_price?.toFixed(2)}
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Saiz Posisi (1.5% Modal)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word' }}>
                         {selectedDelib.haziq?.allocated_shares} unit (${selectedDelib.haziq?.position_value?.toFixed(2)})
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Asas Modal Efektif</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word', color: 'success.main' }}>
                         {formatCurrency(selectedDelib.haziq?.account_equity_used || 100000)}
                       </Typography>
                     </Box>
@@ -856,7 +856,7 @@ export function AgentsPage({ screenerConfig }) {
 
           {orders.length > 0 ? (
             <>
-              <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, maxWidth: '100%', overflowX: 'auto' }}>
                 <Table size="small">
                   <TableHead sx={{ bgcolor: 'action.hover' }}>
                     <TableRow>

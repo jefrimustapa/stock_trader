@@ -68,8 +68,20 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.assertEqual(info["total_equity"], 125000.75)
 
     def test_branch_submit_order_live(self):
+        from unittest.mock import MagicMock
+        import pandas as pd
         self.client._connected = True
-        res = self.client.submit_order({"client_order_id": "live-order-98765"})
+        self.client._account_id = "1001"
+        mock_ctx = MagicMock()
+        mock_ctx.place_order.return_value = (0, pd.DataFrame([{"order_id": "ORD-live-98765"}]))
+        self.client._trade_ctx = mock_ctx
+
+        res = self.client.submit_order({
+            "client_order_id": "live-order-98765",
+            "symbol": "US.NVDA",
+            "quantity": 10,
+            "entry_price": 140.0
+        })
         self.assertEqual(res["status"], "SUBMITTED")
         self.assertEqual(res["opend_status"], "CONNECTED")
 
@@ -176,6 +188,180 @@ class TestMoomooClientBVA(unittest.TestCase):
 
 
 
+
+
+    def test_simulate_only_guard_rejects_real_env_initialization(self):
+        """Hard Rule: Any initialization with trd_env != 'SIMULATE' raises SimulateOnlySecurityError."""
+        from bridge.src.moomoo_client import SimulateOnlySecurityError
+        with self.assertRaises(SimulateOnlySecurityError):
+            MoomooClient(host="127.0.0.1", port=11111, trd_env="REAL")
+
+        with self.assertRaises(SimulateOnlySecurityError):
+            MoomooClient(host="127.0.0.1", port=11111, trd_env="LIVE")
+
+    def test_switch_account_rejects_real_environment(self):
+        """Hard Rule: Switching to an account with trd_env == 'REAL' is strictly prohibited."""
+        self.client._connected = True
+        self.client._available_accounts = [
+            {"account_id": "1001", "trd_env": "SIMULATE"},
+            {"account_id": "9999", "trd_env": "REAL"}
+        ]
+        ok, msg = self.client.switch_account("9999")
+        self.assertFalse(ok)
+        self.assertIn("REAL trading account is strictly prohibited", msg)
+
+    def test_submit_order_bva_validations(self):
+        """BVA: Boundary tests for order submission inputs."""
+        # 1. Empty client_order_id
+        res = self.client.submit_order({"client_order_id": "", "symbol": "NVDA", "quantity": 10, "price": 100.0})
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIn("client_order_id", res["error"])
+
+        # 2. Empty symbol
+        res = self.client.submit_order({"client_order_id": "ord-1", "symbol": "", "quantity": 10, "price": 100.0})
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIn("symbol", res["error"])
+
+        # 3. Quantity zero or negative
+        res = self.client.submit_order({"client_order_id": "ord-1", "symbol": "NVDA", "quantity": 0, "price": 100.0})
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIn("quantity must be positive", res["error"])
+
+        res = self.client.submit_order({"client_order_id": "ord-1", "symbol": "NVDA", "quantity": -5, "price": 100.0})
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIn("quantity must be positive", res["error"])
+
+        # 4. Price zero or negative
+        res = self.client.submit_order({"client_order_id": "ord-1", "symbol": "NVDA", "quantity": 10, "price": 0.0})
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIn("price must be positive", res["error"])
+
+        res = self.client.submit_order({"client_order_id": "ord-1", "symbol": "NVDA", "quantity": 10, "price": -10.0})
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIn("price must be positive", res["error"])
+
+    def test_submit_order_connected_success(self):
+        """Connected client submits order with TrdEnv.SIMULATE to OpenSecTradeContext."""
+        from unittest.mock import MagicMock
+        import pandas as pd
+
+        self.client._connected = True
+        self.client._account_id = "12345"
+
+        mock_ctx = MagicMock()
+        mock_df = pd.DataFrame([{"order_id": "BROKER-ORD-9988"}])
+        mock_ctx.place_order.return_value = (0, mock_df)
+        self.client._trade_ctx = mock_ctx
+
+        res = self.client.submit_order({
+            "client_order_id": "test-uuid-1",
+            "symbol": "AAPL",
+            "quantity": 15,
+            "entry_price": 220.50,
+            "order_side": "BUY"
+        })
+        self.assertEqual(res["status"], "SUBMITTED")
+        self.assertEqual(res["order_id"], "BROKER-ORD-9988")
+        self.assertEqual(res["env"], "SIMULATE")
+        self.assertEqual(res["symbol"], "US.AAPL")
+        self.assertEqual(res["quantity"], 15)
+        self.assertEqual(res["price"], 220.50)
+
+        # Verify place_order parameters passed to SDK
+        mock_ctx.place_order.assert_called_once()
+        _, kwargs = mock_ctx.place_order.call_args
+        self.assertEqual(kwargs["qty"], 15)
+        self.assertEqual(kwargs["price"], 220.50)
+        self.assertEqual(kwargs["code"], "US.AAPL")
+
+    def test_submit_order_broker_error_fails_closed(self):
+        """When OpenD returns RET_ERROR, submit_order returns REJECTED."""
+        from unittest.mock import MagicMock
+
+        self.client._connected = True
+        self.client._account_id = "12345"
+        mock_ctx = MagicMock()
+        mock_ctx.place_order.return_value = (-1, "Insufficient buying power in paper trading account")
+        self.client._trade_ctx = mock_ctx
+
+        res = self.client.submit_order({
+            "client_order_id": "test-uuid-2",
+            "symbol": "TSLA",
+            "quantity": 50,
+            "entry_price": 310.00,
+            "order_side": "BUY"
+        })
+        self.assertEqual(res["status"], "REJECTED")
+        self.assertIsNone(res["order_id"])
+        self.assertIn("Insufficient buying power", res["error"])
+
+    def test_cancel_order_bva_and_execution(self):
+        """BVA and execution tests for broker order cancellation."""
+        from unittest.mock import MagicMock
+        import pandas as pd
+
+        # 1. Empty order_id
+        res = self.client.cancel_order("")
+        self.assertFalse(res["success"])
+        self.assertIn("order_id cannot be empty", res["error"])
+
+        # 2. Disconnected
+        res = self.client.cancel_order("ORD-123")
+        self.assertFalse(res["success"])
+        self.assertIn("not connected", res["error"])
+
+        # 3. Connected success
+        self.client._connected = True
+        self.client._account_id = "12345"
+        mock_ctx = MagicMock()
+        mock_ctx.modify_order.return_value = (0, pd.DataFrame([{"order_id": "ORD-123"}]))
+        self.client._trade_ctx = mock_ctx
+
+        res = self.client.cancel_order("ORD-123")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["status"], "CANCELLED")
+        self.assertEqual(res["order_id"], "ORD-123")
+
+        # 4. Connected broker error
+        mock_ctx.modify_order.return_value = (-1, "Order already filled")
+        res = self.client.cancel_order("ORD-123")
+        self.assertFalse(res["success"])
+        self.assertIn("Order already filled", res["error"])
+
+    def test_query_orders_connected_success(self):
+        """Connected client retrieves and normalizes orders from OpenD."""
+        from unittest.mock import MagicMock
+        import pandas as pd
+
+        self.client._connected = True
+        self.client._account_id = "12345"
+        mock_ctx = MagicMock()
+        mock_df = pd.DataFrame([
+            {
+                "order_id": "ORD-100",
+                "code": "US.NVDA",
+                "stock_name": "NVIDIA",
+                "trd_side": "BUY",
+                "order_type": "NORMAL",
+                "order_status": "SUBMITTED",
+                "qty": 20,
+                "price": 140.00,
+                "dealt_qty": 0,
+                "dealt_avg_price": 0.0,
+                "create_time": "2026-11-19 10:00:00",
+                "updated_time": "2026-11-19 10:00:00"
+            }
+        ])
+        mock_ctx.order_list_query.return_value = (0, mock_df)
+        self.client._trade_ctx = mock_ctx
+
+        orders = self.client.query_orders()
+        self.assertEqual(len(orders), 1)
+        self.assertEqual(orders[0]["order_id"], "ORD-100")
+        self.assertEqual(orders[0]["code"], "US.NVDA")
+        self.assertEqual(orders[0]["order_status"], "SUBMITTED")
+        self.assertEqual(orders[0]["qty"], 20)
+        self.assertEqual(orders[0]["price"], 140.00)
 
 
 if __name__ == "__main__":

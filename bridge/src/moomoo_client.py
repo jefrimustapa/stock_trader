@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 try:
     from moomoo import (
         OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK, SysConfig,
-        OpenQuoteContext, SubType, KLType
+        OpenQuoteContext, SubType, KLType,
+        OrderType, TrdSide, ModifyOrderOp, OrderStatus
     )
     from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
     # Patch OpenContextBase._init_connect_sync to avoid infinite while loop on auth failure
@@ -38,6 +39,15 @@ except ImportError:
     RET_OK = 0
     ContextStatus = None
     SysConfig = None
+    OrderType = None
+    TrdSide = None
+    ModifyOrderOp = None
+    OrderStatus = None
+
+
+class SimulateOnlySecurityError(RuntimeError):
+    """Raised whenever an operation attempts to use a non-SIMULATE trading environment."""
+    pass
 
 
 class SubscriptionManager:
@@ -402,7 +412,13 @@ class MoomooClient:
     def __init__(self, host: str, port: int, trd_env: str = "SIMULATE", is_encrypt: Optional[bool] = None):
         self.host = host
         self.port = port
-        self.trd_env = trd_env.upper() if trd_env else "SIMULATE"
+        requested_env = str(trd_env or "SIMULATE").strip().upper()
+        if requested_env != "SIMULATE":
+            raise SimulateOnlySecurityError(
+                f"FATAL SECURITY VIOLATION: MoomooClient is strictly locked to SIMULATE (Paper Trading). "
+                f"Requested environment '{requested_env}' is prohibited."
+            )
+        self.trd_env = "SIMULATE"
         if is_encrypt is not None:
             self.is_encrypt = is_encrypt
         else:
@@ -420,7 +436,33 @@ class MoomooClient:
         self._available_accounts: List[Dict[str, Any]] = []
         self._opend_manager: Any = None
         self._quote_ctx: Any = None
+        self._trade_ctx: Any = None
         self.subscription_manager = SubscriptionManager(self)
+
+    def get_trade_context(self) -> Any:
+        """Returns or creates a shared OpenSecTradeContext for paper trading execution."""
+        if OpenSecTradeContext is None:
+            return None
+        if self._trade_ctx is None:
+            try:
+                if self.is_encrypt and SysConfig is not None:
+                    try:
+                        from .config import BridgeConfig
+                        rsa_path = str(BridgeConfig.ensure_rsa_key())
+                        SysConfig.enable_proto_encrypt(True)
+                        SysConfig.set_init_rsa_file(rsa_path)
+                    except Exception as rsa_err:
+                        logger.warning("RSA key warning in trade context: %s", rsa_err)
+                self._trade_ctx = OpenSecTradeContext(
+                    filter_trdmarket=TrdMarket.US if TrdMarket else None,
+                    host=self.host,
+                    port=self.port,
+                    is_encrypt=self.is_encrypt
+                )
+            except Exception as e:
+                logger.error("Failed to create OpenSecTradeContext: %s", e)
+                self._trade_ctx = None
+        return self._trade_ctx
 
     def get_quote_context(self) -> Any:
         """Returns or creates a shared OpenQuoteContext for live subscriptions."""
@@ -674,6 +716,11 @@ class MoomooClient:
 
         clean_id = new_account_id.strip()
 
+        matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
+        target_env = matched[0].get("trd_env", self.trd_env) if matched else self.trd_env
+        if str(target_env).upper() != "SIMULATE":
+            return False, "Security restriction: Switching to REAL trading account is strictly prohibited."
+
         # Fail-closed: Cannot switch account if OpenD is not connected or authenticated
         if not self._connected:
             return False, f"OpenD is not connected or authenticated ({self.get_connection_status()})"
@@ -681,9 +728,7 @@ class MoomooClient:
         if OpenSecTradeContext is None or TrdEnv is None or TrdMarket is None:
             return False, "Moomoo OpenAPI SDK is not available or initialized"
 
-        matched = [a for a in self._available_accounts if a.get("account_id") == clean_id]
-        target_env = matched[0].get("trd_env", self.trd_env) if matched else self.trd_env
-        env_val = TrdEnv.REAL if target_env == "REAL" else TrdEnv.SIMULATE
+        env_val = TrdEnv.SIMULATE if TrdEnv else "SIMULATE"
 
         # Active connection via OpenAPI SDK
         ctx = None
@@ -763,19 +808,150 @@ class MoomooClient:
         return self._total_equity
 
     def query_positions(self) -> List[Dict[str, Any]]:
-        """Queries active stock positions."""
+        """Queries active stock positions from Moomoo OpenD Paper Trading."""
         if not self._connected:
             return []
-        return []
+        if self.trd_env != "SIMULATE":
+            raise SimulateOnlySecurityError("FATAL: Live trading position queries prohibited.")
+        ctx = self.get_trade_context()
+        if ctx is None:
+            return []
+        try:
+            acc_num = int(self._account_id) if self._account_id and str(self._account_id).isdigit() else 0
+            ret_code, df_pos = ctx.position_list_query(
+                trd_env=TrdEnv.SIMULATE if TrdEnv else "SIMULATE",
+                acc_id=acc_num,
+                refresh_cache=True
+            )
+            if ret_code == RET_OK and df_pos is not None and not df_pos.empty:
+                positions = []
+                for _, row in df_pos.iterrows():
+                    positions.append({
+                        "position_id": str(row.get("position_id", "")),
+                        "code": str(row.get("code", "")),
+                        "stock_name": str(row.get("stock_name", "")),
+                        "qty": int(row.get("qty", 0)),
+                        "can_sell_qty": int(row.get("can_sell_qty", 0)),
+                        "cost_price": float(row.get("cost_price", 0.0)),
+                        "nominal_price": float(row.get("nominal_price", 0.0)),
+                        "pl_val": float(row.get("pl_val", 0.0)),
+                        "pl_ratio": float(row.get("pl_ratio", 0.0))
+                    })
+                return positions
+            return []
+        except Exception as e:
+            logger.error("Error querying positions from OpenD: %s", e)
+            return []
 
     def query_orders(self) -> List[Dict[str, Any]]:
-        """Queries pending and active orders."""
+        """Queries pending and active orders from Moomoo OpenD Paper Trading."""
         if not self._connected:
             return []
-        return []
+        if self.trd_env != "SIMULATE":
+            raise SimulateOnlySecurityError("FATAL: Live trading query prohibited.")
+        ctx = self.get_trade_context()
+        if ctx is None:
+            return []
+        try:
+            acc_num = int(self._account_id) if self._account_id and str(self._account_id).isdigit() else 0
+            ret_code, df_orders = ctx.order_list_query(
+                trd_env=TrdEnv.SIMULATE if TrdEnv else "SIMULATE",
+                acc_id=acc_num,
+                refresh_cache=True
+            )
+            if ret_code == RET_OK and df_orders is not None and not df_orders.empty:
+                orders = []
+                for _, row in df_orders.iterrows():
+                    orders.append({
+                        "order_id": str(row.get("order_id", "")),
+                        "code": str(row.get("code", "")),
+                        "stock_name": str(row.get("stock_name", "")),
+                        "trd_side": str(row.get("trd_side", "")),
+                        "order_type": str(row.get("order_type", "")),
+                        "order_status": str(row.get("order_status", "")),
+                        "qty": int(row.get("qty", 0)),
+                        "price": float(row.get("price", 0.0)),
+                        "dealt_qty": int(row.get("dealt_qty", 0)),
+                        "dealt_avg_price": float(row.get("dealt_avg_price", 0.0)),
+                        "create_time": str(row.get("create_time", "")),
+                        "updated_time": str(row.get("updated_time", ""))
+                    })
+                return orders
+            return []
+        except Exception as e:
+            logger.error("Error querying orders from OpenD: %s", e)
+            return []
 
     def submit_order(self, order_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Submits vetted order to OpenD."""
+        """
+        Submits vetted order to Moomoo OpenD Paper Trading (TrdEnv.SIMULATE).
+        Deterministic fail-closed behavior:
+        - BVA validation on quantity (> 0), price (> 0), symbol, client_order_id.
+        - Hard Rule: Only TrdEnv.SIMULATE is allowed.
+        - Fails closed if OpenD is not connected or returns RET_ERROR.
+        """
+        if self.trd_env != "SIMULATE":
+            raise SimulateOnlySecurityError("FATAL: Live trading execution prohibited.")
+
+        client_order_id = str(order_dict.get("client_order_id", "")).strip()
+        if not client_order_id:
+            return {
+                "order_id": None,
+                "status": "REJECTED",
+                "opend_status": self.get_connection_status(),
+                "env": self.trd_env,
+                "error": "BVA Validation Error: client_order_id cannot be empty."
+            }
+
+        raw_symbol = str(order_dict.get("symbol", "")).strip().upper()
+        if not raw_symbol:
+            return {
+                "order_id": None,
+                "status": "REJECTED",
+                "opend_status": self.get_connection_status(),
+                "env": self.trd_env,
+                "error": "BVA Validation Error: symbol cannot be empty."
+            }
+        norm_sym = raw_symbol if "." in raw_symbol else f"US.{raw_symbol}"
+
+        try:
+            quantity = int(order_dict.get("quantity", 0))
+            if quantity <= 0:
+                return {
+                    "order_id": None,
+                    "status": "REJECTED",
+                    "opend_status": self.get_connection_status(),
+                    "env": self.trd_env,
+                    "error": f"BVA Validation Error: quantity must be positive integer (got {quantity})."
+                }
+        except (ValueError, TypeError):
+            return {
+                "order_id": None,
+                "status": "REJECTED",
+                "opend_status": self.get_connection_status(),
+                "env": self.trd_env,
+                "error": "BVA Validation Error: invalid quantity format."
+            }
+
+        try:
+            price = float(order_dict.get("entry_price") or order_dict.get("price", 0.0))
+            if price <= 0:
+                return {
+                    "order_id": None,
+                    "status": "REJECTED",
+                    "opend_status": self.get_connection_status(),
+                    "env": self.trd_env,
+                    "error": f"BVA Validation Error: price must be positive (got {price})."
+                }
+        except (ValueError, TypeError):
+            return {
+                "order_id": None,
+                "status": "REJECTED",
+                "opend_status": self.get_connection_status(),
+                "env": self.trd_env,
+                "error": "BVA Validation Error: invalid price format."
+            }
+
         if not self._connected:
             return {
                 "order_id": None,
@@ -784,17 +960,149 @@ class MoomooClient:
                 "env": self.trd_env,
                 "error": f"OpenD gateway is not connected or authenticated ({self.get_connection_status()}). Cannot submit order."
             }
-        return {
-            "order_id": f"ORD-{order_dict.get('client_order_id', 'live')[:8]}",
-            "status": "SUBMITTED",
-            "opend_status": "CONNECTED",
-            "env": self.trd_env
-        }
+
+        ctx = self.get_trade_context()
+        if ctx is None:
+            return {
+                "order_id": None,
+                "status": "REJECTED",
+                "opend_status": self.get_connection_status(),
+                "env": self.trd_env,
+                "error": "OpenSecTradeContext is not available."
+            }
+
+        side_raw = str(order_dict.get("order_side", "BUY")).strip().upper()
+        trd_side = TrdSide.SELL if side_raw == "SELL" else (TrdSide.BUY if TrdSide else "BUY")
+        order_type = OrderType.NORMAL if OrderType else "NORMAL"
+        acc_num = int(self._account_id) if self._account_id and str(self._account_id).isdigit() else 0
+
+        try:
+            ret_code, df_res = ctx.place_order(
+                price=price,
+                qty=quantity,
+                code=norm_sym,
+                trd_side=trd_side,
+                order_type=order_type,
+                trd_env=TrdEnv.SIMULATE if TrdEnv else "SIMULATE",
+                acc_id=acc_num
+            )
+            if ret_code == RET_OK and df_res is not None and not df_res.empty:
+                broker_order_id = str(df_res["order_id"].iloc[0])
+                logger.info(
+                    "Order placed successfully at Moomoo OpenD Paper Trading: ID %s (Symbol: %s, Qty: %d, Price: $%.2f)",
+                    broker_order_id, norm_sym, quantity, price
+                )
+                return {
+                    "order_id": broker_order_id,
+                    "client_order_id": client_order_id,
+                    "status": "SUBMITTED",
+                    "opend_status": "CONNECTED",
+                    "env": self.trd_env,
+                    "symbol": norm_sym,
+                    "quantity": quantity,
+                    "price": price,
+                    "error": None
+                }
+            else:
+                err_msg = str(df_res) if ret_code != RET_OK else "Empty response from place_order"
+                logger.error("OpenD place_order failed (ret=%s): %s", ret_code, err_msg)
+                return {
+                    "order_id": None,
+                    "client_order_id": client_order_id,
+                    "status": "REJECTED",
+                    "opend_status": "CONNECTED",
+                    "env": self.trd_env,
+                    "error": f"OpenD place_order returned error ({ret_code}): {err_msg}"
+                }
+        except Exception as e:
+            logger.error("Exception during OpenD place_order: %s", e)
+            return {
+                "order_id": None,
+                "client_order_id": client_order_id,
+                "status": "REJECTED",
+                "opend_status": "CONNECTED",
+                "env": self.trd_env,
+                "error": f"Exception submitting order to OpenD: {str(e)}"
+            }
+
+    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        Cancels an active order on Moomoo OpenD Paper Trading broker.
+        """
+        if self.trd_env != "SIMULATE":
+            raise SimulateOnlySecurityError("FATAL: Live trading cancellation prohibited.")
+
+        clean_id = str(order_id or "").strip()
+        if not clean_id:
+            return {
+                "success": False,
+                "order_id": None,
+                "error": "BVA Validation Error: order_id cannot be empty."
+            }
+
+        if not self._connected:
+            return {
+                "success": False,
+                "order_id": clean_id,
+                "error": f"OpenD is not connected ({self.get_connection_status()})."
+            }
+
+        ctx = self.get_trade_context()
+        if ctx is None:
+            return {
+                "success": False,
+                "order_id": clean_id,
+                "error": "OpenSecTradeContext is not available."
+            }
+
+        acc_num = int(self._account_id) if self._account_id and str(self._account_id).isdigit() else 0
+        modify_op = ModifyOrderOp.CANCEL if ModifyOrderOp else "CANCEL"
+
+        try:
+            ret_code, df_res = ctx.modify_order(
+                modify_order_op=modify_op,
+                order_id=clean_id,
+                qty=0,
+                price=0.0,
+                trd_env=TrdEnv.SIMULATE if TrdEnv else "SIMULATE",
+                acc_id=acc_num
+            )
+            if ret_code == RET_OK:
+                logger.info("Order %s cancelled successfully at Moomoo OpenD", clean_id)
+                return {
+                    "success": True,
+                    "order_id": clean_id,
+                    "status": "CANCELLED",
+                    "message": f"Pesanan {clean_id} berjaya dibatalkan di broker OpenD."
+                }
+            else:
+                err_msg = str(df_res)
+                logger.error("OpenD modify_order (CANCEL) failed for %s (ret=%s): %s", clean_id, ret_code, err_msg)
+                return {
+                    "success": False,
+                    "order_id": clean_id,
+                    "error": f"OpenD modify_order failed ({ret_code}): {err_msg}"
+                }
+        except Exception as e:
+            logger.error("Exception during OpenD cancel_order for %s: %s", clean_id, e)
+            return {
+                "success": False,
+                "order_id": clean_id,
+                "error": f"Exception cancelling order at OpenD: {str(e)}"
+            }
 
     def cancel_all_orders(self) -> int:
         if not self._connected:
             return 0
-        return 0
+        orders = self.query_orders()
+        cancelled_count = 0
+        for ord_item in orders:
+            o_id = ord_item.get("order_id")
+            if o_id:
+                res = self.cancel_order(o_id)
+                if res.get("success"):
+                    cancelled_count += 1
+        return cancelled_count
 
     def liquidate_all_positions(self) -> int:
         if not self._connected:
@@ -928,6 +1236,12 @@ class MoomooClient:
             except Exception:
                 pass
             self._quote_ctx = None
+        if self._trade_ctx is not None:
+            try:
+                self._trade_ctx.close()
+            except Exception:
+                pass
+            self._trade_ctx = None
         if hasattr(self, "subscription_manager"):
             with self.subscription_manager.lock:
                 self.subscription_manager.subscriptions.clear()
