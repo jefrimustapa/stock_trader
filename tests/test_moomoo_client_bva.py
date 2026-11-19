@@ -467,6 +467,38 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.assertEqual(res["status"], "ERROR")
         self.assertIn("News search rate limited", res["error"])
 
+    def test_get_history_kline_bva_and_execution(self):
+        """Tests BVA and execution for get_history_kline consuming Moomoo OpenAPI quota."""
+        from unittest.mock import MagicMock
+        import pandas as pd
+
+        # 1. BVA: empty symbol
+        res = self.client.get_history_kline("")
+        self.assertEqual(res["status"], "ERROR")
+        self.assertIn("non-empty string", res["error"])
+
+        # 2. OpenD disconnected
+        self.client._connected = False
+        res = self.client.get_history_kline("AAPL")
+        self.assertEqual(res["status"], "UNAVAILABLE")
+
+        # 3. Successful real K-line retrieval
+        self.client._connected = True
+        mock_ctx = MagicMock()
+        mock_df = pd.DataFrame([
+            {"time_key": "2026-11-18", "open": 220.0, "high": 225.0, "low": 219.0, "close": 224.5, "volume": 1000000},
+            {"time_key": "2026-11-19", "open": 224.5, "high": 226.0, "low": 223.0, "close": 225.0, "volume": 1200000}
+        ])
+        mock_ctx.request_history_kline.return_value = (0, mock_df, None)
+        self.client._quote_ctx = mock_ctx
+
+        res = self.client.get_history_kline("US.AAPL", interval="day", num=60)
+        self.assertEqual(res["status"], "OK")
+        self.assertTrue(res["connected"])
+        self.assertEqual(res["count"], 2)
+        self.assertEqual(res["candles"][0]["close"], 224.5)
+        self.assertEqual(res["candles"][1]["close"], 225.0)
+
 
 if __name__ == "__main__":
     unittest.main()

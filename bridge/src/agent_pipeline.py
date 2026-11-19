@@ -13,7 +13,7 @@ import logging
 import math
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -172,12 +172,21 @@ class AgentPipeline:
         atr_14 = None
 
         # Fetch real K-line candlestick bars if live OpenD is connected and candles not pre-populated
-        if not candles and self.moomoo_client is not None and self.moomoo_client.is_connected():
+        if not candles and self.moomoo_client is not None:
             try:
-                kl_resp = self.moomoo_client.get_cur_kline_with_sub(symbol, interval="day", num=60)
-                if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
-                    candles = kl_resp["candles"]
-                    self.moomoo_client.release_kline_subscription(symbol, interval="day")
+                if not self.moomoo_client.is_connected():
+                    self.moomoo_client.connect()
+                if self.moomoo_client.is_connected():
+                    # 1. Primary: request real historical K-lines from Moomoo OpenAPI (burns 30-day quota)
+                    if hasattr(self.moomoo_client, "get_history_kline"):
+                        kl_resp = self.moomoo_client.get_history_kline(symbol, interval="day", num=60)
+                        if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
+                            candles = kl_resp["candles"]
+                    if not candles and hasattr(self.moomoo_client, "get_cur_kline_with_sub"):
+                        kl_resp = self.moomoo_client.get_cur_kline_with_sub(symbol, interval="day", num=60)
+                        if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
+                            candles = kl_resp["candles"]
+                            self.moomoo_client.release_kline_subscription(symbol, interval="day")
             except Exception as e:
                 logger.warning("Failed to fetch live K-line for %s: %s", symbol, e)
 
@@ -293,49 +302,56 @@ class AgentPipeline:
         earnings_date = candidate.get("earnings_date")
 
         # Query live Moomoo earnings calendar if connected and not already marked
-        if not earnings_within_5d and self.moomoo_client is not None and self.moomoo_client.is_connected():
-            now_dt = datetime.now(timezone.utc)
-            today_str = now_dt.strftime("%Y-%m-%d")
+        if not earnings_within_5d and self.moomoo_client is not None:
+            if not self.moomoo_client.is_connected():
+                self.moomoo_client.connect()
+            if self.moomoo_client.is_connected():
+                now_dt = datetime.now(timezone.utc)
+                today_str = now_dt.strftime("%Y-%m-%d")
+                end_str = (now_dt + timedelta(days=6)).strftime("%Y-%m-%d")
 
-            # Check cache or fetch calendar
-            if "us_earnings" not in self._earnings_cache or (now_dt.timestamp() - self._earnings_cache.get("time", 0)) > 300:
-                earn_resp = self.moomoo_client.get_earnings_calendar(market="US", begin_date=today_str)
-                if earn_resp.get("status") == "OK":
-                    self._earnings_cache = {
-                        "time": now_dt.timestamp(),
-                        "items": earn_resp.get("items", [])
-                    }
+                # Check cache or fetch calendar (Moomoo enforces max 7 days date range)
+                if "us_earnings" not in self._earnings_cache or (now_dt.timestamp() - self._earnings_cache.get("time", 0)) > 300:
+                    earn_resp = self.moomoo_client.get_earnings_calendar(market="US", begin_date=today_str, end_date=end_str)
+                    if earn_resp.get("status") == "OK":
+                        self._earnings_cache = {
+                            "time": now_dt.timestamp(),
+                            "items": earn_resp.get("items", [])
+                        }
 
-            cached_items = self._earnings_cache.get("items", [])
-            for item in cached_items:
-                item_sym = item.get("symbol") or item.get("security") or ""
-                item_ticker = item_sym.split(".")[-1] if "." in item_sym else item_sym
-                if clean_ticker.upper() == item_ticker.upper():
-                    item_date_str = item.get("earnings_date")
-                    if item_date_str:
-                        try:
-                            item_date = datetime.strptime(item_date_str, "%Y-%m-%d").date()
-                            days_diff = (item_date - now_dt.date()).days
-                            if 0 <= days_diff <= 5:
-                                earnings_within_5d = True
-                                earnings_date = item_date_str
-                                data_source = "MOOMOO_EARNINGS_REAL"
-                                break
-                        except Exception:
-                            pass
+                cached_items = self._earnings_cache.get("items", [])
+                for item in cached_items:
+                    item_sym = item.get("symbol") or item.get("security") or ""
+                    item_ticker = item_sym.split(".")[-1] if "." in item_sym else item_sym
+                    if clean_ticker.upper() == item_ticker.upper():
+                        item_date_str = item.get("earnings_date")
+                        if item_date_str:
+                            try:
+                                item_date = datetime.strptime(item_date_str, "%Y-%m-%d").date()
+                                days_diff = (item_date - now_dt.date()).days
+                                if 0 <= days_diff <= 5:
+                                    earnings_within_5d = True
+                                    earnings_date = item_date_str
+                                    data_source = "MOOMOO_EARNINGS_REAL"
+                                    break
+                            except Exception:
+                                pass
 
         # 2. News flow and headline sentiment
         news_items = candidate.get("news_items")
         news_headline = candidate.get("news_headline")
         news_url = candidate.get("news_url")
 
-        if not news_items and self.moomoo_client is not None and self.moomoo_client.is_connected():
-            try:
-                news_resp = self.moomoo_client.get_news_for_symbol(symbol=symbol, max_count=5)
-                if news_resp.get("status") == "OK" and news_resp.get("items"):
-                    news_items = news_resp["items"]
-            except Exception as e:
-                logger.warning("Failed to fetch live news for %s: %s", symbol, e)
+        if not news_items and self.moomoo_client is not None:
+            if not self.moomoo_client.is_connected():
+                self.moomoo_client.connect()
+            if self.moomoo_client.is_connected():
+                try:
+                    news_resp = self.moomoo_client.get_news_for_symbol(symbol=symbol, max_count=5)
+                    if news_resp.get("status") == "OK" and news_resp.get("items"):
+                        news_items = news_resp["items"]
+                except Exception as e:
+                    logger.warning("Failed to fetch live news for %s: %s", symbol, e)
 
         if news_items and len(news_items) > 0:
             data_source = "MOOMOO_NEWS_REAL" if data_source == "HEURISTIC_MOCK" else f"{data_source}+NEWS_REAL"
@@ -423,7 +439,8 @@ class AgentPipeline:
         Calculates position sizing: 1.5% equity risk, max 20% equity cap, Stop Loss = 1.5*ATR14.
         """
         symbol = candidate.get("symbol", "UNKNOWN")
-        price = float(candidate.get("price", 10.0))
+        raw_price = float(candidate.get("price", 10.0))
+        price = round(raw_price, 2) if raw_price >= 1.0 else round(raw_price, 4)
         s_tech = float(tariq_res.get("s_tech", 0.0))
         s_sent_norm = float(nawwar_res.get("s_sent_norm", 0.0))
 
@@ -700,7 +717,9 @@ class AgentPipeline:
             candidates = self.load_watchlist_candidates(max_candidates=10)
 
         # Baseline equity from OpenD or DB
-        client = get_moomoo_client()
+        client = self.moomoo_client or get_moomoo_client()
+        if hasattr(client, "connect") and not client.is_connected():
+            client.connect()
         trade_date = now_ny.strftime("%Y-%m-%d")
         broker_equity = client.get_account_equity()
         baseline_equity = self.hard_rules_engine.get_verified_equity(trade_date, fallback=None)

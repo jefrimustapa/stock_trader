@@ -507,6 +507,9 @@ class MoomooClient:
         Fetches corporate earnings calendar from Moomoo OpenAPI (Qot_GetEarningsCalendar).
         Returns dict with status, items: list of {symbol, name, earnings_date, pub_type, etc.}
         """
+        if not self._connected:
+            self.connect()
+
         conn_status = self.get_connection_status()
         if conn_status not in ("CONNECTED", "IDLE"):
             return {
@@ -530,6 +533,14 @@ class MoomooClient:
             }
 
         try:
+            import datetime
+            today_date = datetime.date.today()
+            if not begin_date:
+                begin_date = today_date.strftime("%Y-%m-%d")
+            if not end_date:
+                # Moomoo requires date range <= 7 days
+                end_date = (today_date + datetime.timedelta(days=6)).strftime("%Y-%m-%d")
+
             mkt_val = Market.US if (Market is not None and hasattr(Market, market.upper())) else market
             ret, data = ctx.get_earnings_calendar(
                 market=mkt_val,
@@ -597,6 +608,9 @@ class MoomooClient:
         norm_sym = SubscriptionManager.normalize_symbol(symbol)
         clean_ticker = norm_sym.split(".")[-1] if "." in norm_sym else norm_sym
 
+        if not self._connected:
+            self.connect()
+
         conn_status = self.get_connection_status()
         if conn_status not in ("CONNECTED", "IDLE"):
             return {
@@ -659,6 +673,128 @@ class MoomooClient:
                 "opend_status": conn_status,
                 "symbol": norm_sym,
                 "items": [],
+                "error": str(e)
+            }
+
+    def get_history_kline(
+        self,
+        symbol: str,
+        interval: str = "day",
+        num: int = 60,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Retrieves real candlestick history from Moomoo OpenAPI (request_history_kline).
+        Consumes 30-day K-line quota as expected by Moomoo OpenAPI.
+        Returns dict with status, candles: list of {time, open, high, low, close, volume}.
+        """
+        norm_sym = SubscriptionManager.normalize_symbol(symbol) if hasattr(SubscriptionManager, "normalize_symbol") else symbol
+        if not norm_sym:
+            return {
+                "status": "ERROR",
+                "connected": False,
+                "symbol": symbol,
+                "candles": [],
+                "error": "Symbol must be a non-empty string"
+            }
+
+        if not self._connected:
+            self.connect()
+
+        conn_status = self.get_connection_status()
+        if conn_status not in ("CONNECTED", "IDLE"):
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "candles": [],
+                "error": f"OpenD gateway is not authenticated (status: {conn_status})"
+            }
+
+        ctx = self.get_quote_context()
+        if ctx is None:
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "candles": [],
+                "error": "OpenQuoteContext tidak tersedia"
+            }
+
+        try:
+            from moomoo import KLType, RET_OK
+            kl_type_map = {
+                "day": KLType.K_DAY,
+                "15m": KLType.K_15M,
+                "5m": KLType.K_5M,
+                "1m": KLType.K_1M
+            }
+            ktype = kl_type_map.get(str(interval).lower(), KLType.K_DAY)
+
+            import datetime
+            today_date = datetime.date.today()
+            if not end_date:
+                end_date = today_date.strftime("%Y-%m-%d")
+            if not start_date:
+                start_date = (today_date - datetime.timedelta(days=max(90, num * 2))).strftime("%Y-%m-%d")
+
+            res = ctx.request_history_kline(
+                code=norm_sym,
+                start=start_date,
+                end=end_date,
+                ktype=ktype,
+                max_count=num
+            )
+            ret_code = res[0]
+            data = res[1]
+
+            if ret_code != RET_OK:
+                logger.warning("request_history_kline failed for %s: ret=%s, data=%s", norm_sym, ret_code, data)
+                return {
+                    "status": "ERROR",
+                    "connected": True,
+                    "opend_status": conn_status,
+                    "symbol": norm_sym,
+                    "candles": [],
+                    "error": str(data)
+                }
+
+            candles = []
+            if hasattr(data, "iterrows"):
+                for _, row in data.iterrows():
+                    candles.append({
+                        "time": str(row.get("time_key", "")),
+                        "open": float(row.get("open", 0.0)),
+                        "high": float(row.get("high", 0.0)),
+                        "low": float(row.get("low", 0.0)),
+                        "close": float(row.get("close", 0.0)),
+                        "volume": float(row.get("volume", 0.0))
+                    })
+            elif isinstance(data, list):
+                for item in data:
+                    candles.append(item)
+
+            return {
+                "status": "OK",
+                "connected": True,
+                "opend_status": "CONNECTED",
+                "symbol": norm_sym,
+                "interval": interval,
+                "candles": candles,
+                "count": len(candles),
+                "error": None
+            }
+        except Exception as e:
+            logger.error("Exception in get_history_kline for %s: %s", norm_sym, e)
+            return {
+                "status": "ERROR",
+                "connected": True,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "candles": [],
                 "error": str(e)
             }
 
@@ -836,6 +972,8 @@ class MoomooClient:
             return False
 
     def is_connected(self) -> bool:
+        if not self._connected:
+            self.connect()
         return self._connected
 
     def get_connection_status(self) -> str:
@@ -857,6 +995,10 @@ class MoomooClient:
 
         if not socket_reachable:
             return "DISCONNECTED"
+
+        # Socket is reachable; try to connect session
+        if self.connect():
+            return "CONNECTED"
 
         if manager is not None and hasattr(manager, "is_waiting_otp") and manager.is_waiting_otp():
             return "WAIT_OTP"
@@ -1100,7 +1242,8 @@ class MoomooClient:
             }
 
         try:
-            price = float(order_dict.get("entry_price") or order_dict.get("price", 0.0))
+            raw_p = float(order_dict.get("entry_price") or order_dict.get("price", 0.0))
+            price = round(raw_p, 2) if raw_p >= 1.0 else round(raw_p, 4)
             if price <= 0:
                 return {
                     "order_id": None,
