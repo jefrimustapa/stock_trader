@@ -4,6 +4,14 @@ Sistem saringan pasaran saham AS (L0 Screener), jambatan komunikasi ejen (MCP Br
 
 ---
 
+> [!IMPORTANT]
+> **Rujukan Dokumen Sumber Rasmi (Source of Truth)**:
+> Sila rujuk [BLUEPRINT.md](BLUEPRINT.md) sebagai dokumen rujukan teras bagi senibina keseluruhan sistem, hierarki dan tanggungjawab ejen (L0 Screener, L1 Tariq, L2 Nawwar, L3 Haziq, L4 Danial), aliran orkestrasi kuota Moomoo OpenAPI, serta spesifikasi pangkalan data & API.
+>
+> Semua pelan tindakan dan reka bentuk khusus mengikut cawangan (*branch implementation plans*) diarkibkan dalam direktori [`plan/`](plan/).
+
+---
+
 ## 1. Senibina Sistem (Architecture Overview)
 
 Sistem ini terdiri daripada beberapa komponen teras yang diorkestrasikan melalui Docker Compose:
