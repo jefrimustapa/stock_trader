@@ -37,6 +37,8 @@ class TestAgentPipelineBVA(unittest.TestCase):
         self.pipeline = AgentPipeline(db_path=self.db_path)
 
     def tearDown(self):
+        if hasattr(self, "pipeline") and self.pipeline is not None:
+            self.pipeline.close()
         self.tmp_dir.cleanup()
 
     # =========================================================================

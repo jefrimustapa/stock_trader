@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 try:
     from moomoo import (
         OpenSecTradeContext, TrdEnv, TrdMarket, RET_OK, SysConfig,
-        OpenQuoteContext, SubType, KLType,
+        OpenQuoteContext, SubType, KLType, Market,
         OrderType, TrdSide, ModifyOrderOp, OrderStatus
     )
     from moomoo.common.open_context_base import OpenContextBase, ContextStatus, ReqInfo, PacketErr
@@ -34,6 +34,7 @@ except ImportError:
     OpenQuoteContext = None
     SubType = None
     KLType = None
+    Market = None
     TrdEnv = None
     TrdMarket = None
     RET_OK = 0
@@ -495,6 +496,171 @@ class MoomooClient:
     def release_kline_subscription(self, symbol: str, interval: str = "day") -> Dict[str, Any]:
         """Decrements ref count and triggers delayed unsubscribe cooldown."""
         return self.subscription_manager.release_subscription(symbol=symbol, interval=interval)
+
+    def get_earnings_calendar(
+        self,
+        market: str = "US",
+        begin_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Fetches corporate earnings calendar from Moomoo OpenAPI (Qot_GetEarningsCalendar).
+        Returns dict with status, items: list of {symbol, name, earnings_date, pub_type, etc.}
+        """
+        conn_status = self.get_connection_status()
+        if conn_status not in ("CONNECTED", "IDLE"):
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "market": market,
+                "items": [],
+                "error": f"OpenD gateway is not authenticated (status: {conn_status})"
+            }
+
+        ctx = self.get_quote_context()
+        if ctx is None:
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "market": market,
+                "items": [],
+                "error": "OpenQuoteContext tidak tersedia"
+            }
+
+        try:
+            mkt_val = Market.US if (Market is not None and hasattr(Market, market.upper())) else market
+            ret, data = ctx.get_earnings_calendar(
+                market=mkt_val,
+                begin_date=begin_date,
+                end_date=end_date
+            )
+            if ret != RET_OK:
+                return {
+                    "status": "ERROR",
+                    "connected": True,
+                    "opend_status": conn_status,
+                    "market": market,
+                    "items": [],
+                    "error": f"get_earnings_calendar returned {ret}: {data}"
+                }
+
+            items = []
+            if data is not None and hasattr(data, "iterrows"):
+                for _, row in data.iterrows():
+                    sec = str(row.get("security", "") or "")
+                    norm_sym = SubscriptionManager.normalize_symbol(sec) if sec else ""
+                    items.append({
+                        "security": sec,
+                        "symbol": norm_sym or sec,
+                        "name": str(row.get("name", "") or ""),
+                        "earnings_date": str(row.get("earnings_date", "") or ""),
+                        "earnings_timestamp": row.get("earnings_timestamp"),
+                        "pub_type": str(row.get("pub_type", "") or ""),
+                        "period_text": str(row.get("period_text", "") or ""),
+                        "eps_actual": row.get("eps_actual"),
+                        "eps_predict": row.get("eps_predict"),
+                        "revenue_actual": row.get("revenue_actual"),
+                        "revenue_predict": row.get("revenue_predict"),
+                        "price": row.get("price")
+                    })
+
+            return {
+                "status": "OK",
+                "connected": True,
+                "opend_status": "CONNECTED",
+                "market": market,
+                "items": items,
+                "count": len(items)
+            }
+        except Exception as e:
+            logger.error("get_earnings_calendar exception: %s", e)
+            return {
+                "status": "ERROR",
+                "connected": True,
+                "opend_status": conn_status,
+                "market": market,
+                "items": [],
+                "error": str(e)
+            }
+
+    def get_news_for_symbol(
+        self,
+        symbol: str,
+        max_count: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Fetches latest news headlines for a ticker from Moomoo OpenAPI (Qot_GetSearchNews).
+        Returns dict with status, items: list of {title, news_sub_type, source, publish_time, url, ...}
+        """
+        norm_sym = SubscriptionManager.normalize_symbol(symbol)
+        clean_ticker = norm_sym.split(".")[-1] if "." in norm_sym else norm_sym
+
+        conn_status = self.get_connection_status()
+        if conn_status not in ("CONNECTED", "IDLE"):
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "items": [],
+                "error": f"OpenD gateway is not authenticated (status: {conn_status})"
+            }
+
+        ctx = self.get_quote_context()
+        if ctx is None:
+            return {
+                "status": "UNAVAILABLE",
+                "connected": False,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "items": [],
+                "error": "OpenQuoteContext tidak tersedia"
+            }
+
+        try:
+            ret, data = ctx.get_search_news(keyword=clean_ticker, max_count=max_count)
+            if ret != RET_OK:
+                return {
+                    "status": "ERROR",
+                    "connected": True,
+                    "opend_status": conn_status,
+                    "symbol": norm_sym,
+                    "items": [],
+                    "error": f"get_search_news returned {ret}: {data}"
+                }
+
+            items = []
+            if data is not None and hasattr(data, "iterrows"):
+                for _, row in data.iterrows():
+                    items.append({
+                        "title": str(row.get("title", "") or ""),
+                        "news_sub_type": str(row.get("news_sub_type", "") or ""),
+                        "source": str(row.get("source", "") or ""),
+                        "publish_time": str(row.get("publish_time", "") or ""),
+                        "view_count": int(row.get("view_count", 0) or 0) if row.get("view_count") is not None else 0,
+                        "url": str(row.get("url", "") or "")
+                    })
+
+            return {
+                "status": "OK",
+                "connected": True,
+                "opend_status": "CONNECTED",
+                "symbol": norm_sym,
+                "items": items,
+                "count": len(items)
+            }
+        except Exception as e:
+            logger.error("get_news_for_symbol exception: %s", e)
+            return {
+                "status": "ERROR",
+                "connected": True,
+                "opend_status": conn_status,
+                "symbol": norm_sym,
+                "items": [],
+                "error": str(e)
+            }
 
     def set_opend_manager(self, manager: Any) -> None:
         self._opend_manager = manager

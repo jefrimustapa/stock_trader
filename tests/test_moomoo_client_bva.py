@@ -363,6 +363,110 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.assertEqual(orders[0]["qty"], 20)
         self.assertEqual(orders[0]["price"], 140.00)
 
+    def test_get_earnings_calendar_disconnected_fails_closed(self):
+        """get_earnings_calendar returns UNAVAILABLE when client is disconnected."""
+        self.client._connected = False
+        res = self.client.get_earnings_calendar(market="US")
+        self.assertEqual(res["status"], "UNAVAILABLE")
+        self.assertFalse(res["connected"])
+        self.assertEqual(res["items"], [])
+
+    def test_get_earnings_calendar_connected_success(self):
+        """get_earnings_calendar parses DataFrame from OpenD successfully."""
+        from unittest.mock import MagicMock
+        import pandas as pd
+
+        self.client._connected = True
+        mock_ctx = MagicMock()
+        mock_df = pd.DataFrame([
+            {
+                "security": "US.NVDA",
+                "name": "NVIDIA Corp",
+                "earnings_date": "2026-11-20",
+                "earnings_timestamp": 1795163400.0,
+                "pub_type": "AFTER",
+                "period_text": "2026Q3",
+                "eps_actual": 0.81,
+                "eps_predict": 0.75,
+                "revenue_actual": 35000000000.0,
+                "revenue_predict": 33000000000.0,
+                "price": 145.0
+            }
+        ])
+        mock_ctx.get_earnings_calendar.return_value = (0, mock_df)
+        self.client._quote_ctx = mock_ctx
+
+        res = self.client.get_earnings_calendar(market="US")
+        self.assertEqual(res["status"], "OK")
+        self.assertTrue(res["connected"])
+        self.assertEqual(res["count"], 1)
+        item = res["items"][0]
+        self.assertEqual(item["symbol"], "US.NVDA")
+        self.assertEqual(item["earnings_date"], "2026-11-20")
+        self.assertEqual(item["pub_type"], "AFTER")
+
+    def test_get_earnings_calendar_broker_error(self):
+        """get_earnings_calendar handles broker errors gracefully."""
+        from unittest.mock import MagicMock
+
+        self.client._connected = True
+        mock_ctx = MagicMock()
+        mock_ctx.get_earnings_calendar.return_value = (-1, "Calendar query failed")
+        self.client._quote_ctx = mock_ctx
+
+        res = self.client.get_earnings_calendar(market="US")
+        self.assertEqual(res["status"], "ERROR")
+        self.assertIn("Calendar query failed", res["error"])
+
+    def test_get_news_for_symbol_disconnected_fails_closed(self):
+        """get_news_for_symbol returns UNAVAILABLE when client is disconnected."""
+        self.client._connected = False
+        res = self.client.get_news_for_symbol("NVDA")
+        self.assertEqual(res["status"], "UNAVAILABLE")
+        self.assertFalse(res["connected"])
+        self.assertEqual(res["items"], [])
+
+    def test_get_news_for_symbol_connected_success(self):
+        """get_news_for_symbol parses news DataFrame from OpenD successfully."""
+        from unittest.mock import MagicMock
+        import pandas as pd
+
+        self.client._connected = True
+        mock_ctx = MagicMock()
+        mock_df = pd.DataFrame([
+            {
+                "title": "Nvidia Surges on Record AI Chip Demand",
+                "news_sub_type": "NEWS",
+                "source": "Bloomberg",
+                "publish_time": "2026/11/19 14:00:00",
+                "view_count": 500,
+                "url": "https://www.moomoo.com/news/post/12345"
+            }
+        ])
+        mock_ctx.get_search_news.return_value = (0, mock_df)
+        self.client._quote_ctx = mock_ctx
+
+        res = self.client.get_news_for_symbol("US.NVDA")
+        self.assertEqual(res["status"], "OK")
+        self.assertTrue(res["connected"])
+        self.assertEqual(res["count"], 1)
+        item = res["items"][0]
+        self.assertEqual(item["title"], "Nvidia Surges on Record AI Chip Demand")
+        self.assertEqual(item["source"], "Bloomberg")
+
+    def test_get_news_for_symbol_broker_error(self):
+        """get_news_for_symbol handles broker errors gracefully."""
+        from unittest.mock import MagicMock
+
+        self.client._connected = True
+        mock_ctx = MagicMock()
+        mock_ctx.get_search_news.return_value = (-1, "News search rate limited")
+        self.client._quote_ctx = mock_ctx
+
+        res = self.client.get_news_for_symbol("US.NVDA")
+        self.assertEqual(res["status"], "ERROR")
+        self.assertIn("News search rate limited", res["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

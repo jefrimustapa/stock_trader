@@ -48,9 +48,11 @@ class AgentPipeline:
     Coordinates and persists deliberative AI workflow and Moomoo OpenD simulation execution.
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, moomoo_client: Optional[Any] = None):
         self.db_path = db_path or BridgeConfig.AGENT_ACTIVITY_DB
         self.hard_rules_engine = HardRulesEngine(BridgeConfig.EQUITY_BASELINE_DB)
+        self.moomoo_client = moomoo_client or get_moomoo_client()
+        self._earnings_cache: Dict[str, Any] = {}
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -152,7 +154,9 @@ class AgentPipeline:
     def evaluate_tariq_technical(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
         """
         Tariq analyzes Wyckoff accumulation/markup, Elliott wave structure,
-        and SMC (Smart Money Concepts) Fair Value Gap (FVG) confluence.
+        and SMC (Smart Money Concepts) Fair Value Gap (FVG) confluence using
+        real candlestick K-line data from Moomoo OpenAPI (get_cur_kline_with_sub)
+        or candidate fallback metrics.
         Returns technical analysis dict with S_tech in [0, 100].
         """
         symbol = candidate.get("symbol", "UNKNOWN")
@@ -163,18 +167,90 @@ class AgentPipeline:
         setup_metrics = candidate.get("setup_metrics") or {}
         dist_52w = float(setup_metrics.get("dist_to_52w_high_pct") or 5.0)
 
-        # Baseline S_tech calculated deterministically from screener lane and market confluence
-        base_score = 65.0 if lane == "MOMENTUM" else 62.0
-        bonus_rs = min(15.0, max(-15.0, (rs_spy - 1.0) * 20.0))
-        bonus_dist = max(0.0, 10.0 - dist_52w) * 0.8
-        raw_tech = base_score + bonus_rs + bonus_dist + (lane_score - 70.0) * 0.2
-        s_tech = round(max(10.0, min(98.0, raw_tech)), 1)
+        candles = candidate.get("candles")
+        data_source = "HEURISTIC_MOCK"
+        atr_14 = None
 
-        wyckoff_phase = "MARKUP" if lane == "MOMENTUM" else "ACCUMULATION_PHASE_C"
+        # Fetch real K-line candlestick bars if live OpenD is connected and candles not pre-populated
+        if not candles and self.moomoo_client is not None and self.moomoo_client.is_connected():
+            try:
+                kl_resp = self.moomoo_client.get_cur_kline_with_sub(symbol, interval="day", num=60)
+                if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
+                    candles = kl_resp["candles"]
+                    self.moomoo_client.release_kline_subscription(symbol, interval="day")
+            except Exception as e:
+                logger.warning("Failed to fetch live K-line for %s: %s", symbol, e)
+
+        if candles and len(candles) >= 5:
+            data_source = "MOOMOO_KLINE_REAL"
+            closes = [float(c["close"]) for c in candles]
+            highs = [float(c["high"]) for c in candles]
+            lows = [float(c["low"]) for c in candles]
+            vols = [float(c.get("volume", 0) or 0) for c in candles]
+
+            latest_close = closes[-1]
+            if price <= 0.0:
+                price = latest_close
+
+            # Support & resistance from candle history
+            lookback = min(len(candles), 20)
+            support_level = round(min(lows[-lookback:]), 2)
+            resistance_level = round(max(highs[-lookback:]), 2)
+
+            # ATR 14 from true range of candles
+            tr_list = []
+            for i in range(1, len(candles)):
+                h = highs[i]
+                l = lows[i]
+                pc = closes[i - 1]
+                tr_list.append(max(h - l, abs(h - pc), abs(l - pc)))
+            if tr_list:
+                atr_slice = tr_list[-min(len(tr_list), 14):]
+                atr_14 = round(sum(atr_slice) / len(atr_slice), 2)
+
+            # Moving average trend & Wyckoff Phase
+            sma20 = sum(closes[-lookback:]) / lookback
+            sma_trend_up = latest_close >= sma20
+
+            # Up-day vs down-day volume confirmation
+            up_vols = [vols[i] for i in range(1, len(candles)) if closes[i] >= closes[i-1]]
+            down_vols = [vols[i] for i in range(1, len(candles)) if closes[i] < closes[i-1]]
+            avg_up_vol = sum(up_vols) / len(up_vols) if up_vols else 1.0
+            avg_down_vol = sum(down_vols) / len(down_vols) if down_vols else 1.0
+            vol_expansion = avg_up_vol > avg_down_vol
+
+            if sma_trend_up and vol_expansion:
+                wyckoff_phase = "MARKUP"
+            elif latest_close >= support_level * 0.98 and latest_close <= support_level * 1.05:
+                wyckoff_phase = "ACCUMULATION_PHASE_C"
+            elif sma_trend_up:
+                wyckoff_phase = "MARKUP"
+            else:
+                wyckoff_phase = "ACCUMULATION_PHASE_C"
+
+            # Technical score from real candlestick dynamics
+            candle_momentum_pct = ((latest_close - closes[0]) / closes[0] * 100.0) if closes[0] > 0 else 0.0
+            base_score = 65.0 if wyckoff_phase == "MARKUP" else 62.0
+            bonus_rs = min(15.0, max(-15.0, (rs_spy - 1.0) * 20.0))
+            bonus_dist = max(0.0, 10.0 - dist_52w) * 0.8
+            bonus_mom = min(10.0, max(-10.0, candle_momentum_pct * 0.5))
+            bonus_vol = 3.0 if vol_expansion else 0.0
+
+            raw_tech = base_score + bonus_rs + bonus_dist + bonus_mom + bonus_vol + (lane_score - 70.0) * 0.2
+            s_tech = round(max(10.0, min(98.0, raw_tech)), 1)
+        else:
+            # Baseline S_tech calculated deterministically from screener lane and market confluence
+            base_score = 65.0 if lane == "MOMENTUM" else 62.0
+            bonus_rs = min(15.0, max(-15.0, (rs_spy - 1.0) * 20.0))
+            bonus_dist = max(0.0, 10.0 - dist_52w) * 0.8
+            raw_tech = base_score + bonus_rs + bonus_dist + (lane_score - 70.0) * 0.2
+            s_tech = round(max(10.0, min(98.0, raw_tech)), 1)
+
+            wyckoff_phase = "MARKUP" if lane == "MOMENTUM" else "ACCUMULATION_PHASE_C"
+            support_level = round(price * 0.96, 2)
+            resistance_level = round(price * 1.08, 2)
+
         fvg_confluence = "BULLISH_FVG_CONFIRMED" if s_tech >= 65.0 else "TESTING_LIQUIDITY_ZONE"
-        support_level = round(price * 0.96, 2)
-        resistance_level = round(price * 1.08, 2)
-
         passed = s_tech >= 60.0
         return {
             "agent": "Tariq",
@@ -187,9 +263,12 @@ class AgentPipeline:
             "smc_fvg_confluence": fvg_confluence,
             "support_level": support_level,
             "resistance_level": resistance_level,
+            "atr_14": atr_14,
+            "candle_count": len(candles) if candles else 0,
+            "data_source": data_source,
             "fail_fast": not passed,
             "notes": (
-                f"S_tech={s_tech}/100. Wyckoff {wyckoff_phase} with SMC {fvg_confluence}. "
+                f"S_tech={s_tech}/100. Wyckoff {wyckoff_phase} with SMC {fvg_confluence} ({data_source}). "
                 f"Konfluens teknikal {'memenuhi' if passed else 'tidak memenuhi'} syarat ambang >= 60.0."
             )
         }
@@ -200,27 +279,115 @@ class AgentPipeline:
     def evaluate_nawwar_sentiment(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
         """
         Nawwar evaluates news flow, earnings catalyst gate, and macro environment.
-        Raw score S_sent in [-100, +100], normalized S_sent_norm in [0, 100].
+        Uses Moomoo OpenAPI corporate earnings calendar (get_earnings_calendar)
+        and news search (get_search_news) when available.
         Hard threshold: S_sent >= +60.0 (S_sent_norm >= 80.0) without earnings in 5 days.
         """
         symbol = candidate.get("symbol", "UNKNOWN")
         change_pct = float(candidate.get("change_pct", 0.0))
-        
-        # Raw sentiment heuristic from momentum and trend indicators
-        raw_sent = 70.0 + min(25.0, change_pct * 3.0)
-        raw_sent = round(max(-100.0, min(100.0, raw_sent)), 1)
+        clean_ticker = symbol.split(".")[-1] if "." in symbol else symbol
+        data_source = "HEURISTIC_MOCK"
+
+        # 1. Earnings calendar gate check (Hard Rule: reject if earnings <= 5 days)
+        earnings_within_5d = bool(candidate.get("earnings_within_5d", False))
+        earnings_date = candidate.get("earnings_date")
+
+        # Query live Moomoo earnings calendar if connected and not already marked
+        if not earnings_within_5d and self.moomoo_client is not None and self.moomoo_client.is_connected():
+            now_dt = datetime.now(timezone.utc)
+            today_str = now_dt.strftime("%Y-%m-%d")
+
+            # Check cache or fetch calendar
+            if "us_earnings" not in self._earnings_cache or (now_dt.timestamp() - self._earnings_cache.get("time", 0)) > 300:
+                earn_resp = self.moomoo_client.get_earnings_calendar(market="US", begin_date=today_str)
+                if earn_resp.get("status") == "OK":
+                    self._earnings_cache = {
+                        "time": now_dt.timestamp(),
+                        "items": earn_resp.get("items", [])
+                    }
+
+            cached_items = self._earnings_cache.get("items", [])
+            for item in cached_items:
+                item_sym = item.get("symbol") or item.get("security") or ""
+                item_ticker = item_sym.split(".")[-1] if "." in item_sym else item_sym
+                if clean_ticker.upper() == item_ticker.upper():
+                    item_date_str = item.get("earnings_date")
+                    if item_date_str:
+                        try:
+                            item_date = datetime.strptime(item_date_str, "%Y-%m-%d").date()
+                            days_diff = (item_date - now_dt.date()).days
+                            if 0 <= days_diff <= 5:
+                                earnings_within_5d = True
+                                earnings_date = item_date_str
+                                data_source = "MOOMOO_EARNINGS_REAL"
+                                break
+                        except Exception:
+                            pass
+
+        # 2. News flow and headline sentiment
+        news_items = candidate.get("news_items")
+        news_headline = candidate.get("news_headline")
+        news_url = candidate.get("news_url")
+
+        if not news_items and self.moomoo_client is not None and self.moomoo_client.is_connected():
+            try:
+                news_resp = self.moomoo_client.get_news_for_symbol(symbol=symbol, max_count=5)
+                if news_resp.get("status") == "OK" and news_resp.get("items"):
+                    news_items = news_resp["items"]
+            except Exception as e:
+                logger.warning("Failed to fetch live news for %s: %s", symbol, e)
+
+        if news_items and len(news_items) > 0:
+            data_source = "MOOMOO_NEWS_REAL" if data_source == "HEURISTIC_MOCK" else f"{data_source}+NEWS_REAL"
+            news_headline = news_items[0].get("title", f"Liputan Berita Terkini {clean_ticker}")
+            news_url = news_items[0].get("url") or f"https://finance.yahoo.com/quote/{clean_ticker}/news/"
+
+            # Sentiment keyword analysis from real headlines
+            bullish_words = {"beat", "surge", "surged", "soar", "record", "growth", "profit", "upgrade", "bullish", "rally", "gain", "high", "strong", "expansion"}
+            bearish_words = {"miss", "missed", "plunge", "fall", "loss", "downgrade", "bearish", "warning", "slump", "drop", "decline", "weak", "probe", "investigation"}
+
+            bullish_hits = 0
+            bearish_hits = 0
+            for it in news_items:
+                title_lower = (it.get("title") or "").lower()
+                for w in bullish_words:
+                    if w in title_lower:
+                        bullish_hits += 1
+                for w in bearish_words:
+                    if w in title_lower:
+                        bearish_hits += 1
+
+            headline_bias = (bullish_hits * 10.0) - (bearish_hits * 15.0)
+            raw_sent = 68.0 + headline_bias + min(15.0, max(-15.0, change_pct * 1.5))
+            raw_sent = round(max(-100.0, min(100.0, raw_sent)), 1)
+        else:
+            # Fallback heuristic from momentum and trend indicators
+            if not news_headline:
+                news_headline = f"Liputan Berita Terkini & Sentimen Pasaran {clean_ticker}"
+            if not news_url:
+                news_url = f"https://finance.yahoo.com/quote/{clean_ticker}/news/"
+            raw_sent = 70.0 + min(25.0, change_pct * 3.0)
+            raw_sent = round(max(-100.0, min(100.0, raw_sent)), 1)
+
         sent_norm = normalize_sentiment(raw_sent)
 
         # Earnings & macro gate check
-        earnings_within_5d = False
         fomc_macro_risk = False
         passed = (raw_sent >= 60.0) and (not earnings_within_5d) and (not fomc_macro_risk)
 
-        clean_ticker = symbol.split(".")[-1] if "." in symbol else symbol
-        news_url = f"https://finance.yahoo.com/quote/{clean_ticker}/news/"
-        news_headline = f"Liputan Berita Terkini & Sentimen Pasaran {clean_ticker}"
-
         label = "BULLISH" if raw_sent >= 50.0 else ("BEARISH" if raw_sent <= -20.0 else "NEUTRAL")
+
+        if earnings_within_5d:
+            notes = (
+                f"S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}). "
+                f"SEKATAN KERAS: Pengumuman earnings dalam tempoh 5 hari ({earnings_date or 'segera'}). Ditolak serta-merta."
+            )
+        else:
+            notes = (
+                f"S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}, {data_source}). "
+                f"Tiada risiko earnings dalam 5 hari. {'Lulus' if passed else 'Ditolak'} tapisan sentimen."
+            )
+
         return {
             "agent": "Nawwar",
             "role": "L1 Sentiment & Macro Scout",
@@ -230,13 +397,14 @@ class AgentPipeline:
             "passed": passed,
             "sentiment_label": label,
             "earnings_within_5d": earnings_within_5d,
+            "earnings_date": earnings_date,
             "fomc_macro_risk": fomc_macro_risk,
             "news_url": news_url,
             "news_headline": news_headline,
-            "notes": (
-                f"S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}). "
-                f"Tiada risiko earnings dalam 5 hari. {'Lulus' if passed else 'Ditolak'} tapisan sentimen."
-            )
+            "news_count": len(news_items) if news_items else 0,
+            "data_source": data_source,
+            "fail_fast": not passed,
+            "notes": notes
         }
 
     # =========================================================================
@@ -268,10 +436,12 @@ class AgentPipeline:
         total_risk_capital = account_equity * risk_per_trade_pct
         max_position_value = account_equity * max_position_equity_pct
 
-        # ATR 14 estimation: default 3.0% of price if ATR not supplied
+        # ATR 14 estimation: use Tariq's K-line ATR14 if calculated, else fallback to setup_metrics
         setup_metrics = candidate.get("setup_metrics") or {}
         atr_pct = float(setup_metrics.get("atr_14_pct") or 3.0)
-        atr_14 = max(0.10, round(price * (atr_pct / 100.0), 2))
+        atr_14 = tariq_res.get("atr_14")
+        if not atr_14 or atr_14 <= 0:
+            atr_14 = max(0.10, round(price * (atr_pct / 100.0), 2))
 
         sl_distance = round(1.5 * atr_14, 2)
         stop_loss_price = round(max(0.01, price - sl_distance), 2)
@@ -292,7 +462,7 @@ class AgentPipeline:
 
         thesis = (
             f"S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
-            f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}), "
+            f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}, ATR14: ${atr_14:.2f}), "
             f"TP1: ${tp1_price:.2f} (1:{rr_ratio}). Saiz: {allocated_shares} unit "
             f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% modal efektif). "
             f"Asas Modal: ${account_equity:,.2f}."
@@ -919,6 +1089,14 @@ class AgentPipeline:
                 "status": "CANCELLED",
                 "message": f"Pesanan {order_id} ({row['symbol']}) berjaya dibatalkan."
             }
+
+    def close(self) -> None:
+        """Closes any underlying OpenD context cleanly."""
+        if self.moomoo_client is not None and hasattr(self.moomoo_client, "close"):
+            try:
+                self.moomoo_client.close()
+            except Exception:
+                pass
 
 
 # Module-level singleton
