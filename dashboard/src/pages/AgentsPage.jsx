@@ -33,9 +33,21 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SecurityIcon from '@mui/icons-material/Security';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { sneatTokens } from '../theme';
 
 export function AgentsPage() {
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(Number(val) || 0);
+  };
+
   const [loading, setLoading] = useState(true);
   const [runningSim, setRunningSim] = useState(false);
   const [activityData, setActivityData] = useState(null);
@@ -203,218 +215,257 @@ export function AgentsPage() {
         </Alert>
       )}
 
-      {/* Summary KPI Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                JUMLAH KITARAN SIMULASI
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700, my: 0.5, color: sneatTokens.primary.main }}>
-                {stats.total_cycles || 0}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Kitaran terkini: {latestCycle?.cycle_id ? latestCycle.cycle_id.substring(0, 16) + '...' : '-'}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                CALON KITARAN TERKINI
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700, my: 0.5, color: sneatTokens.info.main }}>
-                {latestCycle?.total_candidates || deliberations.length || 0}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                L1: {latestCycle?.passed_l1 ?? 0} | L2: {latestCycle?.passed_l2 ?? 0} | L3: {latestCycle?.passed_l3 ?? 0}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                PESANAN SIMULASI DIJANA
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700, my: 0.5, color: sneatTokens.success.main }}>
-                {orders.length}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Paper trading ke Moomoo OpenD
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                STATUS KESELAMATAN & RISIKO
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, my: 0.5 }}>
-                <CheckCircleIcon sx={{ color: sneatTokens.success.main, fontSize: 24 }} />
-                <Typography variant="h6" sx={{ fontWeight: 700, color: sneatTokens.success.main }}>
-                  8 HARD RULES
-                </Typography>
-              </Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Penguatkuasaan deterministik aktif
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Visual Pipeline Stepper */}
-      <Card sx={{ mb: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-        <CardContent sx={{ p: 2.5 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-            Aliran Saluran Paip Keputusan Pasukan Ejen (Trading Pipeline Flow)
-          </Typography>
-          <Grid container spacing={1} alignItems="center">
-            {/* L0 */}
-            <Grid item xs={12} sm={2.4}>
-              <Paper
-                elevation={0}
+      {/* Summary Header: Calon Kitaran Terkini (HOM-302 Clean Layout) */}
+      <Card sx={{ mb: 3, borderRadius: 2.5, border: '1px solid', borderColor: 'divider' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box
                 sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: 'action.hover',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  textAlign: 'center',
-                }}
-              >
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                  L0 SCREENER
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  Watchlist Dwi-Lorong
-                </Typography>
-                <Chip
-                  label={`${latestCycle?.total_candidates || deliberations.length || 0} Calon`}
-                  size="small"
-                  sx={{ mt: 1, fontWeight: 600 }}
-                />
-              </Paper>
-            </Grid>
-
-            {/* L1 */}
-            <Grid item xs={12} sm={2.4}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.5,
+                  width: 48,
+                  height: 48,
                   borderRadius: 2,
                   bgcolor: sneatTokens.info.soft,
-                  border: '1px solid',
-                  borderColor: sneatTokens.info.main,
-                  textAlign: 'center',
+                  color: sneatTokens.info.main,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
-                <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.info.main }}>
-                  L1 KECERDASAN
+                <PsychologyIcon sx={{ fontSize: 28 }} />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 0.5 }}>
+                  CALON KITARAN TERKINI
                 </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  Tariq & Nawwar
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: sneatTokens.info.main }}>
+                    {latestCycle?.total_candidates || deliberations.length || 0}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    kaunter saham dikesan
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Chip
+                label={`L1: ${latestCycle?.passed_l1 ?? 0} Lulus`}
+                size="small"
+                sx={{ fontWeight: 700, bgcolor: sneatTokens.info.soft, color: sneatTokens.info.main }}
+              />
+              <Chip
+                label={`L2: ${latestCycle?.passed_l2 ?? 0} Lulus`}
+                size="small"
+                sx={{ fontWeight: 700, bgcolor: sneatTokens.primary.soft, color: sneatTokens.primary.main }}
+              />
+              <Chip
+                label={`L3: ${latestCycle?.passed_l3 ?? 0} Lulus`}
+                size="small"
+                sx={{ fontWeight: 700, bgcolor: sneatTokens.warning.soft, color: sneatTokens.warning.main }}
+              />
+              <Chip
+                label={`L4: ${latestCycle?.orders_placed ?? orders.length} Pesanan`}
+                size="small"
+                sx={{ fontWeight: 700, bgcolor: sneatTokens.success.soft, color: sneatTokens.success.main }}
+              />
+              {latestCycle?.cycle_id && (
                 <Chip
-                  label={`${latestCycle?.passed_l1 ?? 0} Lulus L1`}
+                  variant="outlined"
+                  label={`Kitaran: ${latestCycle.cycle_id.substring(0, 16)}...`}
                   size="small"
-                  sx={{ mt: 1, fontWeight: 600, bgcolor: sneatTokens.info.main, color: '#fff' }}
+                  sx={{ color: 'text.secondary', borderColor: 'divider', fontSize: '0.75rem' }}
                 />
-              </Paper>
-            </Grid>
+              )}
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Visual Pipeline Stepper with Directional Connectors (HOM-302) */}
+      <Card sx={{ mb: 3, borderRadius: 2.5, border: '1px solid', borderColor: 'divider' }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Aliran Saluran Paip Keputusan Pasukan Ejen (Trading Pipeline Flow)
+            </Typography>
+            <Chip
+              label="L0 → L1 → L2 → L3 → L4"
+              size="small"
+              sx={{ fontWeight: 700, bgcolor: sneatTokens.primary.soft, color: sneatTokens.primary.main }}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            {/* L0 */}
+            <Paper
+              elevation={0}
+              sx={{
+                flex: 1,
+                width: '100%',
+                p: 2,
+                borderRadius: 2,
+                bgcolor: 'action.hover',
+                border: '1px solid',
+                borderColor: 'divider',
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block' }}>
+                L0 SCREENER
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                Watchlist Dwi-Lorong
+              </Typography>
+              <Chip
+                label={`${latestCycle?.total_candidates || deliberations.length || 0} Calon`}
+                size="small"
+                sx={{ mt: 1, fontWeight: 700 }}
+              />
+            </Paper>
+
+            {/* Arrow L0 -> L1 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: sneatTokens.primary.main }}>
+              <ArrowForwardIcon sx={{ display: { xs: 'none', md: 'block' }, fontSize: 24 }} />
+              <ArrowDownwardIcon sx={{ display: { xs: 'block', md: 'none' }, fontSize: 24, my: 0.5 }} />
+            </Box>
+
+            {/* L1 */}
+            <Paper
+              elevation={0}
+              sx={{
+                flex: 1,
+                width: '100%',
+                p: 2,
+                borderRadius: 2,
+                bgcolor: sneatTokens.info.soft,
+                border: '1px solid',
+                borderColor: sneatTokens.info.main,
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.info.main, display: 'block' }}>
+                L1 KECERDASAN
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                Tariq &amp; Nawwar
+              </Typography>
+              <Chip
+                label={`${latestCycle?.passed_l1 ?? 0} Lulus L1`}
+                size="small"
+                sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.info.main, color: '#fff' }}
+              />
+            </Paper>
+
+            {/* Arrow L1 -> L2 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: sneatTokens.primary.main }}>
+              <ArrowForwardIcon sx={{ display: { xs: 'none', md: 'block' }, fontSize: 24 }} />
+              <ArrowDownwardIcon sx={{ display: { xs: 'block', md: 'none' }, fontSize: 24, my: 0.5 }} />
+            </Box>
 
             {/* L2 */}
-            <Grid item xs={12} sm={2.4}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: sneatTokens.primary.soft,
-                  border: '1px solid',
-                  borderColor: sneatTokens.primary.main,
-                  textAlign: 'center',
-                }}
-              >
-                <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.primary.main }}>
-                  L2 STRATEGI & PORTFOLIO
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  Haziq (Lead)
-                </Typography>
-                <Chip
-                  label={`${latestCycle?.passed_l2 ?? 0} Lulus L2`}
-                  size="small"
-                  sx={{ mt: 1, fontWeight: 600, bgcolor: sneatTokens.primary.main, color: '#fff' }}
-                />
-              </Paper>
-            </Grid>
+            <Paper
+              elevation={0}
+              sx={{
+                flex: 1,
+                width: '100%',
+                p: 2,
+                borderRadius: 2,
+                bgcolor: sneatTokens.primary.soft,
+                border: '1px solid',
+                borderColor: sneatTokens.primary.main,
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.primary.main, display: 'block' }}>
+                L2 STRATEGI &amp; PORTFOLIO
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                Haziq (Lead)
+              </Typography>
+              <Chip
+                label={`${latestCycle?.passed_l2 ?? 0} Lulus L2`}
+                size="small"
+                sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.primary.main, color: '#fff' }}
+              />
+            </Paper>
+
+            {/* Arrow L2 -> L3 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: sneatTokens.primary.main }}>
+              <ArrowForwardIcon sx={{ display: { xs: 'none', md: 'block' }, fontSize: 24 }} />
+              <ArrowDownwardIcon sx={{ display: { xs: 'block', md: 'none' }, fontSize: 24, my: 0.5 }} />
+            </Box>
 
             {/* L3 */}
-            <Grid item xs={12} sm={2.4}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: sneatTokens.warning.soft,
-                  border: '1px solid',
-                  borderColor: sneatTokens.warning.main,
-                  textAlign: 'center',
-                }}
-              >
-                <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.warning.main }}>
-                  L3 AUDIT RISIKO
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  Danial & 8 Hard Rules
-                </Typography>
-                <Chip
-                  label={`${latestCycle?.passed_l3 ?? 0} Lulus L3`}
-                  size="small"
-                  sx={{ mt: 1, fontWeight: 600, bgcolor: sneatTokens.warning.main, color: '#fff' }}
-                />
-              </Paper>
-            </Grid>
+            <Paper
+              elevation={0}
+              sx={{
+                flex: 1,
+                width: '100%',
+                p: 2,
+                borderRadius: 2,
+                bgcolor: sneatTokens.warning.soft,
+                border: '1px solid',
+                borderColor: sneatTokens.warning.main,
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.warning.main, display: 'block' }}>
+                L3 AUDIT RISIKO
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                Danial &amp; 8 Hard Rules
+              </Typography>
+              <Chip
+                label={`${latestCycle?.passed_l3 ?? 0} Lulus L3`}
+                size="small"
+                sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.warning.main, color: '#fff' }}
+              />
+            </Paper>
+
+            {/* Arrow L3 -> L4 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: sneatTokens.primary.main }}>
+              <ArrowForwardIcon sx={{ display: { xs: 'none', md: 'block' }, fontSize: 24 }} />
+              <ArrowDownwardIcon sx={{ display: { xs: 'block', md: 'none' }, fontSize: 24, my: 0.5 }} />
+            </Box>
 
             {/* L4 */}
-            <Grid item xs={12} sm={2.4}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: sneatTokens.success.soft,
-                  border: '1px solid',
-                  borderColor: sneatTokens.success.main,
-                  textAlign: 'center',
-                }}
-              >
-                <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.success.main }}>
-                  L4 PELAKSANAAN
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  Moomoo OpenD Paper
-                </Typography>
-                <Chip
-                  label={`${latestCycle?.orders_placed ?? orders.length} Pesanan`}
-                  size="small"
-                  sx={{ mt: 1, fontWeight: 600, bgcolor: sneatTokens.success.main, color: '#fff' }}
-                />
-              </Paper>
-            </Grid>
-          </Grid>
+            <Paper
+              elevation={0}
+              sx={{
+                flex: 1,
+                width: '100%',
+                p: 2,
+                borderRadius: 2,
+                bgcolor: sneatTokens.success.soft,
+                border: '1px solid',
+                borderColor: sneatTokens.success.main,
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.success.main, display: 'block' }}>
+                L4 PELAKSANAAN
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
+                Moomoo OpenD Paper
+              </Typography>
+              <Chip
+                label={`${latestCycle?.orders_placed ?? orders.length} Pesanan`}
+                size="small"
+                sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.success.main, color: '#fff' }}
+              />
+            </Paper>
+          </Box>
         </CardContent>
       </Card>
 
@@ -489,9 +540,14 @@ export function AgentsPage() {
                     />
                   </Box>
 
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                    SKOR TEKNIKAL ($S_{'{tech}'}$)
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                      SKOR TEKNIKAL ($S_{'{tech}'}$)
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      Ambang: ≥ 60.0 | Margin: {selectedDelib.tariq?.s_tech ? (selectedDelib.tariq.s_tech - 60).toFixed(1) : '-'}
+                    </Typography>
+                  </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
                     <LinearProgress
                       variant="determinate"
@@ -556,9 +612,14 @@ export function AgentsPage() {
                     />
                   </Box>
 
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                    SKOR SENTIMEN TERNORMAL ($S_{'{sent_norm}'}$)
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                      SKOR SENTIMEN TERNORMAL ($S_{'{sent_norm}'}$)
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      Ambang: ≥ 80.0 | Margin: {selectedDelib.nawwar?.s_sent_norm ? (selectedDelib.nawwar.s_sent_norm - 80).toFixed(1) : '-'}
+                    </Typography>
+                  </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
                     <LinearProgress
                       variant="determinate"
@@ -599,6 +660,25 @@ export function AgentsPage() {
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
                     {selectedDelib.nawwar?.notes}
                   </Typography>
+
+                  <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                      Liputan Berita &amp; Sentimen Terkini:
+                    </Typography>
+                    <Button
+                      component="a"
+                      href={selectedDelib.nawwar?.news_url || `https://finance.yahoo.com/quote/${(selectedDelib.symbol || '').replace(/^US\./, '')}/news/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+                      sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600, fontSize: '0.75rem', py: 0.5 }}
+                    >
+                      {selectedDelib.nawwar?.news_headline || `Pautan Berita Saham ${selectedDelib.symbol}`}
+                    </Button>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -629,9 +709,14 @@ export function AgentsPage() {
                     />
                   </Box>
 
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                    SKOR KOMPOSIT ($S_{'{total}'} = 0.65 \times S_{'{tech}'} + 0.35 \times S_{'{sent_norm}'}$)
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                      SKOR KOMPOSIT ($S_{'{total}'} = 0.65 \times S_{'{tech}'} + 0.35 \times S_{'{sent_norm}'}$)
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      Ambang: ≥ 65.0 | Margin: {selectedDelib.haziq?.s_total ? (selectedDelib.haziq.s_total - 65).toFixed(1) : '-'}
+                    </Typography>
+                  </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
                     <LinearProgress
                       variant="determinate"
@@ -665,6 +750,12 @@ export function AgentsPage() {
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Saiz Posisi (1.5% Modal)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>
                         {selectedDelib.haziq?.allocated_shares} unit (${selectedDelib.haziq?.position_value?.toFixed(2)})
+                      </Typography>
+                    </Box>
+                    <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Asas Modal Efektif</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
+                        {formatCurrency(selectedDelib.haziq?.account_equity_used || 100000)}
                       </Typography>
                     </Box>
                   </Box>
@@ -703,7 +794,7 @@ export function AgentsPage() {
                   </Box>
 
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, display: 'block' }}>
-                    MATRIKS AUDIT 8 HARD RULES:
+                    Semakan 8 Hard Rules (Matriks Audit Risiko):
                   </Typography>
 
                   <TableContainer component={Paper} elevation={0} sx={{ bgcolor: 'action.hover', borderRadius: 1.5 }}>

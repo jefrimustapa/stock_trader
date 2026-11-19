@@ -272,8 +272,8 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   return (
     <Box id="opend-control" sx={{ mb: 4 }}>
       <Grid container spacing={3}>
-        {/* Kolum Kiri: Sesi Broker & Kawalan Akaun */}
-        <Grid item xs={12} md={7} lg={7.5}>
+        {/* Kolum Utama: Sesi Broker & Kawalan Akaun */}
+        <Grid item xs={12}>
           {isConnected && !manualShowLogin ? (
             /* Keadaan 1: Terhubung (Connected) -> Hanya tunjuk Logout & Pertukaran Akaun. Sembunyikan Borang Login */
             <Card sx={{ height: '100%', border: '1px solid', borderColor: 'divider' }}>
@@ -528,75 +528,6 @@ export function OpendControlPanel({ statusData, onRefresh }) {
               </CardContent>
             </Card>
           )}
-        </Grid>
-
-        {/* Kolum Kanan: Spesifikasi Gerbang & Status Keselamatan */}
-        <Grid item xs={12} md={5} lg={4.5}>
-          <Card sx={{ height: '100%', border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, fontSize: { xs: '1rem', sm: '1.15rem' }, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ShieldIcon sx={{ color: sneatTokens.primary.main }} />
-                Spesifikasi &amp; Diagnostik Gerbang
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                Status rangkaian gerbang OpenD dan polisi perlindungan data Seksyen 3.5.B Blueprint.
-              </Typography>
-
-              <Divider sx={{ mb: 2 }} />
-
-              <List disablePadding>
-                <ListItem disableGutters sx={{ py: 1 }}>
-                  <ListItemIcon sx={{ minWidth: 38 }}>
-                    <RouterIcon sx={{ color: sneatTokens.info.main, fontSize: 22 }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>Protokol Komunikasi</Typography>}
-                    secondary={<Typography variant="caption" sx={{ color: 'text.secondary' }}>Port 22222 (Telnet Gateway) &bull; Port 11111 (API)</Typography>}
-                  />
-                </ListItem>
-
-                <ListItem disableGutters sx={{ py: 1 }}>
-                  <ListItemIcon sx={{ minWidth: 38 }}>
-                    <AccountBalanceWalletIcon sx={{ color: sneatTokens.primary.main, fontSize: 22 }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>Akaun Tersedia</Typography>}
-                    secondary={<Typography variant="caption" sx={{ color: 'text.secondary' }}>{accounts.length} Akaun Dikesan (SIMULATE / REAL)</Typography>}
-                  />
-                </ListItem>
-
-                <ListItem disableGutters sx={{ py: 1 }}>
-                  <ListItemIcon sx={{ minWidth: 38 }}>
-                    <SecurityIcon sx={{ color: sneatTokens.success.main, fontSize: 22 }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={<Typography variant="body2" sx={{ fontWeight: 600, color: sneatTokens.success.main }}>Keselamatan Kata Laluan</Typography>}
-                    secondary={<Typography variant="caption" sx={{ color: 'text.secondary' }}>MD5 Server Hashing (Aktif &bull; Sifar Plaintext Log)</Typography>}
-                  />
-                </ListItem>
-
-                <ListItem disableGutters sx={{ py: 1 }}>
-                  <ListItemIcon sx={{ minWidth: 38 }}>
-                    <KeyIcon sx={{ color: sneatTokens.warning.main, fontSize: 22 }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={<Typography variant="body2" sx={{ fontWeight: 600, color: sneatTokens.warning.main }}>Geganti 2FA OTP</Typography>}
-                    secondary={<Typography variant="caption" sx={{ color: 'text.secondary' }}>Popup Automatik Semasa Sesi (WAIT_OTP)</Typography>}
-                  />
-                </ListItem>
-
-                <ListItem disableGutters sx={{ py: 1 }}>
-                  <ListItemIcon sx={{ minWidth: 38 }}>
-                    <ShieldIcon sx={{ color: sneatTokens.info.main, fontSize: 22 }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>Pengesahan Proksi</Typography>}
-                    secondary={<Typography variant="caption" sx={{ color: 'text.secondary' }}>Authentik Forward-Auth HMAC Constant-Time</Typography>}
-                  />
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
         </Grid>
       </Grid>
 

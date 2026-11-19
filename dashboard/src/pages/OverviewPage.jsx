@@ -135,18 +135,6 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
               color: sneatTokens.primary.main,
             }}
           />
-          <Chip
-            size="small"
-            icon={<ShowChartIcon sx={{ fontSize: '14px !important' }} />}
-            label="Sneat MUI v6"
-            sx={{
-              fontWeight: 600,
-              borderRadius: 1.5,
-              backgroundColor: sneatTokens.info.soft,
-              color: sneatTokens.info.main,
-              display: { xs: 'none', sm: 'inline-flex' },
-            }}
-          />
         </Box>
       </Box>
 
@@ -560,113 +548,10 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
         </Grid>
 
         {/* ======================================================== */}
-        {/* Right Column (4.5 Col): Security & Infrastructure Health */}
+        {/* Right Column (4.5 Col): System Connectivity & Diagnostics */}
         {/* ======================================================== */}
         <Grid item xs={12} md={5} lg={4.5}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            {/* Modular Card C: Architecture & Security Compliance */}
-            <Card
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2.5,
-                backgroundColor: 'background.paper',
-              }}
-            >
-              <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <SecurityIcon sx={{ color: sneatTokens.success.main, fontSize: 22 }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.92rem', sm: '1rem' } }}>
-                      Pematuhan Seni Bina &amp; Keselamatan
-                    </Typography>
-                  </Box>
-                  <Chip
-                    size="small"
-                    label="Patuh"
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: '0.7rem',
-                      borderRadius: 1,
-                      backgroundColor: sneatTokens.success.soft,
-                      color: sneatTokens.success.main,
-                    }}
-                  />
-                </Box>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
-                  {/* Item 1 */}
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
-                    <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18, mt: 0.2, flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                        Authentik SSO &amp; Forward-Auth
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.73rem' }}>
-                        Perlindungan HMAC &amp; RS256 JWKS
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Divider />
-
-                  {/* Item 2 */}
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
-                    <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18, mt: 0.2, flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                        Keselamatan Kredensial MD5
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.73rem' }}>
-                        Kata laluan di-hash sebelum ke OpenD
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Divider />
-
-                  {/* Item 3 */}
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
-                    <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18, mt: 0.2, flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                        Sentinel L4 Circuit Breaker
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.73rem' }}>
-                        Had kerugian &amp; pemantauan automatik
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Divider />
-
-                  {/* Item 4 */}
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
-                    <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18, mt: 0.2, flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                        Cloudflare Named Tunnel
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.73rem' }}>
-                        Sijil TLS sah &amp; protokol HTTP/2
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Divider />
-
-                  {/* Item 5 */}
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
-                    <CheckCircleOutlineIcon sx={{ color: sneatTokens.success.main, fontSize: 18, mt: 0.2, flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                        Had Sempadan Tegar L0
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.73rem' }}>
-                        Min Price &gt;= $1.00 mandatori disahkan
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-
             {/* Modular Card D: System Connectivity & Diagnostics */}
             <Card
               sx={{

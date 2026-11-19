@@ -126,6 +126,26 @@ class AgentPipeline:
                 logger.warning("Could not read watchlist.json: %s", e)
         return []
 
+    def get_max_buying_power_limit(self) -> float:
+        """Reads max_buying_power limit from screener_config.sqlite, defaulting to 100,000.0 (HOM-302)."""
+        config_db = BridgeConfig.SHARED_DATA_DIR / "screener_config.sqlite"
+        if config_db.exists():
+            try:
+                conn = sqlite3.connect(str(config_db), timeout=3.0)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT max_buying_power FROM screener_config WHERE id = 1")
+                row = cursor.fetchone()
+                if row and "max_buying_power" in row.keys() and row["max_buying_power"] is not None:
+                    val = float(row["max_buying_power"])
+                    if val >= 500.0:
+                        conn.close()
+                        return val
+                conn.close()
+            except Exception as e:
+                logger.warning("Could not read max_buying_power from %s: %s", config_db, e)
+        return 100000.0
+
     # =========================================================================
     # L1: Tariq (Technical Analyst)
     # =========================================================================
@@ -196,6 +216,10 @@ class AgentPipeline:
         fomc_macro_risk = False
         passed = (raw_sent >= 60.0) and (not earnings_within_5d) and (not fomc_macro_risk)
 
+        clean_ticker = symbol.split(".")[-1] if "." in symbol else symbol
+        news_url = f"https://finance.yahoo.com/quote/{clean_ticker}/news/"
+        news_headline = f"Liputan Berita Terkini & Sentimen Pasaran {clean_ticker}"
+
         label = "BULLISH" if raw_sent >= 50.0 else ("BEARISH" if raw_sent <= -20.0 else "NEUTRAL")
         return {
             "agent": "Nawwar",
@@ -207,6 +231,8 @@ class AgentPipeline:
             "sentiment_label": label,
             "earnings_within_5d": earnings_within_5d,
             "fomc_macro_risk": fomc_macro_risk,
+            "news_url": news_url,
+            "news_headline": news_headline,
             "notes": (
                 f"S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}). "
                 f"Tiada risiko earnings dalam 5 hari. {'Lulus' if passed else 'Ditolak'} tapisan sentimen."
@@ -268,7 +294,8 @@ class AgentPipeline:
             f"S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
             f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}), "
             f"TP1: ${tp1_price:.2f} (1:{rr_ratio}). Saiz: {allocated_shares} unit "
-            f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% ekuiti)."
+            f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% modal efektif). "
+            f"Asas Modal: ${account_equity:,.2f}."
         )
 
         return {
@@ -284,6 +311,7 @@ class AgentPipeline:
             "position_value": position_value,
             "risk_per_trade_usd": actual_risk_amount,
             "risk_per_trade_pct": round(actual_risk_amount / account_equity * 100, 2),
+            "account_equity_used": account_equity,
             "risk_reward_ratio": rr_ratio,
             "thesis": thesis
         }
@@ -506,7 +534,12 @@ class AgentPipeline:
         trade_date = now_ny.strftime("%Y-%m-%d")
         broker_equity = client.get_account_equity()
         baseline_equity = self.hard_rules_engine.get_verified_equity(trade_date, fallback=None)
-        account_equity = broker_equity or baseline_equity or 100000.0
+        raw_equity = broker_equity or baseline_equity or 100000.0
+
+        # Enforce dynamic max_buying_power ceiling (HOM-302)
+        max_buying_power = self.get_max_buying_power_limit()
+        effective_equity = min(raw_equity, max_buying_power) if max_buying_power and max_buying_power > 0 else raw_equity
+        account_equity = effective_equity
 
         total_candidates = len(candidates)
         passed_l1_count = 0

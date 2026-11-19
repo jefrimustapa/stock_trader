@@ -12,6 +12,8 @@ import {
   InputAdornment,
   Card,
   CardContent,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
@@ -27,7 +29,9 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SpeedIcon from '@mui/icons-material/Speed';
 import LayersIcon from '@mui/icons-material/Layers';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { sneatTokens } from '../theme';
+import { OpendControlPanel } from '../components/OpendControlPanel';
 
 const DEFAULT_CONFIG = {
   min_price: 10.0,
@@ -36,9 +40,45 @@ const DEFAULT_CONFIG = {
   min_rvol: 0.50,
   max_rvol: 20.00,
   max_candidates_per_lane: 5,
+  max_buying_power: 100000.0,
 };
 
-export function SettingsPage() {
+export function SettingsPage({ statusData, onRefresh, initialTab }) {
+  const getInitialTab = () => {
+    if (typeof initialTab === 'number') return initialTab;
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      if (hash.includes('tab=opend') || hash.includes('opend')) return 1;
+    }
+    return 0;
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab);
+
+  useEffect(() => {
+    const checkHashTab = () => {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash || '';
+        if (hash.includes('tab=opend') || hash.includes('opend')) {
+          setActiveTab(1);
+        } else if (hash.includes('settings') && !hash.includes('tab=opend')) {
+          setActiveTab(0);
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('hashchange', checkHashTab);
+      return () => window.removeEventListener('hashchange', checkHashTab);
+    }
+  }, []);
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    if (typeof window !== 'undefined') {
+      window.location.hash = newValue === 1 ? '#/settings?tab=opend' : '#/settings';
+    }
+  };
+
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [originalConfig, setOriginalConfig] = useState(DEFAULT_CONFIG);
   const [limits, setLimits] = useState(null);
@@ -149,6 +189,15 @@ export function SettingsPage() {
       }
     }
 
+    if (field === 'max_buying_power') {
+      if (num < 500.0) {
+        return 'Had buying power maksimum tidak boleh kurang daripada $500.00.';
+      }
+      if (num > 100000000.0) {
+        return 'Had buying power maksimum tidak boleh melebihi $100,000,000.00 ($100M).';
+      }
+    }
+
     return null;
   };
 
@@ -185,6 +234,10 @@ export function SettingsPage() {
     handleFieldChange('max_candidates_per_lane', val);
   };
 
+  const handlePresetBuyingPower = (val) => {
+    handleFieldChange('max_buying_power', val);
+  };
+
   const handleResetDefaults = () => {
     setConfig(DEFAULT_CONFIG);
     setErrors({});
@@ -210,7 +263,7 @@ export function SettingsPage() {
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      setErrorMsg(newErrors.min_price || newErrors.max_candidates_per_lane || newErrors.rvol_cross || 'Sila betulkan nilai yang tidak sah sebelum menyimpan.');
+      setErrorMsg(newErrors.min_price || newErrors.max_candidates_per_lane || newErrors.max_buying_power || newErrors.rvol_cross || 'Sila betulkan nilai yang tidak sah sebelum menyimpan.');
       return;
     }
 
@@ -228,6 +281,7 @@ export function SettingsPage() {
           min_rvol: Number(config.min_rvol),
           max_rvol: Number(config.max_rvol),
           max_candidates_per_lane: Number(config.max_candidates_per_lane),
+          max_buying_power: Number(config.max_buying_power),
         }),
       });
 
@@ -312,25 +366,14 @@ export function SettingsPage() {
             >
               <TuneIcon sx={{ fontSize: 22 }} />
             </Box>
-            Tetapan Parameter Screener L0
+            Tetapan Sistem &amp; Pengurusan Gerbang
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-            Pelarasan dinamik bagi penapis harga, market cap, volum ADV20, dan julat RVOL dengan had keselamatan mandatori ($1.00).
+            Konfigurasi parameter screener L0, had siling buying power, dan kawalan sesi gerbang OpenD Moomoo.
           </Typography>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Chip
-            size="small"
-            icon={<StorageIcon sx={{ fontSize: '14px !important' }} />}
-            label="SQLite WAL: Aktif"
-            sx={{
-              fontWeight: 700,
-              backgroundColor: sneatTokens.success.soft,
-              color: sneatTokens.success.main,
-              borderRadius: 1.5,
-            }}
-          />
           <Chip
             size="small"
             icon={<SecurityIcon sx={{ fontSize: '14px !important' }} />}
@@ -342,9 +385,58 @@ export function SettingsPage() {
               borderRadius: 1.5,
             }}
           />
+          <Chip
+            size="small"
+            icon={<AccountBalanceWalletIcon sx={{ fontSize: '14px !important' }} />}
+            label="Had Siling Modal: Aktif"
+            sx={{
+              fontWeight: 700,
+              backgroundColor: sneatTokens.success.soft,
+              color: sneatTokens.success.main,
+              borderRadius: 1.5,
+            }}
+          />
         </Box>
       </Box>
 
+      {/* Navigation Tabs between Screener Config and OpenD Gateway */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          aria-label="Settings and OpenD Gateway tabs"
+          textColor="primary"
+          indicatorColor="primary"
+          sx={{
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              minHeight: 48,
+            },
+          }}
+        >
+          <Tab
+            id="tab-screener-config"
+            icon={<TuneIcon sx={{ fontSize: 18 }} />}
+            iconPosition="start"
+            label="Parameter Screener & Modal (L0 / Risk)"
+          />
+          <Tab
+            id="tab-opend-gateway"
+            icon={<SettingsIcon sx={{ fontSize: 18 }} />}
+            iconPosition="start"
+            label="Pengurusan Gerbang OpenD"
+          />
+        </Tabs>
+      </Box>
+
+      {activeTab === 1 ? (
+        <Box id="tab-panel-opend" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
+          <OpendControlPanel statusData={statusData} onRefresh={onRefresh} />
+        </Box>
+      ) : (
+        <>
       {/* Alert Notifications */}
       {successMsg && (
         <Alert
@@ -785,6 +877,84 @@ export function SettingsPage() {
                 </CardContent>
               </Card>
 
+              {/* Field 6: Max Buying Power (Limit Buying Power) (HOM-302) */}
+              <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: '8px',
+                          backgroundColor: sneatTokens.success.soft,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: sneatTokens.success.main,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <AccountBalanceWalletIcon sx={{ fontSize: 24 }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
+                          6. Had Siling Modal Maksimum (Limit Buying Power)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                          Had siling modal efektif bagi pengiraan saiz posisi Haziq (L2) dan pengauditan had risiko Danial (L3)
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={`Semasa: ${formatCurrency(config.max_buying_power ?? 100000)}`}
+                      sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
+                    />
+                  </Box>
+
+                  <TextField
+                    id="inputMaxBuyingPower"
+                    name="max_buying_power"
+                    fullWidth
+                    size="small"
+                    type="number"
+                    value={config.max_buying_power ?? 100000}
+                    onChange={(e) => handleFieldChange('max_buying_power', e.target.value)}
+                    error={Boolean(errors.max_buying_power)}
+                    helperText={errors.max_buying_power || 'Had keselamatan minima $500.00. Walaupun baki akaun broker bernilai jutaan dolar, sistem ejen hanya akan menggunakan had siling ini sebagai asas modal efektif.'}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start" sx={{ color: 'text.secondary', fontWeight: 600 }}>$</InputAdornment>,
+                      endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>USD</InputAdornment>,
+                      inputProps: { min: 500.0, max: 100000000.0, step: 1000.0 },
+                    }}
+                  />
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
+                      Preset Siling Modal:
+                    </Typography>
+                    {[
+                      { label: '$10,000 (Ujian Kecil)', val: 10000 },
+                      { label: '$25,000 (PDT Minima)', val: 25000 },
+                      { label: '$50,000 (Konservatif)', val: 50000 },
+                      { label: '$100,000 (Lalai)', val: 100000 },
+                      { label: '$500,000 (Institusi)', val: 500000 },
+                    ].map((p) => (
+                      <Chip
+                        key={p.label}
+                        label={p.label}
+                        size="small"
+                        clickable
+                        variant="outlined"
+                        onClick={() => handlePresetBuyingPower(p.val)}
+                        sx={{ fontSize: '0.75rem', fontWeight: 600, borderRadius: 1.5 }}
+                      />
+                    ))}
+                  </Box>
+                </CardContent>
+              </Card>
+
               {/* Form Action Controls Card */}
               <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, backgroundColor: 'background.paper' }}>
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -956,6 +1126,24 @@ export function SettingsPage() {
                       </Typography>
                     </Box>
 
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        backgroundColor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                        Had Siling Modal:
+                      </Typography>
+                      <Typography id="displayMaxBuyingPower" variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
+                        {formatCurrency(originalConfig.max_buying_power ?? 100000)}
+                      </Typography>
+                    </Box>
+
                     <Divider sx={{ my: 0.5 }} />
 
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
@@ -1093,6 +1281,8 @@ export function SettingsPage() {
             </Box>
           </Grid>
         </Grid>
+      )}
+      </>
       )}
     </Box>
   );
