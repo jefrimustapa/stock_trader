@@ -1,3 +1,3 @@
-from . import health, trade, telnet, kline, agents
+from . import health, trade, telnet, kline, agents, market
 
-__all__ = ["health", "trade", "telnet", "kline", "agents"]
+__all__ = ["health", "trade", "telnet", "kline", "agents", "market"]
