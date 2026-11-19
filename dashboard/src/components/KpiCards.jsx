@@ -122,12 +122,12 @@ export function KpiCards({ statusData, dataPayload }) {
           </Card>
         </Grid>
 
-        {/* Card 2: Baki Akaun & Ekuiti -> navigates to #/settings */}
+        {/* Card 2: Baki Akaun & Ekuiti -> navigates to #/portfolio */}
         <Grid item xs={12} sm={6} md={4}>
           <Card
             sx={cardActionSx}
-            onClick={() => { window.location.hash = '#/settings'; }}
-            title="Klik untuk ke halaman Tetapan & Akaun"
+            onClick={() => { window.location.hash = '#/portfolio'; }}
+            title="Klik untuk ke halaman Portfolio Pegangan & Harga Semasa"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>

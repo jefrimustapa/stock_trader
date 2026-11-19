@@ -30,12 +30,14 @@ import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import PsychologyIcon from '@mui/icons-material/Psychology';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { sneatTokens } from '../theme';
 
 const SIDEBAR_WIDTH = 260;
 
 export const navItems = [
   { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
+  { id: 'portfolio', label: 'Portfolio Pegangan', shortLabel: 'Portfolio', subtitle: 'Harga Beli & Semasa', icon: <AccountBalanceWalletIcon sx={{ fontSize: 20 }} /> },
   { id: 'l0', label: 'L0: Saringan & Watchlist', shortLabel: 'L0 Saringan', subtitle: 'Corong & Watchlist', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
   { id: 'agents', label: 'L1 -> L4: Aktiviti Pasukan Ejen', shortLabel: 'L1-L4 Ejen', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
   { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Rekod 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },

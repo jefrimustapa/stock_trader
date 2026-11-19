@@ -11,8 +11,9 @@ import { L0Page } from './pages/L0Page';
 import { SettingsPage } from './pages/SettingsPage';
 import { QuotaPage } from './pages/QuotaPage';
 import { AgentsPage } from './pages/AgentsPage';
+import { PortfolioPage } from './pages/PortfolioPage';
 
-const VALID_PAGES = ['overview', 'l0', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
+const VALID_PAGES = ['overview', 'portfolio', 'l0', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
@@ -137,6 +138,8 @@ export function App() {
 
   const renderCurrentPage = () => {
     switch (currentPage) {
+      case 'portfolio':
+        return <PortfolioPage onNavigate={navigateTo} />;
       case 'agents':
         return <AgentsPage screenerConfig={screenerConfig} />;
       case 'opend':

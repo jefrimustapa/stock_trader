@@ -1310,6 +1310,84 @@ app.get('/api/trade/orders', authenticateDashboard, async (req, res) => {
     }
 });
 
+app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const [posRes, accRes] = await Promise.all([
+            axios.get(`${targetUrl}/api/v1/trade/positions`, {
+                headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+                timeout: 5000
+            }).catch(e => ({ data: { positions: [], opend_status: 'DISCONNECTED', error: e.message } })),
+            axios.get(`${targetUrl}/api/v1/trade/accounts`, {
+                headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+                timeout: 5000
+            }).catch(e => ({ data: { accounts: [], current_account_id: 'N/A' } }))
+        ]);
+
+        const rawPositions = posRes.data?.positions || [];
+        const opendStatus = posRes.data?.opend_status || 'UNKNOWN';
+
+        let totalCostBasis = 0;
+        let totalMarketValue = 0;
+        let totalPlVal = 0;
+
+        const positions = rawPositions.map(p => {
+            const qty = Number(p.qty) || 0;
+            const costPrice = Number(p.cost_price) || 0;
+            const currentPrice = Number(p.nominal_price) || 0;
+            const totalCost = Number((qty * costPrice).toFixed(2));
+            const marketValue = Number((qty * currentPrice).toFixed(2));
+            const plVal = Number((p.pl_val !== undefined ? p.pl_val : (marketValue - totalCost)).toFixed(2));
+            const plPct = totalCost > 0 ? Number(((plVal / totalCost) * 100).toFixed(2)) : 0;
+
+            totalCostBasis += totalCost;
+            totalMarketValue += marketValue;
+            totalPlVal += plVal;
+
+            return {
+                position_id: p.position_id,
+                symbol: p.code,
+                clean_symbol: p.code ? (p.code.includes('.') ? p.code.split('.')[1] : p.code) : '',
+                stock_name: p.stock_name || p.code,
+                qty,
+                can_sell_qty: p.can_sell_qty !== undefined ? p.can_sell_qty : qty,
+                bought_price: costPrice,
+                current_price: currentPrice,
+                total_cost: totalCost,
+                market_value: marketValue,
+                unrealized_pl: plVal,
+                unrealized_pl_pct: plPct,
+            };
+        });
+
+        totalCostBasis = Number(totalCostBasis.toFixed(2));
+        totalMarketValue = Number(totalMarketValue.toFixed(2));
+        totalPlVal = Number(totalPlVal.toFixed(2));
+        const totalPlPct = totalCostBasis > 0 ? Number(((totalPlVal / totalCostBasis) * 100).toFixed(2)) : 0;
+
+        return res.json({
+            opend_status: opendStatus,
+            account_id: accRes.data?.current_account_id || '3123530',
+            env: accRes.data?.env || 'SIMULATE',
+            summary: {
+                total_cost_basis: totalCostBasis,
+                total_market_value: totalMarketValue,
+                total_unrealized_pl: totalPlVal,
+                total_pl_pct: totalPlPct,
+                position_count: positions.length,
+            },
+            positions,
+            updated_at: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error fetching portfolio:', err.message);
+        return res.status(500).json({ error: 'Gagal mendapatkan data portfolio: ' + err.message });
+    }
+});
+
 const distDir = path.join(__dirname, "dist");
 app.use(express.static(distDir, { index: false }));
 app.use("/assets", express.static(path.join(distDir, "assets")));
