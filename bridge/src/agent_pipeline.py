@@ -193,24 +193,38 @@ class AgentPipeline:
         data_source = "HEURISTIC_MOCK"
         atr_14 = None
 
-        # Fetch real K-line candlestick bars if live OpenD is connected and candles not pre-populated
+        # Check pause buying status: when active, protect the 100-symbol/30-day OpenAPI K-line quota
+        is_paused = self.get_pause_buying_status()
+        is_held = bool(candidate.get("is_held", False) or candidate.get("held_position", False))
+
+        # Fetch real K-line candlestick bars if live OpenD is connected and candles not pre-populated.
+        # CRITICAL QUOTA SAFETY: Tariq MUST NOT request real historical K-lines from Moomoo OpenAPI
+        # for buy candidates when pause buying is active, because new purchases are paused and
+        # requesting K-lines would exhaust the 30-day quota unnecessarily!
         if not candles and self.moomoo_client is not None:
-            try:
-                if not self.moomoo_client.is_connected():
-                    self.moomoo_client.connect()
-                if self.moomoo_client.is_connected():
-                    # 1. Primary: request real historical K-lines from Moomoo OpenAPI (burns 30-day quota)
-                    if hasattr(self.moomoo_client, "get_history_kline"):
-                        kl_resp = self.moomoo_client.get_history_kline(symbol, interval="day", num=60)
-                        if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
-                            candles = kl_resp["candles"]
-                    if not candles and hasattr(self.moomoo_client, "get_cur_kline_with_sub"):
-                        kl_resp = self.moomoo_client.get_cur_kline_with_sub(symbol, interval="day", num=60)
-                        if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
-                            candles = kl_resp["candles"]
-                            self.moomoo_client.release_kline_subscription(symbol, interval="day")
-            except Exception as e:
-                logger.warning("Failed to fetch live K-line for %s: %s", symbol, e)
+            if is_paused and not is_held:
+                logger.info(
+                    "[Tariq] Pause buying is active; skipping Moomoo OpenAPI K-line request for %s to protect 30-day quota.",
+                    symbol
+                )
+                data_source = "PAUSE_BUYING_MOCK"
+            else:
+                try:
+                    if not self.moomoo_client.is_connected():
+                        self.moomoo_client.connect()
+                    if self.moomoo_client.is_connected():
+                        # 1. Primary: request real historical K-lines from Moomoo OpenAPI (burns 30-day quota)
+                        if hasattr(self.moomoo_client, "get_history_kline"):
+                            kl_resp = self.moomoo_client.get_history_kline(symbol, interval="day", num=60)
+                            if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
+                                candles = kl_resp["candles"]
+                        if not candles and hasattr(self.moomoo_client, "get_cur_kline_with_sub"):
+                            kl_resp = self.moomoo_client.get_cur_kline_with_sub(symbol, interval="day", num=60)
+                            if kl_resp.get("status") in ("OK", "HEALTHY") and kl_resp.get("candles"):
+                                candles = kl_resp["candles"]
+                                self.moomoo_client.release_kline_subscription(symbol, interval="day")
+                except Exception as e:
+                    logger.warning("Failed to fetch live K-line for %s: %s", symbol, e)
 
         if candles and len(candles) >= 5:
             data_source = "MOOMOO_KLINE_REAL"
@@ -301,6 +315,7 @@ class AgentPipeline:
             "notes": (
                 f"S_tech={s_tech}/100. Wyckoff {wyckoff_phase} with SMC {fvg_confluence} ({data_source}). "
                 f"Konfluens teknikal {'memenuhi' if passed else 'tidak memenuhi'} syarat ambang >= 60.0."
+                + (" [K-line API dilangkau: Mod Jeda Pembelian aktif memelihara kuota 30 hari]." if (is_paused and not is_held) else "")
             )
         }
 
