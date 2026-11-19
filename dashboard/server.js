@@ -1389,6 +1389,18 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
 });
 
 const distDir = path.join(__dirname, "dist");
+// Robust asset handler for both absolute /assets/ and relative sub-route /portfolio/assets/
+app.use((req, res, next) => {
+    const assetsIdx = req.path.indexOf("/assets/");
+    if (assetsIdx !== -1) {
+        const subPath = req.path.substring(assetsIdx + "/assets/".length);
+        const targetFile = path.join(distDir, "assets", subPath);
+        if (fs.existsSync(targetFile)) {
+            return res.sendFile(targetFile);
+        }
+    }
+    next();
+});
 app.use(express.static(distDir, { index: false }));
 app.use("/assets", express.static(path.join(distDir, "assets")));
 
