@@ -36,11 +36,10 @@ const SIDEBAR_WIDTH = 260;
 
 export const navItems = [
   { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
-  { id: 'agents', label: 'Aktiviti Ejen', shortLabel: 'Ejen', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
-  { id: 'funnel', label: 'Corong Saringan', shortLabel: 'Corong', subtitle: '5-Stage Screener', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
-  { id: 'watchlist', label: 'Watchlist Dwi-Lorong', shortLabel: 'Watchlist', subtitle: 'Momentum & Setup', icon: <ViewListIcon sx={{ fontSize: 20 }} /> },
+  { id: 'l0', label: 'L0: Saringan & Watchlist', shortLabel: 'L0 Saringan', subtitle: 'Corong & Watchlist', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
+  { id: 'agents', label: 'L1 -> L4: Aktiviti Pasukan Ejen', shortLabel: 'L1-L4 Ejen', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
   { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Rekod 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
-  { id: 'settings', label: 'Tetapan & Gerbang', shortLabel: 'Tetapan', subtitle: 'Parameter L0 & OpenD', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
+  { id: 'settings', label: 'Tetapan & Gerbang', shortLabel: 'Tetapan', subtitle: 'L0, Modal & OpenD', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export function Layout({
@@ -104,7 +103,12 @@ export function Layout({
 
   const statusChip = getStatusChip(opendStatus);
 
-  const activeItem = navItems.find((n) => n.id === currentPage) || navItems[0];
+  const activeItem =
+    navItems.find((n) => n.id === currentPage) ||
+    (currentPage === 'funnel' || currentPage === 'watchlist'
+      ? navItems.find((n) => n.id === 'l0')
+      : null) ||
+    navItems[0];
 
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -140,7 +144,9 @@ export function Layout({
       {/* Nav List */}
       <List sx={{ px: 1.5, py: 2, flex: 1 }}>
         {navItems.map((item) => {
-          const isActive = currentPage === item.id;
+          const isActive =
+            currentPage === item.id ||
+            (item.id === 'l0' && (currentPage === 'funnel' || currentPage === 'watchlist'));
           return (
             <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton

@@ -56,3 +56,5 @@ playwright_screenshots/
 .claude/
 .pytest_cache/
 qa-artifacts/
+qa_artifacts/
+scratch/

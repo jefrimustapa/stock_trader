@@ -7,11 +7,12 @@ import { OverviewPage } from './pages/OverviewPage';
 import { OpendPage } from './pages/OpendPage';
 import { FunnelPage } from './pages/FunnelPage';
 import { WatchlistPage } from './pages/WatchlistPage';
+import { L0Page } from './pages/L0Page';
 import { SettingsPage } from './pages/SettingsPage';
 import { QuotaPage } from './pages/QuotaPage';
 import { AgentsPage } from './pages/AgentsPage';
 
-const VALID_PAGES = ['overview', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
+const VALID_PAGES = ['overview', 'l0', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
@@ -28,6 +29,9 @@ export function App() {
       return 'settings';
     }
     const pageOnly = cleanHash.split('?')[0];
+    if (pageOnly === 'funnel' || pageOnly === 'watchlist') {
+      return 'l0';
+    }
     return VALID_PAGES.includes(pageOnly) ? pageOnly : 'overview';
   };
 
@@ -55,7 +59,10 @@ export function App() {
       }
       return;
     }
-    const pageOnly = pageId ? pageId.split('?')[0] : 'overview';
+    let pageOnly = pageId ? pageId.split('?')[0] : 'overview';
+    if (pageOnly === 'funnel' || pageOnly === 'watchlist') {
+      pageOnly = 'l0';
+    }
     if (VALID_PAGES.includes(pageOnly)) {
       setCurrentPage(pageOnly);
       if (typeof window !== 'undefined') {
@@ -131,20 +138,21 @@ export function App() {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'agents':
-        return <AgentsPage />;
+        return <AgentsPage screenerConfig={screenerConfig} />;
       case 'opend':
         return <OpendPage statusData={statusData} onRefresh={fetchDashboardData} />;
+      case 'l0':
       case 'funnel':
+      case 'watchlist':
         return (
-          <FunnelPage
+          <L0Page
             dataPayload={dataPayload}
             screenerConfig={screenerConfig}
             configLoading={configLoading}
             configError={configError}
+            onRefresh={fetchDashboardData}
           />
         );
-      case 'watchlist':
-        return <WatchlistPage dataPayload={dataPayload} />;
       case 'settings':
         return <SettingsPage statusData={statusData} onRefresh={fetchDashboardData} />;
       case 'quota':

@@ -198,29 +198,6 @@ export function FunnelStepper({ dataPayload, screenerConfig, configLoading, conf
               </Typography>
             </Box>
           </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Chip
-              size="small"
-              label="Aliran Progresif"
-              sx={{
-                fontWeight: 600,
-                backgroundColor: sneatTokens.info.soft,
-                color: sneatTokens.info.main,
-                borderRadius: 1.5,
-              }}
-            />
-            <Chip
-              size="small"
-              label={`${stage5Count} Calon Akhir`}
-              sx={{
-                fontWeight: 700,
-                backgroundColor: sneatTokens.success.soft,
-                color: sneatTokens.success.main,
-                borderRadius: 1.5,
-              }}
-            />
-          </Box>
         </Box>
 
         {/* 5-Stage Step Grid */}
