@@ -124,3 +124,69 @@ def cancel_agent_paper_order(
             detail=f"Ralat membatalkan pesanan: {str(e)}"
         )
 
+
+class PauseBuyingRequest(BaseModel):
+    paused: bool = Field(..., description="Whether new stock purchases are paused (monitor & maintain existing only)")
+
+
+@router.get("/pause-buying")
+def get_pause_buying(caller: str = Depends(authenticate_request)):
+    """Returns current state of pause_buying."""
+    try:
+        pipeline = get_agent_pipeline()
+        is_paused = pipeline.get_pause_buying_status()
+        return {
+            "status": "OK",
+            "pause_buying": is_paused,
+            "caller": caller
+        }
+    except Exception as e:
+        logger.error("Error reading pause_buying: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal membaca status jeda pembelian: {str(e)}"
+        )
+
+
+@router.post("/pause-buying")
+def set_pause_buying(
+    payload: PauseBuyingRequest,
+    caller: str = Depends(authenticate_request)
+):
+    """
+    Updates pause_buying flag in screener_config.sqlite.
+    When paused, L1-L4 agents perform market analysis and portfolio monitoring,
+    but Danial rejects all new BUY orders.
+    """
+    import sqlite3
+    from datetime import datetime, timezone
+    from ..config import BridgeConfig
+    config_db = BridgeConfig.SHARED_DATA_DIR / "screener_config.sqlite"
+    if not config_db.exists():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Pangkalan data screener_config.sqlite tidak dijumpai."
+        )
+
+    val = 1 if payload.paused else 0
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn = sqlite3.connect(str(config_db), timeout=5.0)
+        cur = conn.cursor()
+        cur.execute("UPDATE screener_config SET pause_buying = ?, updated_at = ?, updated_by = ? WHERE id = 1", (val, now, caller))
+        conn.commit()
+        conn.close()
+        logger.info("pause_buying updated to %s by %s", payload.paused, caller)
+        return {
+            "status": "OK",
+            "pause_buying": payload.paused,
+            "message": "Pembelian baharu dijeda. Ejen L1-L4 hanya akan menganalisis pasaran dan menjaga kaunter sedia ada." if payload.paused else "Pembelian baharu disambung semula secara normal."
+        }
+    except Exception as e:
+        logger.error("Failed to update pause_buying: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengemas kini status jeda pembelian: {str(e)}"
+        )
+
+

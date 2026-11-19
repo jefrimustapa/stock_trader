@@ -35,8 +35,11 @@ class TestAgentPipelineBVA(unittest.TestCase):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmp_dir.name) / "test_agent_activity.sqlite"
         self.pipeline = AgentPipeline(db_path=self.db_path)
+        self.pipeline.moomoo_client = None
 
     def tearDown(self):
+        if hasattr(self, "pipeline") and self.pipeline is not None:
+            self.pipeline.close()
         self.tmp_dir.cleanup()
 
     # =========================================================================
@@ -351,6 +354,73 @@ class TestAgentPipelineBVA(unittest.TestCase):
         # Risk: 1.5% of 50k = $750 risk capital
         self.assertLessEqual(res["position_value"], 10000.0 + 1.0)
         self.assertEqual(res["account_equity_used"], 50000.0)
+
+    def test_danial_rejects_buy_when_pause_buying_is_active(self):
+        """User Acceptance: When pause_buying is active, Danial rejects new buy orders while allowing monitoring."""
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        ny_tz = ZoneInfo("America/New_York")
+        now_ny = datetime(2026, 11, 19, 10, 30, 0, tzinfo=ny_tz)
+
+        cand = {"symbol": "US.GOOG", "price": 175.0, "adv_20": 10000000.0}
+        haziq = {"entry_price": 175.0, "stop_loss_price": 170.0, "allocated_shares": 10}
+
+        # 1. When pause_buying is False: Danial passes
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=False):
+            res_active = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True, force_simulation=True)
+            self.assertTrue(res_active["passed"])
+
+        # 2. When pause_buying is True: Danial rejects new buy order
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=True):
+            res_paused = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True, force_simulation=True)
+            self.assertFalse(res_paused["passed"])
+            self.assertIn("Pembelian baharu dijeda", res_paused["rejection_reason"])
+            # Verify rule check is recorded
+            pause_checks = [rc for rc in res_paused["rule_checks"] if "Kawalan Mod Jeda" in rc["rule"]]
+            self.assertEqual(len(pause_checks), 1)
+            self.assertFalse(pause_checks[0]["passed"])
+
+    def test_tariq_skips_kline_fetch_when_pause_buying_is_active(self):
+        """User Acceptance (HOM-317 Defect): Tariq skips Moomoo OpenAPI K-line request when pause_buying is active to preserve 30-day quota."""
+        from unittest.mock import MagicMock, patch
+
+        mock_moomoo = MagicMock()
+        mock_moomoo.is_connected.return_value = True
+        mock_moomoo.get_history_kline.return_value = {
+            "status": "OK",
+            "candles": [{"close": 150.0, "high": 155.0, "low": 145.0, "volume": 1000} for _ in range(10)]
+        }
+        mock_moomoo.get_cur_kline_with_sub.return_value = {
+            "status": "OK",
+            "candles": [{"close": 150.0, "high": 155.0, "low": 145.0, "volume": 1000} for _ in range(10)]
+        }
+
+        cand = {"symbol": "US.MSFT", "price": 400.0, "lane": "SETUP"}
+
+        # 1. When pause_buying is True: K-line requests MUST NOT be made
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=True):
+            self.pipeline.moomoo_client = mock_moomoo
+            res_paused = self.pipeline.evaluate_tariq_technical(cand)
+            mock_moomoo.get_history_kline.assert_not_called()
+            mock_moomoo.get_cur_kline_with_sub.assert_not_called()
+            self.assertEqual(res_paused["data_source"], "PAUSE_BUYING_MOCK")
+            self.assertIn("Mod Jeda Pembelian aktif memelihara kuota 30 hari", res_paused["notes"])
+
+        # 2. When pause_buying is False: K-line requests are made normally
+        mock_moomoo.reset_mock()
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=False):
+            self.pipeline.moomoo_client = mock_moomoo
+            res_active = self.pipeline.evaluate_tariq_technical(cand)
+            mock_moomoo.get_history_kline.assert_called_once_with("US.MSFT", interval="day", num=60)
+
+        # 3. When pause_buying is True BUT candidate is a held position: K-line is fetched for portfolio monitoring
+        mock_moomoo.reset_mock()
+        cand_held = {"symbol": "US.MSFT", "price": 400.0, "lane": "SETUP", "is_held": True}
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=True):
+            self.pipeline.moomoo_client = mock_moomoo
+            res_held = self.pipeline.evaluate_tariq_technical(cand_held)
+            mock_moomoo.get_history_kline.assert_called_once_with("US.MSFT", interval="day", num=60)
 
 
 if __name__ == "__main__":

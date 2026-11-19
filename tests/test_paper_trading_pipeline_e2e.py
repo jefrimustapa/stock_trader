@@ -25,6 +25,16 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
         self.pipeline = AgentPipeline(db_path=self.db_path)
 
     def tearDown(self):
+        if hasattr(self, "pipeline") and self.pipeline is not None:
+            self.pipeline.close()
+        try:
+            from bridge.src.moomoo_client import get_moomoo_client
+            client = get_moomoo_client()
+            client._connected = False
+            client._trade_ctx = None
+            client._quote_ctx = None
+        except Exception:
+            pass
         self.tmp_dir.cleanup()
 
     def test_e2e_successful_simulation_cycle_and_paper_order(self):
@@ -79,9 +89,9 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
         self.assertEqual(delib["haziq"]["risk_reward_ratio"], 1.5)
         self.assertGreater(delib["haziq"]["allocated_shares"], 0)
 
-        # Danial details (8 Hard Rules + 1 Active Order/Position Check = 9 checks)
+        # Danial details (8 Hard Rules + 1 Active Order/Position Check + 1 Pause Buying Check = 10 checks)
         self.assertTrue(delib["danial"]["passed"])
-        self.assertEqual(len(delib["danial"]["rule_checks"]), 9)
+        self.assertEqual(len(delib["danial"]["rule_checks"]), 10)
         for check in delib["danial"]["rule_checks"]:
             self.assertTrue(check["passed"], f"Rule check failed: {check['rule']}")
 
@@ -159,6 +169,7 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
         client._total_equity = 100000.0
 
         mock_trade_ctx = MagicMock()
+        mock_quote_ctx = MagicMock()
         # Mock place_order returning RET_OK
         mock_trade_ctx.place_order.return_value = (0, pd.DataFrame([{"order_id": "OPEND-ORD-9999"}]))
         # Mock modify_order (cancel) returning RET_OK
@@ -172,6 +183,26 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
             "price": 150.0
         }]))
         client._trade_ctx = mock_trade_ctx
+
+        # Mock quote ctx to prevent blocking network calls in mock tests
+        mock_quote_ctx.get_cur_kline.return_value = (0, pd.DataFrame([{
+            "code": "US.MSFT",
+            "time_key": "2026-11-19 09:30:00",
+            "open": 148.0,
+            "close": 150.0,
+            "high": 151.0,
+            "low": 147.0,
+            "volume": 1000000
+        }]))
+        mock_quote_ctx.subscribe.return_value = (0, None)
+        mock_quote_ctx.query_subscription.return_value = (0, {})
+        mock_quote_ctx.get_earnings_calendar.return_value = (0, pd.DataFrame([]))
+        mock_quote_ctx.get_search_news.return_value = (0, pd.DataFrame([{
+            "title": "Microsoft announces strong earnings and AI growth",
+            "news_id": "1",
+            "time": "2026-11-19 08:00:00"
+        }]))
+        client._quote_ctx = mock_quote_ctx
 
         candidates = [{
             "symbol": "US.MSFT",
