@@ -38,6 +38,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
 import { sneatTokens } from '../theme';
 
 export function AgentsPage({ screenerConfig }) {
@@ -57,12 +58,57 @@ export function AgentsPage({ screenerConfig }) {
   const [cancellingOrder, setCancellingOrder] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(() => Number(screenerConfig?.agent_orders_per_page || 10));
+  const [pauseBuying, setPauseBuying] = useState(() => Boolean(screenerConfig?.pause_buying));
+  const [togglingPause, setTogglingPause] = useState(false);
 
   useEffect(() => {
     if (screenerConfig?.agent_orders_per_page) {
       setRowsPerPage(Number(screenerConfig.agent_orders_per_page));
     }
-  }, [screenerConfig?.agent_orders_per_page]);
+    if (screenerConfig?.pause_buying !== undefined) {
+      setPauseBuying(Boolean(screenerConfig.pause_buying));
+    }
+  }, [screenerConfig?.agent_orders_per_page, screenerConfig?.pause_buying]);
+
+  const fetchPauseBuying = useCallback(async () => {
+    try {
+      const res = await fetch('/api/agents/pause-buying');
+      if (res.ok) {
+        const data = await res.json();
+        setPauseBuying(Boolean(data.pause_buying));
+      }
+    } catch (err) {
+      console.warn('[AgentsPage] Fetch pause-buying error:', err);
+    }
+  }, []);
+
+  const handleTogglePauseBuying = async () => {
+    try {
+      setTogglingPause(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+      const targetState = !pauseBuying;
+      const res = await fetch('/api/agents/pause-buying', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: targetState }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setPauseBuying(targetState);
+      setSuccessMsg(data.message || (targetState ? 'Pembelian baharu dijeda.' : 'Pembelian disambung semula.'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('screener-config-updated'));
+      }
+      await fetchActivity();
+    } catch (err) {
+      setErrorMsg('Ralat mengemas kini status jeda pembelian: ' + err.message);
+    } finally {
+      setTogglingPause(false);
+    }
+  };
 
   const fetchActivity = useCallback(async () => {
     try {
@@ -84,9 +130,13 @@ export function AgentsPage({ screenerConfig }) {
 
   useEffect(() => {
     fetchActivity();
-    const interval = setInterval(fetchActivity, 10000);
+    fetchPauseBuying();
+    const interval = setInterval(() => {
+      fetchActivity();
+      fetchPauseBuying();
+    }, 10000);
     return () => clearInterval(interval);
-  }, [fetchActivity]);
+  }, [fetchActivity, fetchPauseBuying]);
 
   const handleCancelOrder = async (orderId) => {
     if (!orderId) return;
@@ -155,14 +205,39 @@ export function AgentsPage({ screenerConfig }) {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button
+            id="btn-toggle-pause-buying"
+            variant="contained"
+            color={pauseBuying ? 'success' : 'warning'}
+            size="medium"
+            startIcon={pauseBuying ? <PlayArrowIcon /> : <PauseCircleOutlineIcon />}
+            onClick={handleTogglePauseBuying}
+            disabled={togglingPause || loading}
+            sx={{
+              borderRadius: 2,
+              fontWeight: 700,
+              textTransform: 'none',
+              boxShadow: pauseBuying ? '0 2px 8px rgba(46, 204, 113, 0.3)' : '0 2px 8px rgba(255, 171, 0, 0.3)',
+            }}
+          >
+            {togglingPause ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : pauseBuying ? (
+              'Sambung Pembelian'
+            ) : (
+              'Pause Pembelian'
+            )}
+          </Button>
+
+          <Button
+            id="btn-refresh-agents"
             variant="outlined"
             size="medium"
             startIcon={<RefreshIcon />}
             onClick={fetchActivity}
             disabled={loading}
-            sx={{ borderRadius: 2 }}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
           >
             Segarkan
           </Button>
@@ -178,6 +253,31 @@ export function AgentsPage({ screenerConfig }) {
       {successMsg && (
         <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setSuccessMsg(null)}>
           {successMsg}
+        </Alert>
+      )}
+
+      {/* Alert Mod Pantau Sahaja (Pembelian Dijeda) */}
+      {pauseBuying && (
+        <Alert
+          severity="warning"
+          id="alert-pause-buying-active"
+          sx={{
+            mb: 3,
+            borderRadius: 2.5,
+            border: '1px solid',
+            borderColor: 'warning.main',
+            alignItems: 'center',
+          }}
+          icon={<PauseCircleOutlineIcon sx={{ fontSize: 28 }} />}
+        >
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+              MOD PANTAU SAHAJA AKTIF (PEMBELIAN DIJEDA)
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.25 }}>
+              Pembelian kaunter saham baharu sedang dijeda oleh pengguna. Ejen L1-L4 hanya menjalankan analisis teknikal &amp; sentimen serta memantau dan menjaga kaunter sedia ada yang telah dibeli.
+            </Typography>
+          </Box>
         </Alert>
       )}
 
@@ -435,9 +535,15 @@ export function AgentsPage({ screenerConfig }) {
                 Moomoo OpenD Paper
               </Typography>
               <Chip
-                label={`${latestCycle?.orders_placed ?? orders.length} Pesanan`}
+                id="chip-pipeline-l4-status"
+                label={pauseBuying ? 'Pembelian Dijeda (Mod Pantau)' : `${latestCycle?.orders_placed ?? orders.length} Pesanan`}
                 size="small"
-                sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.success.main, color: '#fff' }}
+                sx={{
+                  mt: 1,
+                  fontWeight: 700,
+                  bgcolor: pauseBuying ? sneatTokens.warning.main : sneatTokens.success.main,
+                  color: '#fff',
+                }}
               />
             </Paper>
           </Box>

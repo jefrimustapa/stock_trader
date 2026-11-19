@@ -464,6 +464,12 @@ function getScreenerDb() {
             screenerDbInstance.exec('ALTER TABLE screener_config ADD COLUMN agent_orders_per_page INTEGER NOT NULL DEFAULT 10 CHECK (agent_orders_per_page IN (5, 10, 25, 50));');
         }
 
+        // Migration check: ensure pause_buying exists in screener_config
+        const hasPauseBuying = tableCols.some(col => col.name === 'pause_buying');
+        if (!hasPauseBuying) {
+            screenerDbInstance.exec('ALTER TABLE screener_config ADD COLUMN pause_buying INTEGER NOT NULL DEFAULT 0 CHECK (pause_buying IN (0, 1));');
+        }
+
         const row = screenerDbInstance.prepare('SELECT * FROM screener_config WHERE id = 1').get();
         if (!row) {
             const initStmt = screenerDbInstance.prepare(`
@@ -479,7 +485,7 @@ function getScreenerDb() {
 app.get('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
         const db = getScreenerDb();
-        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, updated_at, updated_by FROM screener_config WHERE id = 1').get();
+        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, updated_at, updated_by FROM screener_config WHERE id = 1').get();
         if (!row) {
             return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
         }
@@ -492,7 +498,8 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
                 max_rvol: Number(row.max_rvol),
                 max_candidates_per_lane: Number(row.max_candidates_per_lane ?? 5),
                 max_buying_power: Number(row.max_buying_power ?? 100000.0),
-                agent_orders_per_page: Number(row.agent_orders_per_page ?? 10)
+                agent_orders_per_page: Number(row.agent_orders_per_page ?? 10),
+                pause_buying: Boolean(row.pause_buying === 1)
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: row.updated_at,
@@ -539,7 +546,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
         const body = req.body;
         const db = getScreenerDb();
-        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page FROM screener_config WHERE id = 1').get();
+        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying FROM screener_config WHERE id = 1').get();
         if (!current) {
             return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
         }
@@ -552,6 +559,11 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         let newMaxCandidatesPerLane = current.max_candidates_per_lane ?? 5;
         let newMaxBuyingPower = current.max_buying_power ?? 100000.0;
         let newAgentOrdersPerPage = current.agent_orders_per_page ?? 10;
+        let newPauseBuying = current.pause_buying ?? 0;
+
+        if (body.pause_buying !== undefined) {
+            newPauseBuying = body.pause_buying ? 1 : 0;
+        }
 
         if (body.min_price !== undefined) {
             const parsed = parseStrictNumericField(body.min_price, 'Harga minimum');
@@ -660,7 +672,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             newMaxRvol !== current.max_rvol ||
             newMaxCandidatesPerLane !== (current.max_candidates_per_lane ?? 5) ||
             newMaxBuyingPower !== (current.max_buying_power ?? 100000.0) ||
-            newAgentOrdersPerPage !== (current.agent_orders_per_page ?? 10)
+            newAgentOrdersPerPage !== (current.agent_orders_per_page ?? 10) ||
+            newPauseBuying !== (current.pause_buying ?? 0)
         );
 
         if (!hasChanges) {
@@ -674,7 +687,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                     max_rvol: current.max_rvol,
                     max_candidates_per_lane: current.max_candidates_per_lane ?? 5,
                     max_buying_power: current.max_buying_power ?? 100000.0,
-                    agent_orders_per_page: current.agent_orders_per_page ?? 10
+                    agent_orders_per_page: current.agent_orders_per_page ?? 10,
+                    pause_buying: Boolean((current.pause_buying ?? 0) === 1)
                 },
                 limits: SCREENER_CONFIG_LIMITS,
                 updated_at: current.updated_at,
@@ -693,7 +707,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             max_rvol: current.max_rvol,
             max_candidates_per_lane: current.max_candidates_per_lane ?? 5,
             max_buying_power: current.max_buying_power ?? 100000.0,
-            agent_orders_per_page: current.agent_orders_per_page ?? 10
+            agent_orders_per_page: current.agent_orders_per_page ?? 10,
+            pause_buying: current.pause_buying ?? 0
         });
 
         const newValues = JSON.stringify({
@@ -704,15 +719,16 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             max_rvol: newMaxRvol,
             max_candidates_per_lane: newMaxCandidatesPerLane,
             max_buying_power: newMaxBuyingPower,
-            agent_orders_per_page: newAgentOrdersPerPage
+            agent_orders_per_page: newAgentOrdersPerPage,
+            pause_buying: newPauseBuying
         });
 
         const updateStmt = db.prepare(`
             UPDATE screener_config
-            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, max_buying_power = ?, agent_orders_per_page = ?, updated_at = ?, updated_by = ?
+            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, max_buying_power = ?, agent_orders_per_page = ?, pause_buying = ?, updated_at = ?, updated_by = ?
             WHERE id = 1
         `);
-        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, newMaxBuyingPower, newAgentOrdersPerPage, now, user);
+        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, newMaxBuyingPower, newAgentOrdersPerPage, newPauseBuying, now, user);
 
         const auditStmt = db.prepare(`
             INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
@@ -730,7 +746,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                 max_rvol: newMaxRvol,
                 max_candidates_per_lane: newMaxCandidatesPerLane,
                 max_buying_power: newMaxBuyingPower,
-                agent_orders_per_page: newAgentOrdersPerPage
+                agent_orders_per_page: newAgentOrdersPerPage,
+                pause_buying: Boolean(newPauseBuying === 1)
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: now,
@@ -1215,6 +1232,62 @@ app.post('/api/agents/orders/:order_id/cancel', authenticateDashboard, async (re
         return res.status(err.response?.status || 502).json({
             error: 'Gagal membatalkan pesanan ejen: ' + (err.response?.data?.detail || err.message)
         });
+    }
+});
+
+app.get('/api/agents/pause-buying', authenticateDashboard, (req, res) => {
+    try {
+        const db = getScreenerDb();
+        const row = db.prepare('SELECT pause_buying FROM screener_config WHERE id = 1').get();
+        return res.json({
+            status: 'OK',
+            pause_buying: Boolean(row && row.pause_buying === 1)
+        });
+    } catch (err) {
+        return res.status(500).json({ error: 'Gagal membaca status jeda pembelian: ' + err.message });
+    }
+});
+
+app.post('/api/agents/pause-buying', authenticateDashboard, async (req, res) => {
+    try {
+        const { paused } = req.body || {};
+        if (typeof paused !== 'boolean') {
+            return res.status(400).json({ error: 'Parameter "paused" (boolean) diperlukan.' });
+        }
+        const db = getScreenerDb();
+        const current = db.prepare('SELECT pause_buying FROM screener_config WHERE id = 1').get();
+        const prevVal = current ? current.pause_buying : 0;
+        const newVal = paused ? 1 : 0;
+        const now = new Date().toISOString();
+        const user = String(req.authUser || 'anonymous').replace(/[\r\n]/g, '').slice(0, 100);
+
+        db.prepare('UPDATE screener_config SET pause_buying = ?, updated_at = ?, updated_by = ? WHERE id = 1').run(newVal, now, user);
+        db.prepare(`
+            INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(now, user, paused ? 'PAUSE_BUYING' : 'RESUME_BUYING', JSON.stringify({ pause_buying: prevVal }), JSON.stringify({ pause_buying: newVal }));
+
+        // Also notify bridge daemon if configured
+        if (BRIDGE_SERVICE_TOKEN) {
+            try {
+                const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+                await axios.post(`${targetUrl}/api/v1/agents/pause-buying`, { paused }, {
+                    headers: { 'Content-Type': 'application/json', 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+                    timeout: 3000
+                }).catch(() => {});
+            } catch (_) {}
+        }
+
+        return res.json({
+            status: 'OK',
+            pause_buying: paused,
+            message: paused 
+                ? 'Pembelian baharu dijeda. Ejen L1-L4 hanya akan menganalisis pasaran dan menjaga kaunter sedia ada.' 
+                : 'Pembelian baharu disambung semula secara normal.'
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error toggling pause_buying:', err);
+        return res.status(500).json({ error: 'Gagal mengemas kini status jeda pembelian: ' + err.message });
     }
 });
 

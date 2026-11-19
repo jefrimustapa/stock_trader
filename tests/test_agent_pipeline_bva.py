@@ -354,6 +354,32 @@ class TestAgentPipelineBVA(unittest.TestCase):
         self.assertLessEqual(res["position_value"], 10000.0 + 1.0)
         self.assertEqual(res["account_equity_used"], 50000.0)
 
+    def test_danial_rejects_buy_when_pause_buying_is_active(self):
+        """User Acceptance: When pause_buying is active, Danial rejects new buy orders while allowing monitoring."""
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        ny_tz = ZoneInfo("America/New_York")
+        now_ny = datetime(2026, 11, 19, 10, 30, 0, tzinfo=ny_tz)
+
+        cand = {"symbol": "US.GOOG", "price": 175.0, "adv_20": 10000000.0}
+        haziq = {"entry_price": 175.0, "stop_loss_price": 170.0, "allocated_shares": 10}
+
+        # 1. When pause_buying is False: Danial passes
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=False):
+            res_active = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True, force_simulation=True)
+            self.assertTrue(res_active["passed"])
+
+        # 2. When pause_buying is True: Danial rejects new buy order
+        with patch.object(self.pipeline, "get_pause_buying_status", return_value=True):
+            res_paused = self.pipeline.evaluate_danial_compliance(cand, haziq, 100000.0, now_ny, mock_market_window=True, force_simulation=True)
+            self.assertFalse(res_paused["passed"])
+            self.assertIn("Pembelian baharu dijeda", res_paused["rejection_reason"])
+            # Verify rule check is recorded
+            pause_checks = [rc for rc in res_paused["rule_checks"] if "Kawalan Mod Jeda" in rc["rule"]]
+            self.assertEqual(len(pause_checks), 1)
+            self.assertFalse(pause_checks[0]["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()

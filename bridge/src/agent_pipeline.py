@@ -148,6 +148,28 @@ class AgentPipeline:
                 logger.warning("Could not read max_buying_power from %s: %s", config_db, e)
         return 100000.0
 
+    def get_pause_buying_status(self) -> bool:
+        """
+        Reads pause_buying boolean from screener_config.sqlite.
+        When True, new stock purchases are paused (agents only analyze and maintain existing positions).
+        """
+        config_db = BridgeConfig.SHARED_DATA_DIR / "screener_config.sqlite"
+        if config_db.exists():
+            try:
+                conn = sqlite3.connect(str(config_db), timeout=3.0)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT pause_buying FROM screener_config WHERE id = 1")
+                row = cursor.fetchone()
+                if row and "pause_buying" in row.keys() and row["pause_buying"] is not None:
+                    val = int(row["pause_buying"])
+                    conn.close()
+                    return val == 1
+                conn.close()
+            except Exception as e:
+                logger.warning("Could not read pause_buying from %s: %s", config_db, e)
+        return False
+
     # =========================================================================
     # L1: Tariq (Technical Analyst)
     # =========================================================================
@@ -681,6 +703,17 @@ class AgentPipeline:
         if not r_dedup_pass and all_passed:
             all_passed = False
             rejection_reason = f"Simbol {symbol} telah mempunyai pesanan aktif/posisi terbuka ({active_order_status}). Pembelian berulang disekat."
+
+        # Kawalan Mod Jeda (Pause Pembelian Baharu): Pengguna menjeda belian (hanya analisis & pantau)
+        is_buying_paused = self.get_pause_buying_status()
+        rule_checks.append({
+            "rule": "Kawalan Mod Jeda (Pause Pembelian Baharu)",
+            "passed": not is_buying_paused,
+            "detail": "Pembelian aktif dibenarkan" if not is_buying_paused else "Pembelian baharu DIJEDA (Mod Pantau: Analisis & Jaga Kaunter Sahaja)"
+        })
+        if is_buying_paused and all_passed:
+            all_passed = False
+            rejection_reason = "Pembelian baharu dijeda oleh pengguna (Mod Pantau Sahaja: Analisis & Jaga Kaunter Sedia Ada)"
 
         return {
             "agent": "Danial",
