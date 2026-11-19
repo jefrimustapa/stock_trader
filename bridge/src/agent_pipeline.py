@@ -741,10 +741,61 @@ class AgentPipeline:
         }
 
     # =========================================================================
-    # Query API Helpers
+    # Query & Broker Synchronization Helpers
     # =========================================================================
+    def sync_broker_orders(self) -> Dict[str, Any]:
+        """
+        Two-way reconciliation between OpenD broker paper trading orders and local SQLite DB.
+        Queries active orders from OpenD (TrdEnv.SIMULATE) and updates paper_orders records.
+        """
+        client = get_moomoo_client()
+        if not client.is_connected():
+            return {"synced": False, "reason": "OpenD is not connected", "updated_count": 0}
+
+        try:
+            broker_orders = client.query_orders()
+            if not broker_orders:
+                return {"synced": True, "updated_count": 0}
+
+            updated_count = 0
+            with self._get_connection() as conn:
+                for b_ord in broker_orders:
+                    b_id = str(b_ord.get("order_id", "")).strip()
+                    b_status_raw = str(b_ord.get("order_status", "")).strip().upper()
+                    if not b_id:
+                        continue
+
+                    # Map broker status to local status
+                    mapped_status = "PENDING"
+                    if "FILLED" in b_status_raw:
+                        mapped_status = "FILLED"
+                    elif "CANCEL" in b_status_raw:
+                        mapped_status = "CANCELLED"
+                    elif "FAIL" in b_status_raw or "REJECT" in b_status_raw or "DISABLE" in b_status_raw:
+                        mapped_status = "REJECTED"
+                    elif "SUBMIT" in b_status_raw:
+                        mapped_status = "SUBMITTED"
+
+                    cur = conn.execute(
+                        "UPDATE paper_orders SET status = ?, opend_status = 'CONNECTED' WHERE order_id = ? AND status != ?",
+                        (mapped_status, b_id, mapped_status)
+                    )
+                    if cur.rowcount > 0:
+                        updated_count += cur.rowcount
+                conn.commit()
+
+            return {"synced": True, "updated_count": updated_count}
+        except Exception as e:
+            logger.error("Error during sync_broker_orders: %s", e)
+            return {"synced": False, "error": str(e), "updated_count": 0}
+
     def get_recent_activity(self, limit: int = 10) -> Dict[str, Any]:
-        """Returns recent cycles, latest deliberation cards, and order records."""
+        """Returns recent cycles, latest deliberation cards, and order records with broker sync."""
+        try:
+            self.sync_broker_orders()
+        except Exception as sync_err:
+            logger.warning("Broker order sync error in get_recent_activity: %s", sync_err)
+
         with self._get_connection() as conn:
             cycles_cursor = conn.execute("""
                 SELECT cycle_id, created_at, status, total_candidates,
@@ -804,6 +855,11 @@ class AgentPipeline:
             }
 
     def get_paper_orders(self, limit: int = 50) -> List[Dict[str, Any]]:
+        try:
+            self.sync_broker_orders()
+        except Exception as sync_err:
+            logger.warning("Broker order sync error in get_paper_orders: %s", sync_err)
+
         with self._get_connection() as conn:
             cursor = conn.execute("""
                 SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
@@ -839,15 +895,19 @@ class AgentPipeline:
 
             order_id = row["order_id"]
             client = get_moomoo_client()
+            broker_msg = ""
             if client and hasattr(client, "cancel_order") and client.is_connected():
                 try:
-                    client.cancel_order(order_id)
+                    broker_res = client.cancel_order(order_id)
+                    broker_msg = broker_res.get("message") or broker_res.get("error") or ""
                 except Exception as e:
                     logger.warning("Broker cancel error for %s: %s", order_id, e)
+                    broker_msg = str(e)
 
+            cancel_msg = f"Dibatalkan oleh pengguna melalui dashboard ({broker_msg})" if broker_msg else "Dibatalkan oleh pengguna melalui dashboard"
             conn.execute(
-                "UPDATE paper_orders SET status = 'CANCELLED', message = 'Dibatalkan oleh pengguna melalui dashboard' WHERE id = ?",
-                (row["id"],)
+                "UPDATE paper_orders SET status = 'CANCELLED', message = ? WHERE id = ?",
+                (cancel_msg, row["id"])
             )
             conn.commit()
 
