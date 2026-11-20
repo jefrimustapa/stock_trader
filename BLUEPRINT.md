@@ -391,7 +391,9 @@ Urutan pelaksanaan diatur dari yang paling murah/pantas kepada analisis kognitif
 ```
 
 #### D. Pemantauan Dwi-Fokus (Active Portfolio Watch)
-Tariq dan Nawwar mengulang semakan bagi setiap kaunter yang sedang dibuka posisinya dalam portfolio (setiap 15 minit untuk Day Trading, atau 4 jam untuk Swing Trading) bagi mengesan keletihan trend atau ancaman luar jangka.
+Tariq dan Nawwar mengulang semakan bagi setiap kaunter yang sedang dibuka posisinya dalam portfolio:
+- **Mod Day Trading:** Semakan berkala setiap 15 minit untuk mengesan anjakan momentum intraday atau keletihan trend mikro.
+- **Mod Swing Trading (Pemantauan Adaptif Top-Down):** Semakan berkala berstruktur pada timeframe 4H / Daily (3 kali sehari atau semasa bar-close), yang bertukar secara dinamik dan adaptif kepada pemantauan selang 1-jam (1H) apabila harga menghampiri paras minat institusi, aras Take Profit, atau zon Stop Loss bagi mengesan pengesahan pembalikan atau ancaman luar jangka dengan lebih persis tanpa membazirkan kuota API.
 
 ---
 
@@ -707,39 +709,40 @@ Bagi menentukan keserasian operasi pasaran dengan ekosistem ejen Paperclip dan M
 | Dimensi Penilaian | 1. Scalping | 2. Day Trading (Intraday) | 3. Swing Trading (Multi-Day) | 4. Position Trading (Investing) |
 | :--- | :--- | :--- | :--- | :--- |
 | **Horizon Masa Pegangan** | Beberapa saat hingga beberapa minit | Beberapa minit hingga jam (Ditutup sebelum 15:45 NY) | Beberapa hari hingga beberapa minggu | Beberapa minggu hingga beberapa bulan/tahun |
-| **Timeframe Analisis K-line** | Sub-minit (10s, 30s, 1M) | Minit (1M, 5M, 15M) | 1-Jam (1H) dan Harian (Daily/1D) | Mingguan (Weekly) dan Bulanan (Monthly) |
-| **Latensi & Respons AI Paperclip** | **TIDAK SESUAI**<br>Latensi LLM Paperclip (1–5 saat per ejen) terlalu perlahan untuk pergerakan pantas order book. | **SESUAI (Lalai Asal)**<br>Pemantauan selang 5-minit L0 screener memberi masa mencukupi bagi analisis Tariq/Nawwar/Haziq. | **SANGAT SESUAI (Disokong Penuh)**<br>Latensi beberapa saat langsung tidak memberi kesan kepada struktur carta 1H dan Daily. | **BOLEH TETAPI KURANG EFISIEN**<br>Kitaran dagangan terlalu perlahan untuk utiliti sistem ejen aktif berautonomi. |
-| **Penggunaan Kuota Moomoo OpenAPI** | **MEMBAZIR / GAGAL**<br>Melepasi had kadar 10 req/s dan menghabiskan kuota kuotasi masa nyata serta-merta. | **SEDERHANA / TERKAWAL**<br>Dipantau rapi melalui kuota 100 simbol K-line 30-hari dan saringan awan `get_stock_screen` V2. | **SANGAT JIMAT (>75% Penjimatan)**<br>Panggilan K-line berkala (setiap 4 jam atau bar-close) mengurangkan penggunaan kuota secara drastik. | **MINIMUM**<br>Penggunaan kuota K-line hampir sifar kerana semakan hanya berlaku seminggu sekali. |
-| **Penggunaan Token & Kos LLM** | Sangat Tinggi ($5.00–$20.00/hari) | Rendah–Sederhana (~$0.06/hari mengikut Jadual 3.5) | Sangat Rendah (~$0.015/hari; panggilan dikurangkan kepada 3-4 kali sehari) | Sangat Rendah (<$0.005/hari) |
+| **Timeframe Analisis K-line** | Sub-minit (10s, 30s, 1M) | Minit (1M, 5M, 15M) | Struktur 4H / Daily (D1) dengan pemicu adaptif 1-Jam (1H) | Mingguan (Weekly) dan Bulanan (Monthly) |
+| **Latensi & Respons AI Paperclip** | **TIDAK SESUAI**<br>Latensi LLM Paperclip (1–5 saat per ejen) terlalu perlahan untuk pergerakan pantas order book. | **SESUAI (Lalai Asal)**<br>Pemantauan selang 5-minit L0 screener memberi masa mencukupi bagi analisis Tariq/Nawwar/Haziq. | **SANGAT SESUAI (Disokong Penuh)**<br>Struktur 4H/Daily bebas tekanan latensi saat; pemantauan 1H adaptif memberi masa mencukupi bagi analisis pemicu. | **BOLEH TETAPI KURANG EFISIEN**<br>Kitaran dagangan terlalu perlahan untuk utiliti sistem ejen aktif berautonomi. |
+| **Penggunaan Kuota Moomoo OpenAPI** | **MEMBAZIR / GAGAL**<br>Melepasi had kadar 10 req/s dan menghabiskan kuota kuotasi masa nyata serta-merta. | **SEDERHANA / TERKAWAL**<br>Dipantau rapi melalui kuota 100 simbol K-line 30-hari dan saringan awan `get_stock_screen` V2. | **SANGAT JIMAT (>75% Penjimatan)**<br>Pemantauan makro 4H/Daily berkala dengan pengaktifan adaptif 1H hanya berhampiran zon minat/tindakan (maks 3–5 simbol aktif). | **MINIMUM**<br>Penggunaan kuota K-line hampir sifar kerana semakan hanya berlaku seminggu sekali. |
+| **Penggunaan Token & Kos LLM** | Sangat Tinggi ($5.00–$20.00/hari) | Rendah–Sederhana (~$0.06/hari mengikut Jadual 3.5) | Sangat Rendah (~$0.015–$0.025/hari; saringan berkala 4H/Daily dengan semakan 1H adaptif bersasar) | Sangat Rendah (<$0.005/hari) |
 | **Implikasi Peraturan PDT (FINRA)** | **KRITIKAL**<br>Terikat ketat peraturan Pattern Day Trader (maks 3 day trades dalam 5 hari bergolek jika ekuiti < $25k). | **TERIKAT**<br>Wajib dipantau oleh Hard Rule Danial (#5) bagi akaun bawah $25,000. | **BEBAS PDT**<br>Posisi yang dipegang merentas malam (*overnight hold*) dan ditutup pada hari berlainan tidak dikira sebagai day trade. | **BEBAS PDT**<br>Tiada sebarang isu berkaitan had PDT. |
 | **Risiko Pasaran Luar Waktu (Overnight Gap)** | **SIFAR**<br>Tiada pegangan semalaman. | **SIFAR**<br>Ditutup sepenuhnya sebelum jam 15:45 NY. | **ADA (Perlu Mitigasi)**<br>Terdedah kepada lonjakan/kejatuhan harga pra-pasaran (*pre-market gap*) akibat berita semalaman. | **TINGGI**<br>Terdedah kepada kitaran makro ekonomi dan turun naik pendapatan suku tahunan. |
-| **Status Keserasian Seni Bina** | **DITOLAK SECARA TEGAS**<br>Tidak disokong oleh seni bina Paperclip + Moomoo. | **DISOKONG (MOD: DAY)**<br>Mod operasi standard intraday yang aktif. | **DISOKONG (MOD: SWING)**<br>Mod pilihan baharu yang sangat efisien dan ekonomik. | **DI LUAR SKOP UTAMA**<br>Tidak dioptimumkan untuk ejen perdagangan aktif. |
+| **Status Keserasian Seni Bina** | **DITOLAK SECARA TEGAS**<br>Tidak disokong oleh seni bina Paperclip + Moomoo. | **DISOKONG (MOD: DAY)**<br>Mod operasi standard intraday yang aktif. | **DISOKONG (MOD: SWING)**<br>Mod pilihan baharu yang sangat efisien dan ekonomik melalui pemantauan adaptif top-down. | **DI LUAR SKOP UTAMA**<br>Tidak dioptimumkan untuk ejen perdagangan aktif. |
 
 ---
 
 ### 7.2 Perincian Seni Bina & Pelaksanaan Swing Trading
 
-Mod Swing Trading (`TRADING_MODE=SWING`) direka untuk menangkap pergerakan gelombang trend harga sederhana (3–10 hari) dengan memanfaatkan kestabilan teknikal timeframe lebih tinggi dan mengurangkan kos operasi API:
+Mod Swing Trading (`TRADING_MODE=SWING`) direka untuk menangkap pergerakan gelombang trend harga sederhana (3–10 hari) dengan memanfaatkan kestabilan teknikal timeframe lebih tinggi, menghapuskan hingar intraday (*fewer false breakouts*), dan mengurangkan kos operasi API melalui **Pemantauan Adaptif Top-Down (Adaptive Top-Down Multi-Timeframe Monitoring: 4H/Daily -> 1H)**:
 
 ```text
 +------------------------------------------------------------------------+
-| 1. L0 Screener (Saringan Multi-Day)                                    |
-|    - Saringan berasaskan carta Daily: 20-EMA breakout, volume surge    |
-|    - Kitaran imbasan: 4 jam sekali (atau selepas penutupan bar harian) |
+| 1. L0 Screener (Saringan Multi-Day & Pengesanan Zon Minat)             |
+|    - Struktur Makro 4H / Daily: 20-EMA breakout, volume surge 50-SMA   |
+|    - Kitaran imbasan: Baseline berkala (09:00, 13:00, 16:30 NY)        |
+|    - Pengesanan Zon Minat: Menandakan calon berhampiran S/R / Order Block|
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Calon Saringan 1H/Daily)
+                                    v (Calon Struktur 4H/Daily)
 +------------------------------------------------------------------------+
-| 2. L1 Analisis Dwi-Ejen (Timeframe 1H & Daily)                         |
-|    - Tariq (Teknikal): Analisis Wyckoff & SMC pada carta 1H & D1       |
-|    - Nawwar (Sentimen): Saringan Earnings Gate diperketat (< 14 hari)  |
+| 2. L1 Analisis Dwi-Ejen (Top-Down 4H/Daily & Pemicu Adaptif 1H)        |
+|    - Tariq (Teknikal): Wyckoff & SMC 4H/Daily; Pemicu 1H bila dalam zon|
+|    - Nawwar (Sentimen): Saringan Earnings Gate (< 14 hari) & Makro     |
 +-----------------------------------+------------------------------------+
                                     |
                                     v (Tesis S_total & Saiz Posisi)
 +------------------------------------------------------------------------+
 | 3. L2 Haziq (Perancangan Perdagangan Swing)                            |
 |    - Saiz risiko modal dikurangkan kepada 1.0% (Mitigasi overnight gap)|
-|    - Nisbah R:R sasaran diperluas (Minimum 1:3)                        |
+|    - Nisbah R:R sasaran diperluas (Minimum 1:3; SL persis 1.5x ATR 1H) |
 +-----------------------------------+------------------------------------+
                                     |
                                     v (Audit Pematuhan & Had Perlindungan)
@@ -749,21 +752,25 @@ Mod Swing Trading (`TRADING_MODE=SWING`) direka untuk menangkap pergerakan gelom
 |    - Pengesahan pesanan Good-Til-Cancelled (TimeInForce.GTC)           |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Eksekusi Pesanan GTC)
+                                    v (Eksekusi Pesanan GTC & Pemantauan)
 +------------------------------------------------------------------------+
-| 5. L4 Broker & Exit Sentinel (Pemantauan Berterusan)                   |
+| 5. L4 Broker & Exit Sentinel (Pemantauan Adaptif Berterusan)           |
 |    - Hard Stop Loss GTC diletakkan terus di pelayan broker Moomoo      |
-|    - Chandelier Trailing Stop dikemas kini pada setiap bar-close harian|
+|    - Trailing Stop bar penutupan 4H/Daily + pengetatan adaptif 1H      |
 +------------------------------------------------------------------------+
 ```
 
-#### 1. Timeframe & Analisis Teknikal L1 (Tariq)
-- **Gabungan Timeframe (Multi-Timeframe Confluence):**
-  - **Daily (D1):** Digunakan untuk menentukan trend makro, zon pengumpulan/pengagihan Wyckoff utama, dan aras sokongan/rintangan institusi (SMC Order Blocks).
-  - **1-Jam (1H):** Digunakan untuk memperincikan titik pemicu kemasukan (*entry trigger*), pembentukan struktur *Change of Character* (CHoCH), dan penentuan aras henti rugi berasaskan $1.5 \times ATR_{1H}$.
-- **Pengurusan Kuota K-line:**
-  - Tariq memanggil `get_cur_kline_with_sub` bagi `KLType.K_60M` (1-Jam) dan `KLType.K_DAY` (Harian).
-  - Panggilan hanya dibuat apabila ada calon baharu daripada L0 atau pada jadual semakan 4-jam, mengelakkan panggilan berulang yang membazirkan kuota 100 simbol bulanan.
+#### 1. Timeframe & Analisis Teknikal L1 (Tariq): Pendekatan Adaptif Top-Down
+- **Pendekatan Pemantauan Adaptif Top-Down (Adaptive Top-Down Multi-Timeframe Monitoring):**
+  - **Top-Down Structure (4H / Daily):**
+    - Digunakan untuk menentukan arah aliran trend utama (*macro trend direction*), fasa pengumpulan/pengagihan Wyckoff utama, dan zon sokongan/rintangan institusi (SMC Order Blocks, Fair Value Gaps).
+    - Meminimumkan pecahan palsu (*fewer false breakouts*) dan hingar pasaran intraday, di samping memelihara kuota API K-line.
+  - **Adaptive 1H Trigger (Precision Entry & Exit):**
+    - Apabila harga pasaran menghampiri zon minat (*Level of Interest* / SMC Order Block) pada carta 4H, sistem secara automatik beralih kepada selang 1-jam (`KLType.K_60M`) secara adaptif.
+    - Timeframe 1H membolehkan pengesahan pemicu kemasukan (*Change of Character* / CHoCH) secara lebih pantas, penentuan aras Stop Loss yang lebih ketat ($1.5 \times ATR_{1H}$) untuk nisbah Risiko-ke-Ganjaran (R:R) yang lebih optimum, serta pengesanan awal keletihan momentum pembalikan.
+- **Pengurusan Kuota K-line & Langganan Dinamik:**
+  - Tariq memanggil `get_cur_kline_with_sub` bagi `KLType.K_DAY` dan `KLType.K_60M`.
+  - Panggilan K-line 1H diaktifkan secara adaptif dan terhad kepada calon aktif dalam zon minat (maksimum 3–5 simbol serentak) bagi menjamin kuota 100 simbol bulanan Moomoo OpenAPI tidak terjejas. Langganan 1H dibatalkan serta-merta apabila calon keluar daripada julat zon minat atau apabila pesanan telah selesai diisi/dibatalkan.
 
 #### 2. Penapisan Katalis & Kalendar L1 (Nawwar)
 - **Peraturan Sekatan Pendapatan (Earnings Gate) 14-Hari:**
@@ -772,12 +779,18 @@ Mod Swing Trading (`TRADING_MODE=SWING`) direka untuk menangkap pergerakan gelom
 - **Semakan Sentimen & Berita Makro:**
   - Nawwar menyemak kalendar mesyuarat FOMC, pelepasan data CPI/PPI, dan berita sektor berimpak tinggi yang merangkumi horizon 7–14 hari.
 
-#### 3. Jadual Pemantauan Berkala (Periodic Wake Loop)
-Berbanding Day Trading yang menjalankan imbasan setiap 300 saat (5 minit) semasa pasaran aktif, Swing Trading menggunakan kitaran pemantauan berkala:
-- **09:00 NY (Pra-Pasaran / Pre-Market Sync):** Memeriksa harga pra-pasaran, mengesahkan integriti posisi semalaman, dan menyemak sebarang amaran berita mendadak.
-- **13:00 NY (Pertengahan Sesi / Mid-Day Review):** Menilai momentum volum sesi tengah dan mengimbas calon kemasukan baharu pada carta 1H.
-- **16:30 NY (Pasca-Pasaran / Post-Market Bar Close):** Menjalankan rekonsiliasi harian selepas pasaran ditutup, mengira semula paras Chandelier Trailing Stop berasaskan harga penutup harian, dan mengemas kini pangkalan data portfolio.
-- **Pemicu Amaran Harga Bersyarat (Price Alert Trigger):** Sekiranya berlaku pergerakan luar biasa melebihi $2.5 \times ATR$, Exit Sentinel membina pemicu pantas untuk membangunkan ejen pemantau tanpa menunggu kitaran 4 jam.
+#### 3. Kitaran Pemantauan Adaptif (Adaptive Wake & Screening Loop)
+Berbanding Day Trading yang menjalankan imbasan tetap setiap 300 saat (5 minit) semasa pasaran aktif, Swing Trading menggabungkan kitaran berjadual makro dengan pemantauan bersyarat adaptif:
+- **Kitaran Asas Struktur 4H / Daily (Baseline Structure Loop):**
+  - **09:00 NY (Pra-Pasaran / Pre-Market Sync):** Memeriksa harga pra-pasaran, mengesahkan integriti kedudukan semalaman (*overnight hold*), dan menyemak amaran berita luar jangka.
+  - **13:00 NY (Pertengahan Sesi / Mid-Day 4H Bar Close):** Menilai penutupan bar 4H pertama sesi biasa, menyaring momentum volum, dan mengemas kini senarai kaunter yang mendekati zon minat.
+  - **16:30 NY (Pasca-Pasaran / Post-Market Daily Bar Close):** Menjalankan rekonsiliasi harian selepas pasaran ditutup, mengira semula paras Chandelier Trailing Stop berasaskan harga penutup harian, dan mengemas kini pangkalan data portfolio.
+- **Kitaran Pemicu Adaptif 1H (Adaptive 1H Precision Trigger Loop):**
+  - Diaktifkan secara dinamik HANYA bagi kaunter portfolio terbuka atau calon radar yang berada dalam zon toleransi harga ($\le 1.0 \times ATR$ daripada Order Block atau aras sasaran).
+  - Beroperasi pada setiap penutupan bar 1-jam waktu pasaran (10:30, 11:30, 12:30, 13:30, 14:30, 15:30 NY) bagi merebut peluang entri berdiskaun dan pengesahan pembalikan candlestick.
+  - Kembali ke kitaran asas 4H/Daily secara automatik sekiranya harga bergerak keluar dari zon tindakan.
+- **Pemicu Amaran Volatiliti / Jurang Harga (Volatility Alert Trigger):**
+  - Sekiranya berlaku pergerakan harga luar biasa melebihi $2.5 \times ATR$, Exit Sentinel membina pemicu segera untuk membangunkan ejen pemantau tanpa menunggu kitaran jam seterusnya.
 
 #### 4. Pengurusan Pesanan & Had Perlindungan (GTC vs Good-For-Day)
 - **Peralihan ke Pesanan GTC (Good-Til-Cancelled):**
@@ -804,19 +817,19 @@ TRADING_MODE=DAY      # Pilihan: DAY (Lalai Intraday) | SWING (Multi-Day Swing)
 
 | Lapisan Sistem | Parameter / Komponen | Mod DAY (`TRADING_MODE=DAY`) | Mod SWING (`TRADING_MODE=SWING`) |
 | :--- | :--- | :--- | :--- |
-| **L0 Screener** | Kekerapan Imbasan | Setiap 300 saat (5 minit) | Setiap 4 jam / Penutupan Bar Harian |
-| | Kriteria Saringan | Momentum 5M, Volum Relatif Intraday, Julat Sesi | Penembusan 20-EMA Harian, Tapisan Volum 50-SMA |
-| **L1 Tariq** | Jenis K-line Moomoo | `KLType.K_5M`, `KLType.K_15M` | `KLType.K_60M` (1H), `KLType.K_DAY` (Harian) |
-| | Horizon Wyckoff | Fasa Intraday Accumulation/Spring | Fasa Re-Accumulation Harian, Zon SMC Utama |
+| **L0 Screener** | Kekerapan Imbasan | Setiap 300 saat (5 minit) | Baseline 4H / Harian; Imbasan adaptif 1H bagi kaunter zon minat |
+| | Kriteria Saringan | Momentum 5M, Volum Relatif Intraday, Julat Sesi | Struktur 4H/Daily (20-EMA, 50-SMA) + Zon Minat Institusi |
+| **L1 Tariq** | Jenis K-line Moomoo | `KLType.K_5M`, `KLType.K_15M` | `KLType.K_DAY`, `KLType.K_60M` (Pemicu adaptif zon tindakan) |
+| | Horizon Wyckoff | Fasa Intraday Accumulation/Spring | Top-Down: Struktur makro 4H/Daily + CHoCH persis 1H |
 | **L1 Nawwar** | Sekatan Tarikh Earnings | `days_to_earnings < 5` hari | `days_to_earnings < 14` hari |
 | | Skop Analisis Sentimen | Sentimen berita 24-jam & kalendar harian | Trend industri 14-hari & jadual makro FOMC/CPI |
-| **L2 Haziq** | Nisbah Risiko:Ganjaran (R:R) | Minimum 1:2 | Minimum 1:3 |
+| **L2 Haziq** | Nisbah Risiko:Ganjaran (R:R) | Minimum 1:2 | Minimum 1:3 (SL persis berasaskan ATR 1H) |
 | | Had Risiko Modal | 1.5% daripada nilai ekuiti | 1.0% daripada nilai ekuiti (Konservatif) |
 | **L3 Danial** | Semakan Had PDT | Wajib dipatuhi (Maks 3 transaksi jika < $25k) | Dikecualikan bagi pegangan > 1 hari perniagaan |
 | | Penguatkuasaan Time-Exit | **Aktif Wajib** (Tutup semua posisi pada 15:45 NY) | **Dinyahaktifkan** (Membenarkan pegangan semalaman) |
 | | Parameter `time_in_force` | `TimeInForce.DAY` | `TimeInForce.GTC` |
-| **L4 Sentinel** | Logik Trailing Stop | Intraday Chandelier Trailing (Tick-by-tick) | Daily Bar-Close Trailing (Dikemas kini jam 16:30 NY) |
+| **L4 Sentinel** | Logik Trailing Stop | Intraday Chandelier Trailing (Tick-by-tick) | Daily/4H Bar-Close Trailing + pengetatan adaptif 1H |
 | | Rekonsiliasi Pesanan | Menutup pesanan belum diisi jam 16:00 NY | Mengekalkan pesanan GTC aktif merentas hari |
 | **Dashboard UI** | Paparan Bar Status | Lencana `[MOD: DAY (INTRADAY)]` | Lencana `[MOD: SWING (MULTI-DAY)]` |
-| | Tab Pemantauan | Countdown 5-minit saringan seterusnya | Jadual imbasan sesi 4-jam & amaran threshold |
+| | Tab Pemantauan | Countdown 5-minit saringan seterusnya | Status pemantauan adaptif top-down (4H baseline & radar 1H) |
 
