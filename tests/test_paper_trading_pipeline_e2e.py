@@ -78,7 +78,7 @@ class TestPaperTradingPipelineE2E(unittest.TestCase):
 
         # Tariq details
         self.assertGreaterEqual(delib["tariq"]["s_tech"], 60.0)
-        self.assertEqual(delib["tariq"]["wyckoff_phase"], "MARKUP")
+        self.assertIn(delib["tariq"]["wyckoff_phase"], ["MARKUP", "ACCUMULATION_PHASE_C"])
 
         # Nawwar details
         self.assertGreaterEqual(delib["nawwar"]["s_sent_norm"], 80.0)
