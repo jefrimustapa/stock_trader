@@ -9,6 +9,11 @@ class BridgeConfig:
     TELNET_PORT: int = int(os.getenv("MOOMOO_TELNET_PORT", "22222"))
     MOOMOO_TRD_ENV: str = os.getenv("MOOMOO_TRD_ENV", "SIMULATE")
 
+    # Trading Mode Configuration (HOM-328 / Issue #14 / Blueprint Sec 7)
+    TRADING_MODE: str = os.getenv("TRADING_MODE", "DAY").upper().strip()
+    if TRADING_MODE not in ("DAY", "SWING"):
+        TRADING_MODE = "DAY"
+
     # Security Tokens (Zero Default Secrets: must be explicitly provided in environment)
     PAPERCLIP_BRIDGE_SECRET: str = os.getenv("PAPERCLIP_BRIDGE_SECRET", "")
     BRIDGE_SERVICE_TOKEN: str = os.getenv("BRIDGE_SERVICE_TOKEN", "")

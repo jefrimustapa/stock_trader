@@ -293,6 +293,27 @@ export function Layout({
 
           {/* Action Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, sm: 1.5 }, flexShrink: 0 }}>
+            {/* Trading Mode Badge (HOM-328 / Issue #14) */}
+            <Chip
+              size="small"
+              id="chip-trading-mode"
+              label={String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                ? 'MOD: SWING (MULTI-DAY)'
+                : 'MOD: DAY (INTRADAY)'}
+              sx={{
+                backgroundColor: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                  ? 'rgba(105, 108, 255, 0.16)'
+                  : 'rgba(3, 195, 236, 0.16)',
+                color: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                  ? '#696cff'
+                  : '#03c3ec',
+                fontWeight: 700,
+                fontSize: { xs: '0.68rem', sm: '0.75rem' },
+                height: { xs: 24, sm: 26 },
+                '& .MuiChip-label': { px: { xs: 0.8, sm: 1.2 } },
+              }}
+            />
+
             {/* OpenD Status Chip */}
             <Chip
               size="small"

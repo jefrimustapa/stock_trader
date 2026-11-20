@@ -258,10 +258,12 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
             bridgeStatus = { error: err.message, status: 'unavailable' };
         }
     }
+    const tradingMode = (process.env.TRADING_MODE || (bridgeStatus && bridgeStatus.trading_mode) || 'DAY').toUpperCase();
     res.json({
         status: 'healthy',
         service: 'trading-dashboard',
         user: req.authUser,
+        trading_mode: tradingMode,
         bridge: bridgeStatus,
         timestamp: new Date().toISOString()
     });

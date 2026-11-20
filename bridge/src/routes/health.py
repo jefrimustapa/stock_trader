@@ -42,6 +42,7 @@ def get_status(caller: str = Depends(authenticate_request)):
         "service": "mcp-bridge",
         "caller": caller,
         "environment": account_info["env"],
+        "trading_mode": BridgeConfig.TRADING_MODE,
         "opend_target": f"{BridgeConfig.OPEND_HOST}:{BridgeConfig.OPEND_PORT}",
         "opend_status": account_info["status"],
         "account_id": account_info["account_id"],

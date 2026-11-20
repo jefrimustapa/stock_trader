@@ -463,11 +463,12 @@ def main():
 
     screener = CloudScreener(
         quota_tracker=tracker,
-        output_file=ScreenerConfig.WATCHLIST_PATH
+        output_file=ScreenerConfig.WATCHLIST_PATH,
+        trading_mode=ScreenerConfig.TRADING_MODE
     )
 
     interval = ScreenerConfig.SCAN_INTERVAL_SECONDS
-    logger.info("Daemon started. Running scan cycle every %d seconds.", interval)
+    logger.info("Daemon started in [%s] mode. Running scan cycle every %d seconds.", ScreenerConfig.TRADING_MODE, interval)
 
     while running:
         try:

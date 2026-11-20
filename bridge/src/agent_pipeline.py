@@ -113,6 +113,18 @@ class AgentPipeline:
                     created_at TEXT NOT NULL
                 )
             """)
+            # Migration check: paper_orders columns
+            paper_cols = [r["name"] for r in conn.execute("PRAGMA table_info(paper_orders)").fetchall()]
+            if "time_in_force" not in paper_cols:
+                conn.execute("ALTER TABLE paper_orders ADD COLUMN time_in_force TEXT DEFAULT 'DAY'")
+            if "trading_mode" not in paper_cols:
+                conn.execute("ALTER TABLE paper_orders ADD COLUMN trading_mode TEXT DEFAULT 'DAY'")
+
+            # Migration check: simulation_cycles columns
+            sim_cols = [r["name"] for r in conn.execute("PRAGMA table_info(simulation_cycles)").fetchall()]
+            if "trading_mode" not in sim_cols:
+                conn.execute("ALTER TABLE simulation_cycles ADD COLUMN trading_mode TEXT DEFAULT 'DAY'")
+
             conn.commit()
 
     def load_watchlist_candidates(self, max_candidates: int = 10) -> List[Dict[str, Any]]:
@@ -173,14 +185,16 @@ class AgentPipeline:
     # =========================================================================
     # L1: Tariq (Technical Analyst)
     # =========================================================================
-    def evaluate_tariq_technical(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
+    def evaluate_tariq_technical(self, candidate: Dict[str, Any], trading_mode: Optional[str] = None) -> Dict[str, Any]:
         """
         Tariq analyzes Wyckoff accumulation/markup, Elliott wave structure,
         and SMC (Smart Money Concepts) Fair Value Gap (FVG) confluence using
         real candlestick K-line data from Moomoo OpenAPI (get_cur_kline_with_sub)
         or candidate fallback metrics.
+        Supports DAY (5M/15M) and SWING (4H/Daily + 1H adaptive trigger).
         Returns technical analysis dict with S_tech in [0, 100].
         """
+        mode = (trading_mode or candidate.get("trading_mode") or BridgeConfig.TRADING_MODE).upper()
         symbol = candidate.get("symbol", "UNKNOWN")
         price = float(candidate.get("price", 0.0))
         lane = candidate.get("lane", "SETUP")
@@ -297,10 +311,13 @@ class AgentPipeline:
 
         fvg_confluence = "BULLISH_FVG_CONFIRMED" if s_tech >= 65.0 else "TESTING_LIQUIDITY_ZONE"
         passed = s_tech >= 60.0
+        timeframe_label = "4H/Daily+1H_ADAPTIVE" if mode == "SWING" else "5M/15M"
         return {
             "agent": "Tariq",
             "role": "L1 Technical Analyst",
             "symbol": symbol,
+            "trading_mode": mode,
+            "timeframe": timeframe_label,
             "s_tech": s_tech,
             "passed": passed,
             "wyckoff_phase": wyckoff_phase,
@@ -313,7 +330,7 @@ class AgentPipeline:
             "data_source": data_source,
             "fail_fast": not passed,
             "notes": (
-                f"S_tech={s_tech}/100. Wyckoff {wyckoff_phase} with SMC {fvg_confluence} ({data_source}). "
+                f"[{mode} | {timeframe_label}] S_tech={s_tech}/100. Wyckoff {wyckoff_phase} with SMC {fvg_confluence} ({data_source}). "
                 f"Konfluens teknikal {'memenuhi' if passed else 'tidak memenuhi'} syarat ambang >= 60.0."
                 + (" [K-line API dilangkau: Mod Jeda Pembelian aktif memelihara kuota 30 hari]." if (is_paused and not is_held) else "")
             )
@@ -322,32 +339,46 @@ class AgentPipeline:
     # =========================================================================
     # L1: Nawwar (Sentiment & Macro Scout)
     # =========================================================================
-    def evaluate_nawwar_sentiment(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
+    def evaluate_nawwar_sentiment(self, candidate: Dict[str, Any], trading_mode: Optional[str] = None) -> Dict[str, Any]:
         """
         Nawwar evaluates news flow, earnings catalyst gate, and macro environment.
         Uses Moomoo OpenAPI corporate earnings calendar (get_earnings_calendar)
         and news search (get_search_news) when available.
-        Hard threshold: S_sent >= +60.0 (S_sent_norm >= 80.0) without earnings in 5 days.
+        - DAY mode: Hard threshold S_sent >= +60.0 without earnings in 5 days.
+        - SWING mode: Hard threshold S_sent >= +60.0 without earnings in 14 days (days_to_earnings < 14)
+          and without 14-day macro calendar risk (FOMC/CPI/PPI).
         """
+        mode = (trading_mode or candidate.get("trading_mode") or BridgeConfig.TRADING_MODE).upper()
+        earnings_gate_days = 14 if mode == "SWING" else 5
         symbol = candidate.get("symbol", "UNKNOWN")
         change_pct = float(candidate.get("change_pct", 0.0))
         clean_ticker = symbol.split(".")[-1] if "." in symbol else symbol
         data_source = "HEURISTIC_MOCK"
 
-        # 1. Earnings calendar gate check (Hard Rule: reject if earnings <= 5 days)
-        earnings_within_5d = bool(candidate.get("earnings_within_5d", False))
+        # 1. Earnings calendar gate check (DAY: < 5 days, SWING: < 14 days)
+        earnings_within_gate = False
         earnings_date = candidate.get("earnings_date")
+        if candidate.get("days_to_earnings") is not None:
+            if candidate.get("days_to_earnings") < earnings_gate_days:
+                earnings_within_gate = True
+        elif candidate.get("earnings_within_gate") is not None:
+            earnings_within_gate = bool(candidate.get("earnings_within_gate"))
+        elif mode == "SWING" and candidate.get("earnings_within_14d") is not None:
+            earnings_within_gate = bool(candidate.get("earnings_within_14d"))
+        else:
+            earnings_within_gate = bool(candidate.get("earnings_within_5d", False))
 
         # Query live Moomoo earnings calendar if connected and not already marked
-        if not earnings_within_5d and self.moomoo_client is not None:
+        if not earnings_within_gate and self.moomoo_client is not None:
             if not self.moomoo_client.is_connected():
                 self.moomoo_client.connect()
             if self.moomoo_client.is_connected():
                 now_dt = datetime.now(timezone.utc)
                 today_str = now_dt.strftime("%Y-%m-%d")
-                end_str = (now_dt + timedelta(days=6)).strftime("%Y-%m-%d")
+                days_ahead = 15 if mode == "SWING" else 6
+                end_str = (now_dt + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
-                # Check cache or fetch calendar (Moomoo enforces max 7 days date range)
+                # Check cache or fetch calendar (Moomoo enforces max 7 days per call, chunk if needed)
                 if "us_earnings" not in self._earnings_cache or (now_dt.timestamp() - self._earnings_cache.get("time", 0)) > 300:
                     earn_resp = self.moomoo_client.get_earnings_calendar(market="US", begin_date=today_str, end_date=end_str)
                     if earn_resp.get("status") == "OK":
@@ -366,8 +397,8 @@ class AgentPipeline:
                             try:
                                 item_date = datetime.strptime(item_date_str, "%Y-%m-%d").date()
                                 days_diff = (item_date - now_dt.date()).days
-                                if 0 <= days_diff <= 5:
-                                    earnings_within_5d = True
+                                if 0 <= days_diff < earnings_gate_days:
+                                    earnings_within_gate = True
                                     earnings_date = item_date_str
                                     data_source = "MOOMOO_EARNINGS_REAL"
                                     break
@@ -425,31 +456,35 @@ class AgentPipeline:
         sent_norm = normalize_sentiment(raw_sent)
 
         # Earnings & macro gate check
-        fomc_macro_risk = False
-        passed = (raw_sent >= 60.0) and (not earnings_within_5d) and (not fomc_macro_risk)
+        fomc_macro_risk = bool(candidate.get("fomc_macro_risk", False) or (mode == "SWING" and candidate.get("macro_calendar_risk", False)))
+        passed = (raw_sent >= 60.0) and (not earnings_within_gate) and (not fomc_macro_risk)
 
         label = "BULLISH" if raw_sent >= 50.0 else ("BEARISH" if raw_sent <= -20.0 else "NEUTRAL")
 
-        if earnings_within_5d:
+        if earnings_within_gate:
             notes = (
-                f"S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}). "
-                f"SEKATAN KERAS: Pengumuman earnings dalam tempoh 5 hari ({earnings_date or 'segera'}). Ditolak serta-merta."
+                f"[{mode}] S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}). "
+                f"SEKATAN KERAS: Pengumuman earnings dalam tempoh {earnings_gate_days} hari ({earnings_date or 'segera'}). Ditolak serta-merta."
             )
         else:
             notes = (
-                f"S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}, {data_source}). "
-                f"Tiada risiko earnings dalam 5 hari. {'Lulus' if passed else 'Ditolak'} tapisan sentimen."
+                f"[{mode}] S_sent={raw_sent:+0.1f} (Norm={sent_norm}/100, {label}, {data_source}). "
+                f"Tiada risiko earnings dalam {earnings_gate_days} hari. {'Lulus' if passed else 'Ditolak'} tapisan sentimen."
             )
 
         return {
             "agent": "Nawwar",
             "role": "L1 Sentiment & Macro Scout",
             "symbol": symbol,
+            "trading_mode": mode,
+            "earnings_gate_days": earnings_gate_days,
             "s_sent_raw": raw_sent,
             "s_sent_norm": sent_norm,
             "passed": passed,
             "sentiment_label": label,
-            "earnings_within_5d": earnings_within_5d,
+            "earnings_within_gate": earnings_within_gate,
+            "earnings_within_5d": earnings_within_gate if mode == "DAY" else False,
+            "earnings_within_14d": earnings_within_gate if mode == "SWING" else False,
             "earnings_date": earnings_date,
             "fomc_macro_risk": fomc_macro_risk,
             "news_url": news_url,
@@ -468,13 +503,17 @@ class AgentPipeline:
         candidate: Dict[str, Any],
         tariq_res: Dict[str, Any],
         nawwar_res: Dict[str, Any],
-        account_equity: float
+        account_equity: float,
+        trading_mode: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Haziq combines L1 scores into composite S_total = 0.65*S_tech + 0.35*S_sent_norm.
         Entry Gate: S_total >= 65.0, S_tech >= 60.0, S_sent_norm >= 80.0.
-        Calculates position sizing: 1.5% equity risk, max 20% equity cap, Stop Loss = 1.5*ATR14.
+        Calculates position sizing:
+        - DAY: 1.5% equity risk, max 20% equity cap, Stop Loss = 1.5*ATR14, TP1 R:R min 1:1.5–1:2.
+        - SWING: 1.0% equity risk (mitigating overnight gap risk), Stop Loss = 1.5*ATR_1H, TP1 R:R min 1:3.
         """
+        mode = (trading_mode or candidate.get("trading_mode") or BridgeConfig.TRADING_MODE).upper()
         symbol = candidate.get("symbol", "UNKNOWN")
         raw_price = float(candidate.get("price", 10.0))
         price = round(raw_price, 2) if raw_price >= 1.0 else round(raw_price, 4)
@@ -484,13 +523,13 @@ class AgentPipeline:
         s_total = calculate_composite_score(s_tech, s_sent_norm)
         passed_entry_gate = (s_total >= 65.0) and (s_tech >= 60.0) and (s_sent_norm >= 80.0)
 
-        # Risk parameters
-        risk_per_trade_pct = 0.015  # 1.5% equity risk
+        # Risk parameters: 1.0% for SWING, 1.5% for DAY
+        risk_per_trade_pct = 0.01 if mode == "SWING" else 0.015
         max_position_equity_pct = 0.20  # Max 20% position cap
         total_risk_capital = account_equity * risk_per_trade_pct
         max_position_value = account_equity * max_position_equity_pct
 
-        # ATR 14 estimation: use Tariq's K-line ATR14 if calculated, else fallback to setup_metrics
+        # ATR estimation: use Tariq's K-line ATR if calculated, else fallback to setup_metrics
         setup_metrics = candidate.get("setup_metrics") or {}
         atr_pct = float(setup_metrics.get("atr_14_pct") or 3.0)
         atr_14 = tariq_res.get("atr_14")
@@ -510,13 +549,14 @@ class AgentPipeline:
         position_value = round(allocated_shares * price, 2)
         actual_risk_amount = round(allocated_shares * risk_per_share, 2)
 
-        # Targets: TP1 1:1.5 R:R, Chandelier trailing stop
-        tp1_price = round(price + (1.5 * risk_per_share), 2)
+        # Targets: SWING min 1:3 R:R, DAY min 1:1.5-1:2 R:R
+        rr_target_mult = 3.0 if mode == "SWING" else 1.5
+        tp1_price = round(price + (rr_target_mult * risk_per_share), 2)
         rr_ratio = round((tp1_price - price) / risk_per_share, 2)
 
         thesis = (
-            f"S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
-            f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}, ATR14: ${atr_14:.2f}), "
+            f"[{mode}] S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
+            f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}, ATR: ${atr_14:.2f}), "
             f"TP1: ${tp1_price:.2f} (1:{rr_ratio}). Saiz: {allocated_shares} unit "
             f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% modal efektif). "
             f"Asas Modal: ${account_equity:,.2f}."
@@ -526,6 +566,7 @@ class AgentPipeline:
             "agent": "Haziq",
             "role": "L2 Portfolio & Strategy Lead",
             "symbol": symbol,
+            "trading_mode": mode,
             "s_total": s_total,
             "passed": passed_entry_gate,
             "entry_price": price,
@@ -534,9 +575,11 @@ class AgentPipeline:
             "allocated_shares": allocated_shares,
             "position_value": position_value,
             "risk_per_trade_usd": actual_risk_amount,
+            "actual_risk_amount": actual_risk_amount,
             "risk_per_trade_pct": round(actual_risk_amount / account_equity * 100, 2),
             "account_equity_used": account_equity,
             "risk_reward_ratio": rr_ratio,
+            "rr_ratio": rr_ratio,
             "thesis": thesis
         }
 
@@ -550,19 +593,24 @@ class AgentPipeline:
         account_equity: float,
         now_ny: datetime,
         mock_market_window: bool = False,
-        force_simulation: bool = False
+        force_simulation: bool = False,
+        trading_mode: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Danial audits the candidate order strictly against the 8 Hard Rules:
-        1. Risk <= 2.0% equity
+        1. Risk <= 2.0% equity (DAY) or <= 1.0% equity (SWING)
         2. Daily drawdown <= 5.0% circuit breaker
-        3. PDT guard (< $25k, max 3 day trades)
+        3. PDT guard (< $25k, max 3 day trades; SWING multi-day overnight holding exempt)
         4. Penny stock filter (Price >= $5.00)
         5. Order volume <= 1.0% ADV20
-        6. Market time window 09:45 - 15:45 NY
+        6. Market time window: DAY [09:45 - 15:45 NY] vs SWING [09:30 - 16:00 NY]
         7. Idempotency key (UUIDv4)
         8. Manual kill switch & OpenD alive
         """
+        mode = (trading_mode or candidate.get("trading_mode") or BridgeConfig.TRADING_MODE).upper()
+        time_in_force = "GTC" if mode == "SWING" else "DAY"
+        holding_days = int(candidate.get("holding_days", 0))
+
         symbol = candidate.get("symbol", "UNKNOWN")
         price = float(haziq_res.get("entry_price", candidate.get("price", 10.0)))
         stop_loss = float(haziq_res.get("stop_loss_price", price * 0.95))
@@ -577,24 +625,28 @@ class AgentPipeline:
             quantity=quantity,
             entry_price=price,
             stop_loss_price=stop_loss,
-            order_side="BUY"
+            order_side="BUY",
+            time_in_force=time_in_force,
+            trading_mode=mode,
+            holding_days=holding_days
         )
 
         rule_checks = []
         all_passed = True
         rejection_reason = None
 
-        # Rule 1: Max Risk <= 2.0%
-        risk_pct = haziq_res.get("risk_per_trade_pct", 1.5)
-        r1_pass = risk_pct <= 2.0
+        # Rule 1: Max Risk <= 1.0% (SWING) or <= 2.0% (DAY)
+        risk_pct = haziq_res.get("risk_per_trade_pct", 1.0 if mode == "SWING" else 1.5)
+        max_allowed_risk_pct = 1.0 if mode == "SWING" else 2.0
+        r1_pass = risk_pct <= max_allowed_risk_pct
         rule_checks.append({
-            "rule": "Rule 1: Risk per Trade <= 2.0%",
+            "rule": f"Rule 1: Risk per Trade <= {max_allowed_risk_pct:.1f}%",
             "passed": r1_pass,
-            "detail": f"{risk_pct:.2f}% ekuiti (Had: 2.0%)"
+            "detail": f"{risk_pct:.2f}% ekuiti (Had: {max_allowed_risk_pct:.1f}%)"
         })
         if not r1_pass and all_passed:
             all_passed = False
-            rejection_reason = "Pelanggaran Rule 1: Risiko modal melebihi 2.0%"
+            rejection_reason = f"Pelanggaran Rule 1: Risiko modal melebihi {max_allowed_risk_pct:.1f}%"
 
         # Rule 2: Daily Drawdown <= 5.0% Circuit Breaker
         cb_active = self.hard_rules_engine.get_circuit_breaker_status(trade_date)
@@ -650,21 +702,22 @@ class AgentPipeline:
             all_passed = False
             rejection_reason = "Pelanggaran Rule 5: Kuantiti pesanan melebihi 1.0% ADV20"
 
-        # Rule 6: Market Time Window (09:45 - 15:45 NY)
+        # Rule 6: Market Time Window (DAY: 09:45 - 15:45 NY, SWING: 09:30 - 16:00 NY)
         r6_pass = True
         if not mock_market_window:
             try:
-                self.hard_rules_engine.validate_rule6_trading_window(now_ny)
+                self.hard_rules_engine.validate_rule6_trading_window(now_ny, order=order)
             except HardRuleViolation:
                 r6_pass = False
+        window_label = "09:30 - 16:00 NY" if mode == "SWING" else "09:45 - 15:45 NY"
         rule_checks.append({
-            "rule": "Rule 6: Market Window 09:45 - 15:45 NY",
+            "rule": f"Rule 6: Market Window {window_label}",
             "passed": r6_pass,
             "detail": f"Masa NY {now_ny.strftime('%H:%M:%S')} dalam tingkap dagangan" if r6_pass else f"Luar tingkap waktu pasaran {now_ny.strftime('%H:%M:%S')}"
         })
         if not r6_pass and all_passed:
             all_passed = False
-            rejection_reason = "Pelanggaran Rule 6: Di luar waktu dagangan 09:45 - 15:45 NY"
+            rejection_reason = f"Pelanggaran Rule 6: Di luar waktu dagangan {window_label}"
 
         # Rule 7: Idempotency Key
         r7_pass = True
@@ -730,17 +783,22 @@ class AgentPipeline:
             all_passed = False
             rejection_reason = "Pembelian baharu dijeda oleh pengguna (Mod Pantau Sahaja: Analisis & Jaga Kaunter Sedia Ada)"
 
+        order_dict = order.model_dump()
         return {
             "agent": "Danial",
             "role": "L3 Risk & Compliance Officer",
             "symbol": symbol,
+            "trading_mode": mode,
+            "time_in_force": time_in_force,
+            "holding_days": holding_days,
             "passed": all_passed,
             "rejection_reason": rejection_reason,
             "client_order_id": client_order_id,
-            "order_request": order.model_dump(),
+            "order": order_dict,
+            "order_request": order_dict,
             "rule_checks": rule_checks,
             "notes": (
-                f"Audit Danial: {'LULUS 8/8 peraturan risiko & kawalan posisi unik' if all_passed else 'DITOLAK - ' + rejection_reason}."
+                f"[{mode} | {time_in_force}] Audit Danial: {'LULUS 8/8 peraturan risiko & kawalan posisi unik' if all_passed else 'DITOLAK - ' + rejection_reason}."
             )
         }
 
@@ -751,12 +809,15 @@ class AgentPipeline:
         self,
         candidates: Optional[List[Dict[str, Any]]] = None,
         force_simulation: bool = False,
-        mock_market_window: bool = False
+        mock_market_window: bool = False,
+        trading_mode: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes a complete deliberative cycle over watchlist candidates:
         L0 Screener -> L1 Tariq & Nawwar -> L2 Haziq -> L3 Danial -> L4 OpenD Paper Order.
+        Supports DAY and SWING modes.
         """
+        mode = (trading_mode or BridgeConfig.TRADING_MODE).upper()
         now_utc = datetime.now(timezone.utc)
         now_ny = datetime.now(NY_TZ)
         cycle_id = f"CYC-{now_utc.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
@@ -791,9 +852,9 @@ class AgentPipeline:
             symbol = candidate.get("symbol", "UNKNOWN")
 
             # 1. Tariq L1 Analysis
-            tariq_res = self.evaluate_tariq_technical(candidate)
+            tariq_res = self.evaluate_tariq_technical(candidate, trading_mode=mode)
             # 2. Nawwar L1 Analysis
-            nawwar_res = self.evaluate_nawwar_sentiment(candidate)
+            nawwar_res = self.evaluate_nawwar_sentiment(candidate, trading_mode=mode)
 
             l1_passed = tariq_res["passed"] and nawwar_res["passed"]
             if l1_passed:
@@ -804,7 +865,8 @@ class AgentPipeline:
                 candidate=candidate,
                 tariq_res=tariq_res,
                 nawwar_res=nawwar_res,
-                account_equity=account_equity
+                account_equity=account_equity,
+                trading_mode=mode
             )
             l2_passed = l1_passed and haziq_res["passed"]
             if l2_passed:
@@ -817,7 +879,8 @@ class AgentPipeline:
                 account_equity=account_equity,
                 now_ny=now_ny,
                 mock_market_window=mock_market_window or force_simulation,
-                force_simulation=force_simulation
+                force_simulation=force_simulation,
+                trading_mode=mode
             )
             l3_passed = l2_passed and danial_res["passed"]
             if l3_passed:
@@ -873,8 +936,8 @@ class AgentPipeline:
                         INSERT INTO paper_orders (
                             client_order_id, order_id, cycle_id, symbol, order_side,
                             quantity, entry_price, stop_loss_price, take_profit_price,
-                            status, opend_status, message, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            status, opend_status, message, time_in_force, trading_mode, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         client_order_id,
                         order_id,
@@ -887,7 +950,9 @@ class AgentPipeline:
                         haziq_res["take_profit_price"],
                         status_str,
                         opend_status,
-                        f"Paper Trading Simulation Order to Moomoo OpenD (Env: {client.trd_env})",
+                        f"Paper Trading Simulation Order to Moomoo OpenD (Env: {client.trd_env}, Mode: {mode})",
+                        order_req_data.get("time_in_force", "DAY"),
+                        mode,
                         now_utc.isoformat()
                     ))
                     conn.commit()
@@ -901,6 +966,8 @@ class AgentPipeline:
                     "entry_price": order_req_data["entry_price"],
                     "stop_loss_price": order_req_data["stop_loss_price"],
                     "take_profit_price": haziq_res["take_profit_price"],
+                    "time_in_force": order_req_data.get("time_in_force", "DAY"),
+                    "trading_mode": mode,
                     "status": status_str,
                     "opend_status": opend_status
                 })
@@ -947,8 +1014,8 @@ class AgentPipeline:
             conn.execute("""
                 INSERT INTO simulation_cycles (
                     cycle_id, created_at, status, total_candidates,
-                    passed_l1, passed_l2, passed_l3, orders_placed
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    passed_l1, passed_l2, passed_l3, orders_placed, trading_mode
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 cycle_id,
                 now_utc.isoformat(),
@@ -957,7 +1024,8 @@ class AgentPipeline:
                 passed_l1_count,
                 passed_l2_count,
                 passed_l3_count,
-                orders_placed_count
+                orders_placed_count,
+                mode
             ))
             conn.commit()
 

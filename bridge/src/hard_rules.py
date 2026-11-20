@@ -37,6 +37,9 @@ class OrderRequest(BaseModel):
     entry_price: float = Field(..., gt=0, description="Entry limit price in USD")
     stop_loss_price: float = Field(..., gt=0, description="Hard stop loss price in USD")
     order_side: Literal["BUY", "SELL"] = Field(default="BUY", description="BUY or SELL")
+    time_in_force: Literal["DAY", "GTC"] = Field(default="DAY", description="Order time in force: DAY or GTC")
+    trading_mode: Literal["DAY", "SWING"] = Field(default="DAY", description="Trading mode: DAY or SWING")
+    holding_days: int = Field(default=0, ge=0, description="Holding duration in business days (for SWING PDT exemption)")
 
 
 class HardRuleViolation(Exception):
@@ -148,7 +151,9 @@ class HardRulesEngine:
 
     def validate_rule1_max_risk(self, order: OrderRequest, account_equity: float) -> None:
         """
-        Rule 1: Risk Amount = Qty * (EntryPrice - StopLossPrice) <= 2.0% Equity.
+        Rule 1: Risk Amount = Qty * (EntryPrice - StopLossPrice) <= Allowed Risk % Equity.
+        DAY: <= 2.0% Equity.
+        SWING: <= 1.0% Equity (mitigates overnight gap risk).
         Evaluates risk for long buy orders.
         """
         if order.order_side == "BUY":
@@ -156,14 +161,15 @@ class HardRulesEngine:
                 raise HardRuleViolation("RULE_1", "Stop loss price must be below entry price for long buy orders.")
 
             risk_amount = order.quantity * (order.entry_price - order.stop_loss_price)
-            max_allowed_risk = account_equity * 0.02
+            max_risk_pct = 0.01 if order.trading_mode == "SWING" else 0.02
+            max_allowed_risk = account_equity * max_risk_pct
 
             # Round to 4 decimal places to prevent floating point imprecision at exact boundary
             if round(risk_amount, 4) > round(max_allowed_risk, 4):
                 risk_pct = (risk_amount / account_equity) * 100.0
                 raise HardRuleViolation(
                     "RULE_1",
-                    f"Trade risk (${risk_amount:.2f} / {risk_pct:.2f}%) exceeds maximum allowed 2.0% equity (${max_allowed_risk:.2f})."
+                    f"Trade risk (${risk_amount:.2f} / {risk_pct:.2f}%) exceeds maximum allowed {max_risk_pct*100:.1f}% equity (${max_allowed_risk:.2f})."
                 )
 
     def validate_rule1_verified_equity(self, order: OrderRequest, trade_date: str, fallback_equity: Optional[float] = None) -> float:
@@ -212,9 +218,14 @@ class HardRulesEngine:
         Rule 3: For margin account with equity < $25,000, max 3 day trades in rolling 5 business days.
         4th day trade is strictly rejected.
         Applies if an order completes a round-trip day trade or if count >= 3 on non-opening orders.
+        SWING EXEMPTION: Multi-day swing positions held overnight (holding_days >= 1) are exempt from PDT limit.
         """
         if account_equity >= 25_000.0:
             return  # Unlimited day trades above $25,000
+
+        # Multi-day swing holding overnight does not constitute a day trade
+        if order is not None and order.trading_mode == "SWING" and order.holding_days >= 1:
+            return
 
         window_start = get_rolling_business_day_start(current_date, business_days=5)
 
@@ -348,21 +359,38 @@ class HardRulesEngine:
             )
         return verified_adv20
 
-    def validate_rule6_trading_window(self, check_time_ny: Optional[datetime] = None) -> None:
+    def validate_rule6_trading_window(
+        self,
+        check_time_ny: Optional[datetime] = None,
+        trading_mode: str = "DAY",
+        order: Optional[OrderRequest] = None
+    ) -> None:
         """
-        Rule 6: New entries allowed strictly between 09:45:00 and 15:44:59.999 America/New_York (< 15:45:00).
+        Rule 6: Trading Window Validation.
+        - DAY Mode: New entries allowed strictly between 09:45:00 and 15:44:59.999 America/New_York (< 15:45:00).
+        - SWING Mode: Allows regular market session entries [09:30:00 - 16:00:00) NY without mandatory 15:45:00 force exit.
         """
+        mode = order.trading_mode if order else trading_mode
         now_ny = check_time_ny or datetime.now(NY_TZ)
         current_time = now_ny.time()
 
-        start_time = time(9, 45, 0)
-        cutoff_time = time(15, 45, 0)
+        if mode == "SWING":
+            start_time = time(9, 30, 0)
+            cutoff_time = time(16, 0, 0)
+            if not (start_time <= current_time < cutoff_time):
+                raise HardRuleViolation(
+                    "RULE_6",
+                    f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside SWING market session [09:30:00 - 16:00:00)."
+                )
+        else:
+            start_time = time(9, 45, 0)
+            cutoff_time = time(15, 45, 0)
 
-        if not (start_time <= current_time < cutoff_time):
-            raise HardRuleViolation(
-                "RULE_6",
-                f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside allowed [09:45:00 - 15:45:00)."
-            )
+            if not (start_time <= current_time < cutoff_time):
+                raise HardRuleViolation(
+                    "RULE_6",
+                    f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside allowed [09:45:00 - 15:45:00)."
+                )
 
     def validate_rule7_idempotency(self, client_order_id: str) -> None:
         """
@@ -444,7 +472,7 @@ class HardRulesEngine:
         self.validate_rule7_idempotency(order.client_order_id)
         self.validate_rule4_penny_stock(order)
         self.validate_rule5_verified_liquidity(order, market_data_cache)
-        self.validate_rule6_trading_window(check_time_ny)
+        self.validate_rule6_trading_window(check_time_ny, order=order)
         self.validate_rule1_max_risk(order, account_equity)
         self.validate_rule2_daily_drawdown(trade_date, current_equity)
         self.validate_rule3_pdt(account_equity, trade_date, order=order)

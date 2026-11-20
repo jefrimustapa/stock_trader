@@ -30,6 +30,8 @@ class WatchlistStock(BaseModel):
     setup_metrics: Optional[SetupMetrics] = Field(default=None, description="Metrics specific to SETUP lane")
     status: str = Field(default="READY_FOR_ANALYSIS", description="Readiness flag for downstream LLM analysis")
     exchange: Optional[str] = Field(default=None, description="Listing exchange code e.g. US_NYSE, US_NASDAQ, US_AMEX")
+    trading_mode: Optional[str] = Field(default="DAY", description="Trading mode: DAY or SWING")
+    interest_zone: Optional[str] = Field(default=None, description="Interest zone or Order Block label for swing candidates")
 
 
 class QuotaStatus(BaseModel):
@@ -66,6 +68,7 @@ class WatchlistOutput(BaseModel):
     market_status: str = Field(default="OPEN", description="Market session status: OPEN, PRE_POST, or CLOSED")
     is_live: bool = Field(default=True, description="Whether data represents an active open market session")
     data_as_of: str = Field(..., description="Effective data as-of timestamp")
+    trading_mode: str = Field(default="DAY", description="Trading mode: DAY or SWING")
     source: str = Field(default="REAL", description="Data source indicator: REAL or OPEND_UNAVAILABLE")
     warning: Optional[str] = Field(default=None, description="Warning message when OpenD is unavailable or unauthenticated")
     funnel: FunnelStageMetrics = Field(default_factory=FunnelStageMetrics, description="5-stage funnel metrics")

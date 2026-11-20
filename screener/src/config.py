@@ -21,6 +21,14 @@ class ScreenerConfig:
     MAX_KLINE_30D_SYMBOLS: int = int(os.getenv("MAX_KLINE_30D_SYMBOLS", "100"))
     MAX_REALTIME_SUBSCRIPTIONS: int = int(os.getenv("MAX_REALTIME_SUBSCRIPTIONS", "15"))
 
+    # Trading Mode Configuration (HOM-328 / Issue #14 / Blueprint Sec 7)
+    TRADING_MODE: str = os.getenv("TRADING_MODE", "DAY").upper().strip()
+    if TRADING_MODE not in ("DAY", "SWING"):
+        TRADING_MODE = "DAY"
+    SWING_BASELINE_SCHEDULE: str = os.getenv("SWING_BASELINE_SCHEDULE", "09:00,13:00,16:30")
+    SWING_EMA_PERIOD: int = int(os.getenv("SWING_EMA_PERIOD", "20"))
+    SWING_VOL_SMA_PERIOD: int = int(os.getenv("SWING_VOL_SMA_PERIOD", "50"))
+
     # Exchange Filtering & Cache (HOM-271)
     ALLOWED_EXCHANGES: Tuple[str, ...] = tuple(
         x.strip() for x in os.getenv("ALLOWED_EXCHANGES", "US_NYSE,US_NASDAQ,US_AMEX").split(",") if x.strip()
