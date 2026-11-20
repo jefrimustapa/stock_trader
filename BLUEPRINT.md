@@ -688,3 +688,135 @@ Berasaskan ketetapan pemohon (Jefri), sistem menggunakan 100% model Google Gemin
 1. **Laman Portfolio (`#/portfolio`)**: Memaparkan ringkasan modal, tunai, PnL bersih, dan senarai pegangan kaunter aktif dengan harga belian sebenar (*bought price*) dan harga semasa (*current price*).
 2. **Suis Jeda Pembelian (Pause Buying Toggle)**: Membolehkan pengendali menjeda pembelian baharu secara langsung dari papan pemuka.
 3. **Pemberitahuan & Countdown**: Pemasa kiraan detik automatik bagi jadual imbasan L0 seterusnya.
+
+---
+
+## 7. Seni Bina Mod Dagangan (Trading Modes: Day Trading vs Swing Trading)
+
+**Rujukan Tugasan:** HOM-319, HOM-320 (Induk: HOM-47, HOM-114)  
+**Status:** Mod Dagangan Berbilang (Multi-Mode Trading Architecture)  
+**Arkitek / Software Lead:** Fakhri & Hakeem  
+**Penyemak Bebas / QA Gatekeeper:** Zahrin  
+
+---
+
+### 7.1 Perbandingan & Analisis Kesesuaian 4 Gaya Dagangan (Trading Styles)
+
+Bagi menentukan keserasian operasi pasaran dengan ekosistem ejen Paperclip dan Moomoo OpenAPI, penilaian menyeluruh dilakukan ke atas 4 gaya dagangan utama:
+
+| Dimensi Penilaian | 1. Scalping | 2. Day Trading (Intraday) | 3. Swing Trading (Multi-Day) | 4. Position Trading (Investing) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Horizon Masa Pegangan** | Beberapa saat hingga beberapa minit | Beberapa minit hingga jam (Ditutup sebelum 15:45 NY) | Beberapa hari hingga beberapa minggu | Beberapa minggu hingga beberapa bulan/tahun |
+| **Timeframe Analisis K-line** | Sub-minit (10s, 30s, 1M) | Minit (1M, 5M, 15M) | 1-Jam (1H) dan Harian (Daily/1D) | Mingguan (Weekly) dan Bulanan (Monthly) |
+| **Latensi & Respons AI Paperclip** | **TIDAK SESUAI**<br>Latensi LLM Paperclip (1–5 saat per ejen) terlalu perlahan untuk pergerakan pantas order book. | **SESUAI (Lalai Asal)**<br>Pemantauan selang 5-minit L0 screener memberi masa mencukupi bagi analisis Tariq/Nawwar/Haziq. | **SANGAT SESUAI (Disokong Penuh)**<br>Latensi beberapa saat langsung tidak memberi kesan kepada struktur carta 1H dan Daily. | **BOLEH TETAPI KURANG EFISIEN**<br>Kitaran dagangan terlalu perlahan untuk utiliti sistem ejen aktif berautonomi. |
+| **Penggunaan Kuota Moomoo OpenAPI** | **MEMBAZIR / GAGAL**<br>Melepasi had kadar 10 req/s dan menghabiskan kuota kuotasi masa nyata serta-merta. | **SEDERHANA / TERKAWAL**<br>Dipantau rapi melalui kuota 100 simbol K-line 30-hari dan saringan awan `get_stock_screen` V2. | **SANGAT JIMAT (>75% Penjimatan)**<br>Panggilan K-line berkala (setiap 4 jam atau bar-close) mengurangkan penggunaan kuota secara drastik. | **MINIMUM**<br>Penggunaan kuota K-line hampir sifar kerana semakan hanya berlaku seminggu sekali. |
+| **Penggunaan Token & Kos LLM** | Sangat Tinggi ($5.00–$20.00/hari) | Rendah–Sederhana (~$0.06/hari mengikut Jadual 3.5) | Sangat Rendah (~$0.015/hari; panggilan dikurangkan kepada 3-4 kali sehari) | Sangat Rendah (<$0.005/hari) |
+| **Implikasi Peraturan PDT (FINRA)** | **KRITIKAL**<br>Terikat ketat peraturan Pattern Day Trader (maks 3 day trades dalam 5 hari bergolek jika ekuiti < $25k). | **TERIKAT**<br>Wajib dipantau oleh Hard Rule Danial (#5) bagi akaun bawah $25,000. | **BEBAS PDT**<br>Posisi yang dipegang merentas malam (*overnight hold*) dan ditutup pada hari berlainan tidak dikira sebagai day trade. | **BEBAS PDT**<br>Tiada sebarang isu berkaitan had PDT. |
+| **Risiko Pasaran Luar Waktu (Overnight Gap)** | **SIFAR**<br>Tiada pegangan semalaman. | **SIFAR**<br>Ditutup sepenuhnya sebelum jam 15:45 NY. | **ADA (Perlu Mitigasi)**<br>Terdedah kepada lonjakan/kejatuhan harga pra-pasaran (*pre-market gap*) akibat berita semalaman. | **TINGGI**<br>Terdedah kepada kitaran makro ekonomi dan turun naik pendapatan suku tahunan. |
+| **Status Keserasian Seni Bina** | **DITOLAK SECARA TEGAS**<br>Tidak disokong oleh seni bina Paperclip + Moomoo. | **DISOKONG (MOD: DAY)**<br>Mod operasi standard intraday yang aktif. | **DISOKONG (MOD: SWING)**<br>Mod pilihan baharu yang sangat efisien dan ekonomik. | **DI LUAR SKOP UTAMA**<br>Tidak dioptimumkan untuk ejen perdagangan aktif. |
+
+---
+
+### 7.2 Perincian Seni Bina & Pelaksanaan Swing Trading
+
+Mod Swing Trading (`TRADING_MODE=SWING`) direka untuk menangkap pergerakan gelombang trend harga sederhana (3–10 hari) dengan memanfaatkan kestabilan teknikal timeframe lebih tinggi dan mengurangkan kos operasi API:
+
+```text
++------------------------------------------------------------------------+
+| 1. L0 Screener (Saringan Multi-Day)                                    |
+|    - Saringan berasaskan carta Daily: 20-EMA breakout, volume surge    |
+|    - Kitaran imbasan: 4 jam sekali (atau selepas penutupan bar harian) |
++-----------------------------------+------------------------------------+
+                                    |
+                                    v (Calon Saringan 1H/Daily)
++------------------------------------------------------------------------+
+| 2. L1 Analisis Dwi-Ejen (Timeframe 1H & Daily)                         |
+|    - Tariq (Teknikal): Analisis Wyckoff & SMC pada carta 1H & D1       |
+|    - Nawwar (Sentimen): Saringan Earnings Gate diperketat (< 14 hari)  |
++-----------------------------------+------------------------------------+
+                                    |
+                                    v (Tesis S_total & Saiz Posisi)
++------------------------------------------------------------------------+
+| 3. L2 Haziq (Perancangan Perdagangan Swing)                            |
+|    - Saiz risiko modal dikurangkan kepada 1.0% (Mitigasi overnight gap)|
+|    - Nisbah R:R sasaran diperluas (Minimum 1:3)                        |
++-----------------------------------+------------------------------------+
+                                    |
+                                    v (Audit Pematuhan & Had Perlindungan)
++------------------------------------------------------------------------+
+| 4. L3 Danial (Pematuhan Had Perlindungan)                              |
+|    - Pengecualian Time-Exit 15:45 NY (Membenarkan pegangan semalaman)  |
+|    - Pengesahan pesanan Good-Til-Cancelled (TimeInForce.GTC)           |
++-----------------------------------+------------------------------------+
+                                    |
+                                    v (Eksekusi Pesanan GTC)
++------------------------------------------------------------------------+
+| 5. L4 Broker & Exit Sentinel (Pemantauan Berterusan)                   |
+|    - Hard Stop Loss GTC diletakkan terus di pelayan broker Moomoo      |
+|    - Chandelier Trailing Stop dikemas kini pada setiap bar-close harian|
++------------------------------------------------------------------------+
+```
+
+#### 1. Timeframe & Analisis Teknikal L1 (Tariq)
+- **Gabungan Timeframe (Multi-Timeframe Confluence):**
+  - **Daily (D1):** Digunakan untuk menentukan trend makro, zon pengumpulan/pengagihan Wyckoff utama, dan aras sokongan/rintangan institusi (SMC Order Blocks).
+  - **1-Jam (1H):** Digunakan untuk memperincikan titik pemicu kemasukan (*entry trigger*), pembentukan struktur *Change of Character* (CHoCH), dan penentuan aras henti rugi berasaskan $1.5 \times ATR_{1H}$.
+- **Pengurusan Kuota K-line:**
+  - Tariq memanggil `get_cur_kline_with_sub` bagi `KLType.K_60M` (1-Jam) dan `KLType.K_DAY` (Harian).
+  - Panggilan hanya dibuat apabila ada calon baharu daripada L0 atau pada jadual semakan 4-jam, mengelakkan panggilan berulang yang membazirkan kuota 100 simbol bulanan.
+
+#### 2. Penapisan Katalis & Kalendar L1 (Nawwar)
+- **Peraturan Sekatan Pendapatan (Earnings Gate) 14-Hari:**
+  - Di bawah Day Trading, sekatan pendapatan ditetapkan pada < 5 hari.
+  - Di bawah Swing Trading, kaunter ditolak sekiranya tarikh pengumuman pendapatan syarikat berada dalam tempoh **14 hari** dari tarikh kemasukan (`days_to_earnings < 14`). Ini mengelakkan pegangan multi-day terperangkap dalam lonjakan volatiliti *Earnings Announcement* yang boleh menembusi Stop Loss melalui jurang harga semalaman (*overnight price gap*).
+- **Semakan Sentimen & Berita Makro:**
+  - Nawwar menyemak kalendar mesyuarat FOMC, pelepasan data CPI/PPI, dan berita sektor berimpak tinggi yang merangkumi horizon 7–14 hari.
+
+#### 3. Jadual Pemantauan Berkala (Periodic Wake Loop)
+Berbanding Day Trading yang menjalankan imbasan setiap 300 saat (5 minit) semasa pasaran aktif, Swing Trading menggunakan kitaran pemantauan berkala:
+- **09:00 NY (Pra-Pasaran / Pre-Market Sync):** Memeriksa harga pra-pasaran, mengesahkan integriti posisi semalaman, dan menyemak sebarang amaran berita mendadak.
+- **13:00 NY (Pertengahan Sesi / Mid-Day Review):** Menilai momentum volum sesi tengah dan mengimbas calon kemasukan baharu pada carta 1H.
+- **16:30 NY (Pasca-Pasaran / Post-Market Bar Close):** Menjalankan rekonsiliasi harian selepas pasaran ditutup, mengira semula paras Chandelier Trailing Stop berasaskan harga penutup harian, dan mengemas kini pangkalan data portfolio.
+- **Pemicu Amaran Harga Bersyarat (Price Alert Trigger):** Sekiranya berlaku pergerakan luar biasa melebihi $2.5 \times ATR$, Exit Sentinel membina pemicu pantas untuk membangunkan ejen pemantau tanpa menunggu kitaran 4 jam.
+
+#### 4. Pengurusan Pesanan & Had Perlindungan (GTC vs Good-For-Day)
+- **Peralihan ke Pesanan GTC (Good-Til-Cancelled):**
+  - Parameter pesanan Moomoo OpenAPI ditukar daripada `time_in_force = TimeInForce.DAY` kepada `time_in_force = TimeInForce.GTC`.
+  - Pesanan had (*limit entry*) dan pesanan henti rugi (*Hard Stop Loss*) kekal aktif di pelayan broker Moomoo merentas sesi dagangan sehingga dipenuhi atau dibatalkan secara eksplisit oleh sistem.
+- **Pengecualian Mandatori Peraturan Time-Exit 15:45 NY:**
+  - Hard Rule #5 Danial diubahsuai secara dinamik: Arahan tutup automatik pada jam 15:45 NY hanya diaktifkan sekiranya `TRADING_MODE=DAY`. Bagi `TRADING_MODE=SWING`, kedudukan dibenarkan untuk dipegang semalaman (*overnight hold*).
+- **Mitigasi Risiko Jurang Harga Semalaman (Overnight Gap Risk Mitigation):**
+  - **Pengurangan Saiz Risiko Modal:** Saiz risiko maksimum per transaksi dikurangkan daripada 1.5%–2.0% (Day) kepada **maksimum 1.0% daripada nilai ekuiti akaun** (Swing).
+  - **Hard SL Wajib di Broker:** Exit Sentinel memastikan setiap kedudukan belian yang berjaya diisi disusuli serta-merta dengan pesanan *Stop Loss Order* GTC yang berdaftar terus pada pelayan broker Moomoo bagi melindungi modal sekiranya pasaran dibuka menjunam (*gap-down opening*).
+
+---
+
+### 7.3 Penggunaan Toggle Konfigurasi `TRADING_MODE` (DAY | SWING)
+
+Sistem menyokong pertukaran mod operasi melalui pembolehubah persekitaran tunggal tanpa perlu mengubah kod asas:
+
+```bash
+# Konfigurasi di .env atau Docker Environment
+TRADING_MODE=DAY      # Pilihan: DAY (Lalai Intraday) | SWING (Multi-Day Swing)
+```
+
+#### Matriks Perbezaan Tingkah Laku Sistem Mengikut Lapisan (L0 -> L4)
+
+| Lapisan Sistem | Parameter / Komponen | Mod DAY (`TRADING_MODE=DAY`) | Mod SWING (`TRADING_MODE=SWING`) |
+| :--- | :--- | :--- | :--- |
+| **L0 Screener** | Kekerapan Imbasan | Setiap 300 saat (5 minit) | Setiap 4 jam / Penutupan Bar Harian |
+| | Kriteria Saringan | Momentum 5M, Volum Relatif Intraday, Julat Sesi | Penembusan 20-EMA Harian, Tapisan Volum 50-SMA |
+| **L1 Tariq** | Jenis K-line Moomoo | `KLType.K_5M`, `KLType.K_15M` | `KLType.K_60M` (1H), `KLType.K_DAY` (Harian) |
+| | Horizon Wyckoff | Fasa Intraday Accumulation/Spring | Fasa Re-Accumulation Harian, Zon SMC Utama |
+| **L1 Nawwar** | Sekatan Tarikh Earnings | `days_to_earnings < 5` hari | `days_to_earnings < 14` hari |
+| | Skop Analisis Sentimen | Sentimen berita 24-jam & kalendar harian | Trend industri 14-hari & jadual makro FOMC/CPI |
+| **L2 Haziq** | Nisbah Risiko:Ganjaran (R:R) | Minimum 1:2 | Minimum 1:3 |
+| | Had Risiko Modal | 1.5% daripada nilai ekuiti | 1.0% daripada nilai ekuiti (Konservatif) |
+| **L3 Danial** | Semakan Had PDT | Wajib dipatuhi (Maks 3 transaksi jika < $25k) | Dikecualikan bagi pegangan > 1 hari perniagaan |
+| | Penguatkuasaan Time-Exit | **Aktif Wajib** (Tutup semua posisi pada 15:45 NY) | **Dinyahaktifkan** (Membenarkan pegangan semalaman) |
+| | Parameter `time_in_force` | `TimeInForce.DAY` | `TimeInForce.GTC` |
+| **L4 Sentinel** | Logik Trailing Stop | Intraday Chandelier Trailing (Tick-by-tick) | Daily Bar-Close Trailing (Dikemas kini jam 16:30 NY) |
+| | Rekonsiliasi Pesanan | Menutup pesanan belum diisi jam 16:00 NY | Mengekalkan pesanan GTC aktif merentas hari |
+| **Dashboard UI** | Paparan Bar Status | Lencana `[MOD: DAY (INTRADAY)]` | Lencana `[MOD: SWING (MULTI-DAY)]` |
+| | Tab Pemantauan | Countdown 5-minit saringan seterusnya | Jadual imbasan sesi 4-jam & amaran threshold |
+
