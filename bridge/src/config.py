@@ -42,6 +42,28 @@ class BridgeConfig:
     ENABLE_PROTO_ENCRYPT: bool = os.getenv("ENABLE_PROTO_ENCRYPT", "true").lower() in ("true", "1", "yes")
 
     @classmethod
+    def get_trading_mode(cls) -> str:
+        """
+        Dynamically reads active TRADING_MODE from screener_config.sqlite with fallback to env.
+        """
+        config_db = cls.SHARED_DATA_DIR / "screener_config.sqlite"
+        if config_db.exists():
+            try:
+                import sqlite3
+                conn = sqlite3.connect(str(config_db), timeout=2.0)
+                cursor = conn.cursor()
+                cursor.execute("SELECT trading_mode FROM screener_config WHERE id = 1")
+                row = cursor.fetchone()
+                conn.close()
+                if row and row[0]:
+                    mode = str(row[0]).strip().upper()
+                    if mode in ("DAY", "SWING"):
+                        return mode
+            except Exception:
+                pass
+        return cls.TRADING_MODE
+
+    @classmethod
     def ensure_rsa_key(cls) -> Path:
         """
         Ensures a 1024-bit PKCS#1 RSA private key exists for OpenD protocol encryption.

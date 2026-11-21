@@ -91,6 +91,8 @@ class ScreenerConfig:
         cls.MOM_MAX_RVOL = cls.DEFAULT_MOM_MAX_RVOL
         cls.MAX_CANDIDATES_PER_LANE = cls.DEFAULT_MAX_CANDIDATES_PER_LANE
         cls.MAX_BUYING_POWER = cls.DEFAULT_MAX_BUYING_POWER
+        default_mode = os.getenv("TRADING_MODE", "DAY").upper().strip()
+        cls.TRADING_MODE = default_mode if default_mode in ("DAY", "SWING") else "DAY"
 
     @classmethod
     def load_active_config(cls) -> dict:
@@ -162,6 +164,13 @@ class ScreenerConfig:
                             logger.warning("max_buying_power %s below floor 500.0, keeping %s", max_bp, cls.MAX_BUYING_POWER)
                     except (ValueError, TypeError) as e:
                         logger.warning("Invalid max_buying_power in db: %s", e)
+
+                if "trading_mode" in row.keys() and row["trading_mode"] is not None:
+                    mode = str(row["trading_mode"]).strip().upper()
+                    if mode in ("DAY", "SWING"):
+                        cls.TRADING_MODE = mode
+                    else:
+                        logger.warning("Invalid trading_mode in db: %s, keeping %s", mode, cls.TRADING_MODE)
             else:
                 cls.reset_to_defaults()
 
@@ -177,5 +186,6 @@ class ScreenerConfig:
             "max_rvol": cls.MOM_MAX_RVOL,
             "max_candidates_per_lane": cls.MAX_CANDIDATES_PER_LANE,
             "max_buying_power": cls.MAX_BUYING_POWER,
+            "trading_mode": cls.TRADING_MODE,
         }
 

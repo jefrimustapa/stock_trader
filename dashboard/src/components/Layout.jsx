@@ -51,6 +51,8 @@ export function Layout({
   onToggleMode,
   user,
   statusData,
+  onToggleTradingMode,
+  isTogglingTradingMode = false,
   children,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -293,26 +295,58 @@ export function Layout({
 
           {/* Action Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, sm: 1.5 }, flexShrink: 0 }}>
-            {/* Trading Mode Badge (HOM-328 / Issue #14) */}
-            <Chip
-              size="small"
-              id="chip-trading-mode"
-              label={String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
-                ? 'MOD: SWING (MULTI-DAY)'
-                : 'MOD: DAY (INTRADAY)'}
-              sx={{
-                backgroundColor: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
-                  ? 'rgba(105, 108, 255, 0.16)'
-                  : 'rgba(3, 195, 236, 0.16)',
-                color: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
-                  ? '#696cff'
-                  : '#03c3ec',
-                fontWeight: 700,
-                fontSize: { xs: '0.68rem', sm: '0.75rem' },
-                height: { xs: 24, sm: 26 },
-                '& .MuiChip-label': { px: { xs: 0.8, sm: 1.2 } },
-              }}
-            />
+            {/* Trading Mode Badge & Interactive Toggle Button (HOM-328 / HOM-351) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 0.8 } }}>
+              <Chip
+                size="small"
+                id="chip-trading-mode"
+                onClick={() => onToggleTradingMode && onToggleTradingMode()}
+                clickable={Boolean(onToggleTradingMode)}
+                label={String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                  ? 'MOD: SWING (MULTI-DAY)'
+                  : 'MOD: DAY (INTRADAY)'}
+                sx={{
+                  backgroundColor: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                    ? 'rgba(105, 108, 255, 0.16)'
+                    : 'rgba(3, 195, 236, 0.16)',
+                  color: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                    ? '#696cff'
+                    : '#03c3ec',
+                  fontWeight: 700,
+                  fontSize: { xs: '0.68rem', sm: '0.75rem' },
+                  height: { xs: 24, sm: 26 },
+                  cursor: onToggleTradingMode ? 'pointer' : 'default',
+                  '& .MuiChip-label': { px: { xs: 0.8, sm: 1.2 } },
+                }}
+              />
+              <Tooltip title={String(statusData?.trading_mode || 'DAY').toUpperCase() === 'SWING' ? 'Tukar kepada mod DAY (Intraday)' : 'Tukar kepada mod SWING (Multi-Day)'}>
+                <Button
+                  id="btn-toggle-trading-mode"
+                  size="small"
+                  variant="outlined"
+                  disabled={isTogglingTradingMode}
+                  onClick={() => onToggleTradingMode && onToggleTradingMode()}
+                  sx={{
+                    minWidth: { xs: 65, sm: 78 },
+                    height: { xs: 24, sm: 26 },
+                    fontSize: { xs: '0.65rem', sm: '0.72rem' },
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    py: 0,
+                    px: 1,
+                    borderRadius: '12px',
+                    borderColor: String(statusData?.trading_mode || 'DAY').toUpperCase() === 'SWING' ? '#696cff' : '#03c3ec',
+                    color: String(statusData?.trading_mode || 'DAY').toUpperCase() === 'SWING' ? '#696cff' : '#03c3ec',
+                    '&:hover': {
+                      borderColor: String(statusData?.trading_mode || 'DAY').toUpperCase() === 'SWING' ? '#5f61e6' : '#02a8cc',
+                      backgroundColor: String(statusData?.trading_mode || 'DAY').toUpperCase() === 'SWING' ? 'rgba(105, 108, 255, 0.08)' : 'rgba(3, 195, 236, 0.08)',
+                    }
+                  }}
+                >
+                  {isTogglingTradingMode ? 'Menukar...' : (String(statusData?.trading_mode || 'DAY').toUpperCase() === 'SWING' ? 'Ke DAY' : 'Ke SWING')}
+                </Button>
+              </Tooltip>
+            </Box>
 
             {/* OpenD Status Chip */}
             <Chip
