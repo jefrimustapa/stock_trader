@@ -119,8 +119,8 @@ async function runSuite() {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.waitForTimeout(1000);
 
-    // 6. Navigate to Settings -> Capital & Risk tab and verify exclusive toggle
-    console.log('\n3. Navigating to Settings tab for mode switching...');
+    // 6. Navigate to Settings -> Capital & Risk tab and verify exclusive toggle and interval details
+    console.log('\n3. Navigating to Settings tab for mode switching & interval checks...');
     await page.click('#nav-item-settings');
     await page.waitForTimeout(1000);
     await page.click('#tab-capital-risk');
@@ -128,6 +128,17 @@ async function runSuite() {
 
     const settingsToggleSelector = '#btn-settings-toggle-trading-mode';
     await page.waitForSelector(settingsToggleSelector, { timeout: 10000 });
+
+    // Verify monitoring interval descriptions on Settings page (Rev 6)
+    const settingsPageText = await page.innerText('body');
+    assertCheck(
+      'Settings page contains DAY monitoring interval detail',
+      settingsPageText.includes('Interval Pemantauan: Setiap 5 minit (300s) semasa pasaran aktif')
+    );
+    assertCheck(
+      'Settings page contains SWING monitoring interval detail',
+      settingsPageText.includes('Interval Pemantauan: Kitaran 4H / Harian (09:00, 13:00, 16:30 NY) + semakan adaptif 1H')
+    );
 
     // Ensure we start from DAY mode in Settings
     let currentSettingsChip = await page.innerText('#chip-settings-trading-mode');
@@ -189,6 +200,43 @@ async function runSuite() {
     const ss4 = path.join(QA_DIR, 'hom351_trading_mode_04_day_restored.png');
     await page.screenshot({ path: ss4, fullPage: false });
     console.log(`  [Screenshot Saved]: ${ss4}`);
+
+    // 10. Verify Portfolio page: OpenD chip removed from page header
+    console.log('\n7. Navigating to Portfolio page to verify OpenD header chip is removed...');
+    await page.click('#nav-item-portfolio');
+    await page.waitForTimeout(1500);
+
+    const portfolioPageText = await page.innerText('body');
+    // Header should not contain OpenD chip
+    const portfolioHeaderArea = await page.$('h5'); // Portfolio Pegangan
+    const portfolioHeaderParent = await page.evaluate(() => {
+      const h5 = Array.from(document.querySelectorAll('h5')).find(el => el.textContent.includes('Portfolio Pegangan'));
+      return h5 && h5.parentElement ? h5.parentElement.innerText : '';
+    });
+    console.log(`  [Portfolio Header Area Text]: "${portfolioHeaderParent.replace(/\n/g, ' ')}"`);
+    assertCheck('Portfolio page header does NOT contain OpenD chip', !portfolioHeaderParent.includes('OpenD:'));
+
+    const ssPortfolio = path.join(QA_DIR, 'hom351_portfolio_opend_removed.png');
+    await page.screenshot({ path: ssPortfolio, fullPage: false });
+    console.log(`  [Screenshot Saved]: ${ssPortfolio}`);
+
+    // 11. Verify Agents page: Redundant L0 -> L1 -> L2 -> L3 -> L4 chip removed from pipeline header
+    console.log('\n8. Navigating to Agents page to verify L0->L4 pipeline chip is removed...');
+    await page.click('#nav-item-agents');
+    await page.waitForTimeout(1500);
+
+    const pipelineHeaderHasChip = await page.evaluate(() => {
+      const titles = Array.from(document.querySelectorAll('h6, .MuiTypography-subtitle1'));
+      const pipelineTitle = titles.find(el => el.textContent.includes('Trading Pipeline Flow'));
+      if (!pipelineTitle || !pipelineTitle.parentElement) return false;
+      return pipelineTitle.parentElement.innerText.includes('L0 → L1 → L2 → L3 → L4');
+    });
+    console.log(`  [Pipeline Header Has L0->L4 Chip]: ${pipelineHeaderHasChip}`);
+    assertCheck('Pipeline header does NOT contain redundant L0->L4 chip', !pipelineHeaderHasChip);
+
+    const ssAgents = path.join(QA_DIR, 'hom351_agents_chip_removed.png');
+    await page.screenshot({ path: ssAgents, fullPage: false });
+    console.log(`  [Screenshot Saved]: ${ssAgents}`);
 
     console.log('\n================================================================');
     console.log(`  E2E Test Suite Completed: ${passedTests}/${totalTests} Passed`);

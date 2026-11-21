@@ -840,6 +840,9 @@ export function SettingsPage({
                             &bull; <strong>Had Risiko:</strong> 2.0% ekuiti per dagangan (Maks $2,000)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Interval Pemantauan:</strong> Setiap 5 minit (300s) semasa pasaran aktif
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
                             &bull; <strong>Saringan:</strong> Momentum &amp; VCP Intraday (5-min/15-min)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
@@ -862,6 +865,9 @@ export function SettingsPage({
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
                             &bull; <strong>Had Risiko:</strong> 1.0% ekuiti per dagangan (Maks $1,000)
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Interval Pemantauan:</strong> Kitaran 4H / Harian (09:00, 13:00, 16:30 NY) + semakan adaptif 1H
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
                             &bull; <strong>Saringan:</strong> Penjejakan Trend EMA20 / 50-day SMA harian

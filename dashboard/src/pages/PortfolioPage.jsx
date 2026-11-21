@@ -30,8 +30,6 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { sneatTokens } from '../theme';
 
 export function PortfolioPage({ onNavigate }) {
@@ -116,7 +114,6 @@ export function PortfolioPage({ onNavigate }) {
     position_count: 0,
   };
 
-  const isConnected = String(data?.opend_status || '').toUpperCase() === 'CONNECTED';
   const isPositiveTotal = summary.total_unrealized_pl >= 0;
 
   return (
@@ -150,17 +147,6 @@ export function PortfolioPage({ onNavigate }) {
                 fontSize: '0.72rem',
                 backgroundColor: data?.env === 'REAL' ? sneatTokens.error.soft : sneatTokens.info.soft,
                 color: data?.env === 'REAL' ? sneatTokens.error.main : sneatTokens.info.main,
-              }}
-            />
-            <Chip
-              size="small"
-              icon={isConnected ? <CheckCircleIcon sx={{ fontSize: '14px !important' }} /> : <WarningAmberIcon sx={{ fontSize: '14px !important' }} />}
-              label={`OpenD: ${data?.opend_status || 'MEMUAT...'}`}
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.72rem',
-                backgroundColor: isConnected ? sneatTokens.success.soft : sneatTokens.warning.soft,
-                color: isConnected ? sneatTokens.success.main : sneatTokens.warning.main,
               }}
             />
           </Box>
