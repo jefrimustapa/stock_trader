@@ -1,7 +1,7 @@
 /**
  * test_trading_mode_toggle_playwright.js
- * End-to-End Playwright Verification for HOM-351:
- * Interactive TRADING_MODE Toggle (Day vs Swing) via Dashboard Header & Settings.
+ * End-to-End Playwright Verification for HOM-351 (Rev 5):
+ * Mode switching exclusively in Settings page; Header mode badge strictly read-only.
  * Executed via /paperclip/bin/pw-browser run
  */
 
@@ -19,7 +19,7 @@ if (!fs.existsSync(QA_DIR)) {
 }
 
 console.log('================================================================');
-console.log('  HOM-351 Playwright E2E: TRADING_MODE Interactive Toggle Test  ');
+console.log('  HOM-351 Playwright E2E: Read-Only Header & Settings Toggle   ');
 console.log(`  Target: ${TARGET_URL}`);
 console.log(`  QA Dir: ${QA_DIR}`);
 console.log('================================================================\n');
@@ -62,58 +62,65 @@ async function runSuite() {
     await page.goto(`${TARGET_URL}/#/`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForTimeout(2000);
 
-    // 2. Check for Trading Mode Badge and Toggle Button
+    // 2. Check for Trading Mode Badge (Read-Only)
     const badgeSelector = '#chip-trading-mode';
-    const toggleBtnSelector = '#btn-toggle-trading-mode';
-
     await page.waitForSelector(badgeSelector, { timeout: 10000 });
-    await page.waitForSelector(toggleBtnSelector, { timeout: 10000 });
 
     let initialBadgeText = await page.innerText(badgeSelector);
-    console.log(`  [Initial Badge]: "${initialBadgeText}"`);
+    console.log(`  [Initial Header Badge]: "${initialBadgeText}"`);
     assertCheck('Trading Mode Badge is visible on Header', initialBadgeText.includes('MOD:'));
 
-    // If currently SWING, toggle once to ensure starting from DAY
-    if (initialBadgeText.includes('SWING')) {
-      console.log('  Normalizing initial mode to DAY by clicking toggle...');
-      await page.click(toggleBtnSelector);
-      await page.waitForTimeout(2000);
-      initialBadgeText = await page.innerText(badgeSelector);
-      console.log(`  [Normalized Badge]: "${initialBadgeText}"`);
-    }
+    // 3. Verify toggle button has been removed from Header
+    const headerToggleBtn = await page.$('#btn-toggle-trading-mode');
+    assertCheck('Header toggle button #btn-toggle-trading-mode is NOT present on Header', headerToggleBtn === null);
 
-    assertCheck('Badge is in DAY mode initially: "MOD: DAY (INTRADAY)"', initialBadgeText.includes('DAY'));
+    // 4. Verify Header Badge is non-interactive (read-only)
+    const cursorStyle = await page.$eval(badgeSelector, (el) => window.getComputedStyle(el).cursor);
+    console.log(`  [Header Badge Cursor Style]: "${cursorStyle}"`);
+    assertCheck('Header badge cursor is "default" (non-interactive)', cursorStyle === 'default' || cursorStyle === 'auto');
 
-    // Screenshot initial DAY state
+    // Click on header badge to ensure no state change happens
+    await page.click(badgeSelector);
+    await page.waitForTimeout(1000);
+    const postClickBadgeText = await page.innerText(badgeSelector);
+    assertCheck('Clicking Header badge does NOT trigger mode toggle', postClickBadgeText === initialBadgeText);
+
+    // Screenshot initial state
     const ss1 = path.join(QA_DIR, 'hom351_trading_mode_01_day.png');
     await page.screenshot({ path: ss1, fullPage: false });
     console.log(`  [Screenshot Saved]: ${ss1}`);
 
-    // 3. User clicks toggle button to switch to SWING
-    console.log('\n2. Clicking #btn-toggle-trading-mode to switch to SWING...');
-    await page.click(toggleBtnSelector);
-    await page.waitForTimeout(2500);
+    // 5. Mobile Layout & Responsive Check (375 x 667)
+    console.log('\n2. Testing Mobile Responsive Layout (375 x 667)...');
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.waitForTimeout(1000);
 
-    const swingBadgeText = await page.innerText(badgeSelector);
-    console.log(`  [After Click 1 Badge]: "${swingBadgeText}"`);
-    assertCheck('Badge updates to "MOD: SWING (MULTI-DAY)"', swingBadgeText.includes('MOD: SWING (MULTI-DAY)'));
+    const mobileMenuBtn = await page.waitForSelector('#btn-mobile-menu', { timeout: 10000 });
+    const mobileBadge = await page.waitForSelector(badgeSelector, { timeout: 10000 });
 
-    // Screenshot SWING state
-    const ss2 = path.join(QA_DIR, 'hom351_trading_mode_02_swing.png');
-    await page.screenshot({ path: ss2, fullPage: false });
-    console.log(`  [Screenshot Saved]: ${ss2}`);
+    const menuBox = await mobileMenuBtn.boundingBox();
+    const badgeBox = await mobileBadge.boundingBox();
 
-    // 4. Reload page to verify persistence across sessions
-    console.log('\n3. Reloading page to verify persistence across sessions...');
-    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(2000);
+    console.log(`  [Mobile Menu Bounding Box]: x=${menuBox.x}, width=${menuBox.width}`);
+    console.log(`  [Mobile Badge Bounding Box]: x=${badgeBox.x}, width=${badgeBox.width}`);
 
-    const reloadedBadgeText = await page.innerText(badgeSelector);
-    console.log(`  [After Reload Badge]: "${reloadedBadgeText}"`);
-    assertCheck('SWING mode persists across page reload', reloadedBadgeText.includes('MOD: SWING (MULTI-DAY)'));
+    assertCheck('Mobile menu button and header badge do NOT overlap', (menuBox.x + menuBox.width) <= badgeBox.x);
 
-    // 5. Navigate to Settings -> Capital & Risk tab and verify settings card & toggle
-    console.log('\n4. Navigating to Settings tab to verify settings card...');
+    const mobileBadgeText = await page.innerText(badgeSelector);
+    console.log(`  [Mobile Header Badge Text]: "${mobileBadgeText}"`);
+    assertCheck('Mobile Header badge displays compact label', mobileBadgeText.length <= 15);
+
+    // Screenshot mobile view
+    const ssMobile = path.join(QA_DIR, 'hom351_trading_mode_02_mobile.png');
+    await page.screenshot({ path: ssMobile, fullPage: false });
+    console.log(`  [Screenshot Saved]: ${ssMobile}`);
+
+    // Restore desktop viewport
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForTimeout(1000);
+
+    // 6. Navigate to Settings -> Capital & Risk tab and verify exclusive toggle
+    console.log('\n3. Navigating to Settings tab for mode switching...');
     await page.click('#nav-item-settings');
     await page.waitForTimeout(1000);
     await page.click('#tab-capital-risk');
@@ -122,29 +129,63 @@ async function runSuite() {
     const settingsToggleSelector = '#btn-settings-toggle-trading-mode';
     await page.waitForSelector(settingsToggleSelector, { timeout: 10000 });
 
-    const settingsChipText = await page.innerText('#chip-settings-trading-mode');
-    console.log(`  [Settings Chip Content]: "${settingsChipText}"`);
-    assertCheck('Settings Card displays active mode SWING', settingsChipText.includes('SWING'));
+    // Ensure we start from DAY mode in Settings
+    let currentSettingsChip = await page.innerText('#chip-settings-trading-mode');
+    console.log(`  [Current Settings Chip]: "${currentSettingsChip}"`);
+    if (currentSettingsChip.includes('SWING')) {
+      console.log('  Normalizing initial Settings state to DAY...');
+      await page.click(settingsToggleSelector);
+      await page.waitForTimeout(2500);
+      currentSettingsChip = await page.innerText('#chip-settings-trading-mode');
+    }
+    assertCheck('Settings mode initialized to DAY', currentSettingsChip.includes('DAY'));
 
-    // Screenshot Settings Card in SWING mode
+    // 7. Click Settings toggle button to switch to SWING
+    console.log('\n4. Switching mode to SWING via Settings toggle button...');
+    await page.click(settingsToggleSelector);
+    await page.waitForTimeout(2500);
+
+    const swingHeaderBadge = await page.innerText(badgeSelector);
+    const swingSettingsChip = await page.innerText('#chip-settings-trading-mode');
+    console.log(`  [Header Badge After Settings Toggle]: "${swingHeaderBadge}"`);
+    console.log(`  [Settings Chip After Settings Toggle]: "${swingSettingsChip}"`);
+
+    assertCheck('Header Badge updates dynamically to SWING', swingHeaderBadge.includes('SWING'));
+    assertCheck('Settings Card updates to SWING', swingSettingsChip.includes('SWING'));
+
+    // Screenshot SWING state in Settings
     const ss3 = path.join(QA_DIR, 'hom351_trading_mode_03_settings_swing.png');
     await page.screenshot({ path: ss3, fullPage: false });
     console.log(`  [Screenshot Saved]: ${ss3}`);
 
-    // 6. Click settings toggle button to switch back to DAY
-    console.log('\n5. Clicking #btn-settings-toggle-trading-mode in Settings tab to switch back to DAY...');
+    // 8. Reload page to verify persistence across sessions
+    console.log('\n5. Reloading page to verify persistence across sessions...');
+    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(2000);
+
+    const reloadedHeaderBadge = await page.innerText(badgeSelector);
+    console.log(`  [Header Badge After Reload]: "${reloadedHeaderBadge}"`);
+    assertCheck('SWING mode persists across page reload', reloadedHeaderBadge.includes('SWING'));
+
+    // 9. Switch back to DAY via Settings toggle button
+    console.log('\n6. Restoring mode to DAY via Settings toggle button...');
+    await page.click('#nav-item-settings');
+    await page.waitForTimeout(1000);
+    await page.click('#tab-capital-risk');
+    await page.waitForTimeout(1500);
+
     await page.click(settingsToggleSelector);
     await page.waitForTimeout(2500);
 
-    const finalBadgeText = await page.innerText(badgeSelector);
-    const finalSettingsChipText = await page.innerText('#chip-settings-trading-mode');
-    console.log(`  [Header Badge After Settings Toggle]: "${finalBadgeText}"`);
-    console.log(`  [Settings Chip After Settings Toggle]: "${finalSettingsChipText}"`);
+    const restoredHeaderBadge = await page.innerText(badgeSelector);
+    const restoredSettingsChip = await page.innerText('#chip-settings-trading-mode');
+    console.log(`  [Header Badge Restored]: "${restoredHeaderBadge}"`);
+    console.log(`  [Settings Chip Restored]: "${restoredSettingsChip}"`);
 
-    assertCheck('Badge returns to "MOD: DAY (INTRADAY)"', finalBadgeText.includes('MOD: DAY (INTRADAY)'));
-    assertCheck('Settings Chip returns to "MOD: DAY (INTRADAY)"', finalSettingsChipText.includes('DAY'));
+    assertCheck('Header Badge successfully restored to DAY', restoredHeaderBadge.includes('DAY'));
+    assertCheck('Settings Chip successfully restored to DAY', restoredSettingsChip.includes('DAY'));
 
-    // Screenshot final DAY state in Settings
+    // Screenshot final DAY state restored
     const ss4 = path.join(QA_DIR, 'hom351_trading_mode_04_day_restored.png');
     await page.screenshot({ path: ss4, fullPage: false });
     console.log(`  [Screenshot Saved]: ${ss4}`);
