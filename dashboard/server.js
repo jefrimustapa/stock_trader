@@ -1402,31 +1402,52 @@ app.get('/api/trade/orders', authenticateDashboard, async (req, res) => {
     }
 });
 
+let lastKnownPortfolio = null;
+
 app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
             return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        let bridgePositionsError = null;
+
         const [posRes, accRes] = await Promise.all([
             axios.get(`${targetUrl}/api/v1/trade/positions`, {
                 headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
                 timeout: 5000
-            }).catch(e => ({ data: { positions: [], opend_status: 'DISCONNECTED', error: e.message } })),
+            }).catch(e => {
+                bridgePositionsError = e.message;
+                return { data: { positions: null, opend_status: 'DISCONNECTED', error: e.message } };
+            }),
             axios.get(`${targetUrl}/api/v1/trade/accounts`, {
                 headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
                 timeout: 5000
             }).catch(e => ({ data: { accounts: [], current_account_id: 'N/A' } }))
         ]);
 
-        const rawPositions = posRes.data?.positions || [];
+        const rawPositions = posRes.data?.positions;
         const opendStatus = posRes.data?.opend_status || 'UNKNOWN';
+        const hasTransientError = Boolean(bridgePositionsError || posRes.data?.error || rawPositions === null || opendStatus === 'DISCONNECTED');
+
+        // Fallback to lastKnownPortfolio if transient error occurs and cached data exists
+        if (hasTransientError && lastKnownPortfolio) {
+            return res.json({
+                ...lastKnownPortfolio,
+                opend_status: opendStatus,
+                is_stale: true,
+                stale_reason: bridgePositionsError || posRes.data?.error || 'OpenD disconnected',
+                updated_at: new Date().toISOString()
+            });
+        }
+
+        const validPositionsList = Array.isArray(rawPositions) ? rawPositions : [];
 
         let totalCostBasis = 0;
         let totalMarketValue = 0;
         let totalPlVal = 0;
 
-        const positions = rawPositions.map(p => {
+        const positions = validPositionsList.map(p => {
             const qty = Number(p.qty) || 0;
             const costPrice = Number(p.cost_price) || 0;
             const currentPrice = Number(p.nominal_price) || 0;
@@ -1464,10 +1485,10 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
         totalPlVal = Number(totalPlVal.toFixed(2));
         const totalPlPct = totalCostBasis > 0 ? Number(((totalPlVal / totalCostBasis) * 100).toFixed(2)) : 0;
 
-        return res.json({
+        const payload = {
             opend_status: opendStatus,
-            account_id: accRes.data?.current_account_id || '3123530',
-            env: accRes.data?.env || 'SIMULATE',
+            account_id: accRes.data?.current_account_id || (lastKnownPortfolio ? lastKnownPortfolio.account_id : '3123530'),
+            env: accRes.data?.env || (lastKnownPortfolio ? lastKnownPortfolio.env : 'SIMULATE'),
             summary: {
                 total_cost_basis: totalCostBasis,
                 total_market_value: totalMarketValue,
@@ -1476,10 +1497,22 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
                 position_count: positions.length,
             },
             positions,
+            is_stale: false,
             updated_at: new Date().toISOString()
-        });
+        };
+
+        lastKnownPortfolio = payload;
+        return res.json(payload);
     } catch (err) {
         console.error('[Dashboard] Error fetching portfolio:', err.message);
+        if (lastKnownPortfolio) {
+            return res.json({
+                ...lastKnownPortfolio,
+                is_stale: true,
+                stale_reason: err.message,
+                updated_at: new Date().toISOString()
+            });
+        }
         return res.status(500).json({ error: 'Gagal mendapatkan data portfolio: ' + err.message });
     }
 });

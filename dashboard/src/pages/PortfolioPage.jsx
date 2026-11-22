@@ -22,6 +22,7 @@ import {
   Tooltip,
   TableSortLabel,
   ButtonGroup,
+  Skeleton,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
@@ -35,6 +36,7 @@ import { sneatTokens } from '../theme';
 export function PortfolioPage({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL'); // ALL, GAINERS, LOSERS
@@ -43,7 +45,11 @@ export function PortfolioPage({ onNavigate }) {
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
   const fetchPortfolio = useCallback(async (isManual = false) => {
-    if (isManual) setLoading(true);
+    setData((prev) => {
+      if (!prev) setLoading(true);
+      return prev;
+    });
+    setIsFetching(true);
     try {
       const res = await fetch('/api/portfolio');
       if (!res.ok) {
@@ -58,6 +64,7 @@ export function PortfolioPage({ onNavigate }) {
       setError(err.message || 'Gagal memuatkan data portfolio.');
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
   }, []);
 
@@ -164,15 +171,31 @@ export function PortfolioPage({ onNavigate }) {
           <Button
             variant="outlined"
             size="small"
-            startIcon={<RefreshIcon />}
+            startIcon={
+              <RefreshIcon
+                sx={{
+                  animation: isFetching ? 'spin 1s linear infinite' : 'none',
+                  '@keyframes spin': {
+                    '0%': { transform: 'rotate(0deg)' },
+                    '100%': { transform: 'rotate(360deg)' },
+                  },
+                }}
+              />
+            }
             onClick={() => fetchPortfolio(true)}
-            disabled={loading}
+            disabled={isFetching && !data}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            Segar Semula
+            {isFetching ? 'Mengemas kini...' : 'Segar Semula'}
           </Button>
         </Box>
       </Box>
+
+      {data?.is_stale && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          Perhatian: Sambungan ke OpenD/Bridge terputus sementara. Memaparkan data portfolio terakhir yang diketahui ({data.stale_reason || 'OpenD disconnected'}).
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -205,9 +228,13 @@ export function PortfolioPage({ onNavigate }) {
                   <AttachMoneyIcon sx={{ fontSize: 20 }} />
                 </Box>
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                ${summary.total_market_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Typography>
+              {loading && !data ? (
+                <Skeleton variant="rounded" width={140} height={32} sx={{ my: 0.5 }} />
+              ) : (
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  ${summary.total_market_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Typography>
+              )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
                 Jumlah nilai semasa bagi semua unit pegangan
               </Typography>
@@ -238,9 +265,13 @@ export function PortfolioPage({ onNavigate }) {
                   <Inventory2Icon sx={{ fontSize: 20 }} />
                 </Box>
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                ${summary.total_cost_basis.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Typography>
+              {loading && !data ? (
+                <Skeleton variant="rounded" width={140} height={32} sx={{ my: 0.5 }} />
+              ) : (
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  ${summary.total_cost_basis.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Typography>
+              )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
                 Modal pokok dibelanjakan (harga beli x unit)
               </Typography>
@@ -271,27 +302,31 @@ export function PortfolioPage({ onNavigate }) {
                   {isPositiveTotal ? <TrendingUpIcon sx={{ fontSize: 20 }} /> : <TrendingDownIcon sx={{ fontSize: 20 }} />}
                 </Box>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontWeight: 700,
-                    color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
-                  }}
-                >
-                  {isPositiveTotal ? '+' : ''}${summary.total_unrealized_pl.toFixed(2)}
-                </Typography>
-                <Chip
-                  size="small"
-                  label={`${isPositiveTotal ? '+' : ''}${summary.total_pl_pct.toFixed(2)}%`}
-                  sx={{
-                    fontWeight: 700,
-                    fontSize: '0.72rem',
-                    backgroundColor: isPositiveTotal ? sneatTokens.success.soft : sneatTokens.error.soft,
-                    color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
-                  }}
-                />
-              </Box>
+              {loading && !data ? (
+                <Skeleton variant="rounded" width={150} height={32} sx={{ my: 0.5 }} />
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 700,
+                      color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
+                    }}
+                  >
+                    {isPositiveTotal ? '+' : ''}${summary.total_unrealized_pl.toFixed(2)}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={`${isPositiveTotal ? '+' : ''}${summary.total_pl_pct.toFixed(2)}%`}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.72rem',
+                      backgroundColor: isPositiveTotal ? sneatTokens.success.soft : sneatTokens.error.soft,
+                      color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
+                    }}
+                  />
+                </Box>
+              )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
                 Perbezaan nilai pasaran semasa berbanding kos
               </Typography>
@@ -322,9 +357,13 @@ export function PortfolioPage({ onNavigate }) {
                   <AccountBalanceWalletIcon sx={{ fontSize: 20 }} />
                 </Box>
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                {summary.position_count} Kaunter
-              </Typography>
+              {loading && !data ? (
+                <Skeleton variant="rounded" width={110} height={32} sx={{ my: 0.5 }} />
+              ) : (
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {summary.position_count} Kaunter
+                </Typography>
+              )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
                 Akaun ID: {data?.account_id || '3123530'}
               </Typography>
@@ -369,7 +408,7 @@ export function PortfolioPage({ onNavigate }) {
             onClick={() => setFilterType('ALL')}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            Semua ({data?.positions?.length || 0})
+            Semua ({loading && !data ? '...' : (data?.positions?.length || 0)})
           </Button>
           <Button
             variant={filterType === 'GAINERS' ? 'contained' : 'outlined'}
@@ -481,14 +520,28 @@ export function PortfolioPage({ onNavigate }) {
             </TableHead>
             <TableBody>
               {loading && !data ? (
-                <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
-                    <CircularProgress size={32} />
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5 }}>
-                      Memuatkan rekod portfolio Moomoo OpenD...
-                    </Typography>
-                  </TableCell>
-                </TableRow>
+                [1, 2, 3, 4].map((idx) => (
+                  <TableRow key={`skeleton-row-${idx}`}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Skeleton variant="rounded" width={65} height={24} sx={{ borderRadius: 1.5 }} />
+                        <Skeleton variant="text" width={110} height={20} />
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Skeleton variant="rounded" width={80} height={24} sx={{ mx: 'auto', borderRadius: 1.5 }} />
+                    </TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={50} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={60} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={60} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={70} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={70} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={60} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right">
+                      <Skeleton variant="rounded" width={60} height={24} sx={{ ml: 'auto', borderRadius: 1.5 }} />
+                    </TableCell>
+                  </TableRow>
+                ))
               ) : filteredPositions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
