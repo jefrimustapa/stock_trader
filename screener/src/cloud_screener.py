@@ -27,9 +27,10 @@ class CloudScreener:
     Stage 3: Top-tier K-line enrichment gate with quota budgeting (Top 3-5 candidates per lane).
     """
 
-    def __init__(self, quota_tracker: QuotaTracker, output_file: Path):
+    def __init__(self, quota_tracker: QuotaTracker, output_file: Path, trading_mode: str = "DAY"):
         self.quota_tracker = quota_tracker
         self.output_file = output_file
+        self.trading_mode = trading_mode.upper() if trading_mode else "DAY"
 
     def filter_stage0_quality(
         self,
@@ -384,6 +385,11 @@ class CloudScreener:
                 logger.warning("Quota exceeded while adding %s", symbol)
                 break
 
+            interest_zone = None
+            if self.trading_mode == "SWING":
+                dist = float(item.get("dist_52w", 5.0))
+                interest_zone = "SMC_ORDER_BLOCK_DEMAND" if dist <= 5.0 else "SWING_CONFLUENCE_SR"
+
             # Build WatchlistStock model
             stock_obj = WatchlistStock(
                 symbol=symbol,
@@ -397,7 +403,9 @@ class CloudScreener:
                 lane_score=float(item["lane_score"]),
                 setup_metrics=item.get("setup_metrics"),
                 status="READY_FOR_ANALYSIS",
-                exchange=item.get("exchange")
+                exchange=item.get("exchange"),
+                trading_mode=self.trading_mode,
+                interest_zone=interest_zone
             )
             final_stocks.append(stock_obj)
 
@@ -494,6 +502,7 @@ class CloudScreener:
             market_status=market_status,
             is_live=is_live,
             data_as_of=effective_data_as_of,
+            trading_mode=self.trading_mode,
             source=source,
             warning=warning,
             funnel=funnel,

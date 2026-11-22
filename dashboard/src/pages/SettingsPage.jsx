@@ -14,6 +14,7 @@ import {
   CardContent,
   Tabs,
   Tab,
+  Paper,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
@@ -48,7 +49,14 @@ const DEFAULT_CONFIG = {
   agent_orders_per_page: 10,
 };
 
-export function SettingsPage({ statusData, onRefresh, initialTab }) {
+export function SettingsPage({
+  statusData,
+  screenerConfig,
+  onRefresh,
+  initialTab,
+  onToggleTradingMode,
+  isTogglingTradingMode = false,
+}) {
   const getInitialTab = () => {
     if (typeof initialTab === 'number') return initialTab;
     if (typeof window !== 'undefined') {
@@ -345,6 +353,38 @@ export function SettingsPage({ statusData, onRefresh, initialTab }) {
       setErrorMsg('Ralat komunikasi pelayan semasa menyimpan tetapan.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const currentTradingMode = String(statusData?.trading_mode || config?.trading_mode || 'DAY').toUpperCase();
+
+  const handleSettingsToggleTradingMode = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const nextMode = currentTradingMode === 'SWING' ? 'DAY' : 'SWING';
+    if (onToggleTradingMode) {
+      await onToggleTradingMode(nextMode);
+      setSuccessMsg(`Mod dagangan berjaya ditukar kepada ${nextMode}.`);
+    } else {
+      try {
+        setSaving(true);
+        const res = await fetch('/api/trading-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: nextMode }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setSuccessMsg(data.message || `Mod dagangan berjaya ditukar kepada ${nextMode}.`);
+          if (onRefresh) onRefresh();
+          fetchConfig();
+        } else {
+          setErrorMsg(data.error || 'Gagal menukar mod dagangan.');
+        }
+      } catch (err) {
+        setErrorMsg('Ralat rangkaian semasa menukar mod dagangan.');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -737,6 +777,134 @@ export function SettingsPage({ statusData, onRefresh, initialTab }) {
             {/* Main Form Column (Left - 7.5 col) */}
             <Grid item xs={12} md={7} lg={7.5}>
               <Box component="form" onSubmit={handleSaveCapital} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                {/* Card 0: Mod Dagangan Aktif (TRADING_MODE: DAY vs SWING) - HOM-351 */}
+                <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
+                  <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
+                      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                        <Box
+                          sx={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: '10px',
+                            backgroundColor: currentTradingMode === 'SWING' ? 'rgba(105, 108, 255, 0.16)' : 'rgba(3, 195, 236, 0.16)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: currentTradingMode === 'SWING' ? '#696cff' : '#03c3ec',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <SpeedIcon sx={{ fontSize: 24 }} />
+                        </Box>
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                            Mod Dagangan Aktif (TRADING_MODE)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                            Peralihan serta-merta antara Intraday (DAY) dan Multi-Day (SWING)
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Chip
+                        id="chip-settings-trading-mode"
+                        label={currentTradingMode === 'SWING' ? 'MOD: SWING (MULTI-DAY)' : 'MOD: DAY (INTRADAY)'}
+                        sx={{
+                          backgroundColor: currentTradingMode === 'SWING' ? 'rgba(105, 108, 255, 0.16)' : 'rgba(3, 195, 236, 0.16)',
+                          color: currentTradingMode === 'SWING' ? '#696cff' : '#03c3ec',
+                          fontWeight: 700,
+                          fontSize: '0.78rem',
+                          height: 28,
+                        }}
+                      />
+                    </Box>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    {/* Comparison Guide */}
+                    <Grid container spacing={2} sx={{ mb: 2.5 }}>
+                      <Grid item xs={12} sm={6}>
+                        <Paper
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            borderColor: currentTradingMode === 'DAY' ? '#03c3ec' : 'divider',
+                            backgroundColor: currentTradingMode === 'DAY' ? 'rgba(3, 195, 236, 0.04)' : 'transparent',
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#03c3ec', mb: 0.5 }}>
+                            Mod DAY (Intraday)
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Had Risiko:</strong> 2.0% ekuiti per dagangan (Maks $2,000)
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Interval Pemantauan:</strong> Setiap 5 minit (300s) semasa pasaran aktif
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Saringan:</strong> Momentum &amp; VCP Intraday (5-min/15-min)
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                            &bull; <strong>Penutupan:</strong> Wajib square-off 15:45 NY (Tiada pegangan malam)
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Paper
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            borderColor: currentTradingMode === 'SWING' ? '#696cff' : 'divider',
+                            backgroundColor: currentTradingMode === 'SWING' ? 'rgba(105, 108, 255, 0.04)' : 'transparent',
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#696cff', mb: 0.5 }}>
+                            Mod SWING (Multi-Day)
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Had Risiko:</strong> 1.0% ekuiti per dagangan (Maks $1,000)
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Interval Pemantauan:</strong> Kitaran 4H / Harian (09:00, 13:00, 16:30 NY) + semakan adaptif 1H
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
+                            &bull; <strong>Saringan:</strong> Penjejakan Trend EMA20 / 50-day SMA harian
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                            &bull; <strong>Pegangan:</strong> Pegangan rentas hari dibenarkan dengan trailing stop
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 }}>
+                      <Button
+                        id="btn-settings-toggle-trading-mode"
+                        type="button"
+                        variant="contained"
+                        disabled={isTogglingTradingMode || saving}
+                        onClick={handleSettingsToggleTradingMode}
+                        sx={{
+                          fontWeight: 700,
+                          borderRadius: 2,
+                          px: 3,
+                          py: 1,
+                          backgroundColor: currentTradingMode === 'SWING' ? '#03c3ec' : '#696cff',
+                          '&:hover': {
+                            backgroundColor: currentTradingMode === 'SWING' ? '#02a8cc' : '#5f61e6',
+                          },
+                        }}
+                      >
+                        {isTogglingTradingMode || saving
+                          ? 'Menukar Mod...'
+                          : (currentTradingMode === 'SWING' ? 'Tukar ke Mod DAY' : 'Tukar ke Mod SWING')}
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+
                 {/* Card 1: Had Siling Modal Maksimum (Limit Buying Power) */}
                 <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
                   <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>

@@ -21,6 +21,14 @@ class ScreenerConfig:
     MAX_KLINE_30D_SYMBOLS: int = int(os.getenv("MAX_KLINE_30D_SYMBOLS", "100"))
     MAX_REALTIME_SUBSCRIPTIONS: int = int(os.getenv("MAX_REALTIME_SUBSCRIPTIONS", "15"))
 
+    # Trading Mode Configuration (HOM-328 / Issue #14 / Blueprint Sec 7)
+    TRADING_MODE: str = os.getenv("TRADING_MODE", "DAY").upper().strip()
+    if TRADING_MODE not in ("DAY", "SWING"):
+        TRADING_MODE = "DAY"
+    SWING_BASELINE_SCHEDULE: str = os.getenv("SWING_BASELINE_SCHEDULE", "09:00,13:00,16:30")
+    SWING_EMA_PERIOD: int = int(os.getenv("SWING_EMA_PERIOD", "20"))
+    SWING_VOL_SMA_PERIOD: int = int(os.getenv("SWING_VOL_SMA_PERIOD", "50"))
+
     # Exchange Filtering & Cache (HOM-271)
     ALLOWED_EXCHANGES: Tuple[str, ...] = tuple(
         x.strip() for x in os.getenv("ALLOWED_EXCHANGES", "US_NYSE,US_NASDAQ,US_AMEX").split(",") if x.strip()
@@ -83,6 +91,8 @@ class ScreenerConfig:
         cls.MOM_MAX_RVOL = cls.DEFAULT_MOM_MAX_RVOL
         cls.MAX_CANDIDATES_PER_LANE = cls.DEFAULT_MAX_CANDIDATES_PER_LANE
         cls.MAX_BUYING_POWER = cls.DEFAULT_MAX_BUYING_POWER
+        default_mode = os.getenv("TRADING_MODE", "DAY").upper().strip()
+        cls.TRADING_MODE = default_mode if default_mode in ("DAY", "SWING") else "DAY"
 
     @classmethod
     def load_active_config(cls) -> dict:
@@ -154,6 +164,13 @@ class ScreenerConfig:
                             logger.warning("max_buying_power %s below floor 500.0, keeping %s", max_bp, cls.MAX_BUYING_POWER)
                     except (ValueError, TypeError) as e:
                         logger.warning("Invalid max_buying_power in db: %s", e)
+
+                if "trading_mode" in row.keys() and row["trading_mode"] is not None:
+                    mode = str(row["trading_mode"]).strip().upper()
+                    if mode in ("DAY", "SWING"):
+                        cls.TRADING_MODE = mode
+                    else:
+                        logger.warning("Invalid trading_mode in db: %s, keeping %s", mode, cls.TRADING_MODE)
             else:
                 cls.reset_to_defaults()
 
@@ -169,5 +186,6 @@ class ScreenerConfig:
             "max_rvol": cls.MOM_MAX_RVOL,
             "max_candidates_per_lane": cls.MAX_CANDIDATES_PER_LANE,
             "max_buying_power": cls.MAX_BUYING_POWER,
+            "trading_mode": cls.TRADING_MODE,
         }
 

@@ -43,6 +43,31 @@ export function App() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [togglingMode, setTogglingMode] = useState(false);
+
+  const handleToggleTradingMode = async (targetMode) => {
+    const modeArg = typeof targetMode === 'string' ? targetMode.trim().toUpperCase() : null;
+    const current = String(statusData?.trading_mode || screenerConfig?.trading_mode || 'DAY').toUpperCase();
+    const nextMode = (modeArg === 'DAY' || modeArg === 'SWING') ? modeArg : (current === 'SWING' ? 'DAY' : 'SWING');
+    setTogglingMode(true);
+    try {
+      const res = await fetch('/api/trading-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: nextMode })
+      });
+      if (res.ok) {
+        await fetchDashboardData();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('screener-config-updated'));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to toggle trading mode:', e);
+    } finally {
+      setTogglingMode(false);
+    }
+  };
 
   const toggleMode = () => {
     const nextMode = mode === 'dark' ? 'light' : 'dark';
@@ -157,7 +182,15 @@ export function App() {
           />
         );
       case 'settings':
-        return <SettingsPage statusData={statusData} onRefresh={fetchDashboardData} />;
+        return (
+          <SettingsPage
+            statusData={statusData}
+            screenerConfig={screenerConfig}
+            onRefresh={fetchDashboardData}
+            onToggleTradingMode={handleToggleTradingMode}
+            isTogglingTradingMode={togglingMode}
+          />
+        );
       case 'quota':
         return <QuotaPage />;
       case 'overview':
@@ -183,6 +216,8 @@ export function App() {
           onToggleMode={toggleMode}
           user={user}
           statusData={statusData}
+          onToggleTradingMode={handleToggleTradingMode}
+          isTogglingTradingMode={togglingMode}
         >
           {loading && !statusData ? (
             <Box

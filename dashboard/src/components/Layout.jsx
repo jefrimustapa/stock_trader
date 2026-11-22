@@ -51,6 +51,8 @@ export function Layout({
   onToggleMode,
   user,
   statusData,
+  onToggleTradingMode,
+  isTogglingTradingMode = false,
   children,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -293,6 +295,41 @@ export function Layout({
 
           {/* Action Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, sm: 1.5 }, flexShrink: 0 }}>
+            {/* Trading Mode Badge (Read-Only Status, HOM-351 Rev 5) */}
+            <Chip
+              size="small"
+              id="chip-trading-mode"
+              clickable={false}
+              label={
+                <>
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                    {String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                      ? 'MOD: SWING (MULTI-DAY)'
+                      : 'MOD: DAY (INTRADAY)'}
+                  </Box>
+                  <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+                    {String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                      ? 'MOD: SWING'
+                      : 'MOD: DAY'}
+                  </Box>
+                </>
+              }
+              sx={{
+                backgroundColor: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                  ? 'rgba(105, 108, 255, 0.16)'
+                  : 'rgba(3, 195, 236, 0.16)',
+                color: String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
+                  ? '#696cff'
+                  : '#03c3ec',
+                fontWeight: 700,
+                fontSize: { xs: '0.68rem', sm: '0.75rem' },
+                height: { xs: 24, sm: 26 },
+                cursor: 'default',
+                userSelect: 'none',
+                '& .MuiChip-label': { px: { xs: 0.8, sm: 1.2 } },
+              }}
+            />
+
             {/* OpenD Status Chip */}
             <Chip
               size="small"

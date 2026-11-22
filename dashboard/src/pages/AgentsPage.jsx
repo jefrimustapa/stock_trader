@@ -366,11 +366,6 @@ export function AgentsPage({ screenerConfig }) {
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Aliran Saluran Paip Keputusan Pasukan Ejen (Trading Pipeline Flow)
             </Typography>
-            <Chip
-              label="L0 → L1 → L2 → L3 → L4"
-              size="small"
-              sx={{ fontWeight: 700, bgcolor: sneatTokens.primary.soft, color: sneatTokens.primary.main }}
-            />
           </Box>
 
           <Box

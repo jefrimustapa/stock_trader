@@ -258,10 +258,20 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
             bridgeStatus = { error: err.message, status: 'unavailable' };
         }
     }
+    let dbTradingMode = null;
+    try {
+        const db = getScreenerDb();
+        const row = db.prepare('SELECT trading_mode FROM screener_config WHERE id = 1').get();
+        if (row && row.trading_mode) {
+            dbTradingMode = row.trading_mode;
+        }
+    } catch (_) {}
+    const tradingMode = (dbTradingMode || process.env.TRADING_MODE || (bridgeStatus && bridgeStatus.trading_mode) || 'DAY').toUpperCase();
     res.json({
         status: 'healthy',
         service: 'trading-dashboard',
         user: req.authUser,
+        trading_mode: tradingMode,
         bridge: bridgeStatus,
         timestamp: new Date().toISOString()
     });
@@ -470,11 +480,17 @@ function getScreenerDb() {
             screenerDbInstance.exec('ALTER TABLE screener_config ADD COLUMN pause_buying INTEGER NOT NULL DEFAULT 0 CHECK (pause_buying IN (0, 1));');
         }
 
+        // Migration check: ensure trading_mode exists in screener_config (HOM-351)
+        const hasTradingMode = tableCols.some(col => col.name === 'trading_mode');
+        if (!hasTradingMode) {
+            screenerDbInstance.exec("ALTER TABLE screener_config ADD COLUMN trading_mode TEXT NOT NULL DEFAULT 'DAY' CHECK (trading_mode IN ('DAY', 'SWING'));");
+        }
+
         const row = screenerDbInstance.prepare('SELECT * FROM screener_config WHERE id = 1').get();
         if (!row) {
             const initStmt = screenerDbInstance.prepare(`
-                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, updated_at, updated_by)
-                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, 5, 100000.0, 10, ?, 'system')
+                INSERT INTO screener_config (id, min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, trading_mode, updated_at, updated_by)
+                VALUES (1, 10.0, 1000000000.0, 1000000.0, 0.50, 20.00, 5, 100000.0, 10, 0, 'DAY', ?, 'system')
             `);
             initStmt.run(new Date().toISOString());
         }
@@ -485,7 +501,7 @@ function getScreenerDb() {
 app.get('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
         const db = getScreenerDb();
-        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, updated_at, updated_by FROM screener_config WHERE id = 1').get();
+        const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, trading_mode, updated_at, updated_by FROM screener_config WHERE id = 1').get();
         if (!row) {
             return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
         }
@@ -499,7 +515,8 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
                 max_candidates_per_lane: Number(row.max_candidates_per_lane ?? 5),
                 max_buying_power: Number(row.max_buying_power ?? 100000.0),
                 agent_orders_per_page: Number(row.agent_orders_per_page ?? 10),
-                pause_buying: Boolean(row.pause_buying === 1)
+                pause_buying: Boolean(row.pause_buying === 1),
+                trading_mode: String(row.trading_mode || 'DAY').toUpperCase()
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: row.updated_at,
@@ -546,7 +563,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
         const body = req.body;
         const db = getScreenerDb();
-        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying FROM screener_config WHERE id = 1').get();
+        const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, trading_mode FROM screener_config WHERE id = 1').get();
         if (!current) {
             return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
         }
@@ -560,6 +577,14 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         let newMaxBuyingPower = current.max_buying_power ?? 100000.0;
         let newAgentOrdersPerPage = current.agent_orders_per_page ?? 10;
         let newPauseBuying = current.pause_buying ?? 0;
+        let newTradingMode = current.trading_mode || 'DAY';
+
+        if (body.trading_mode !== undefined) {
+            if (typeof body.trading_mode !== 'string' || !['DAY', 'SWING'].includes(body.trading_mode.trim().toUpperCase())) {
+                return res.status(400).json({ error: 'Mod dagangan tidak sah. Nilai yang diterima: "DAY" atau "SWING".' });
+            }
+            newTradingMode = body.trading_mode.trim().toUpperCase();
+        }
 
         if (body.pause_buying !== undefined) {
             newPauseBuying = body.pause_buying ? 1 : 0;
@@ -673,7 +698,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             newMaxCandidatesPerLane !== (current.max_candidates_per_lane ?? 5) ||
             newMaxBuyingPower !== (current.max_buying_power ?? 100000.0) ||
             newAgentOrdersPerPage !== (current.agent_orders_per_page ?? 10) ||
-            newPauseBuying !== (current.pause_buying ?? 0)
+            newPauseBuying !== (current.pause_buying ?? 0) ||
+            newTradingMode !== (current.trading_mode || 'DAY')
         );
 
         if (!hasChanges) {
@@ -688,7 +714,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                     max_candidates_per_lane: current.max_candidates_per_lane ?? 5,
                     max_buying_power: current.max_buying_power ?? 100000.0,
                     agent_orders_per_page: current.agent_orders_per_page ?? 10,
-                    pause_buying: Boolean((current.pause_buying ?? 0) === 1)
+                    pause_buying: Boolean((current.pause_buying ?? 0) === 1),
+                    trading_mode: String(current.trading_mode || 'DAY').toUpperCase()
                 },
                 limits: SCREENER_CONFIG_LIMITS,
                 updated_at: current.updated_at,
@@ -708,7 +735,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             max_candidates_per_lane: current.max_candidates_per_lane ?? 5,
             max_buying_power: current.max_buying_power ?? 100000.0,
             agent_orders_per_page: current.agent_orders_per_page ?? 10,
-            pause_buying: current.pause_buying ?? 0
+            pause_buying: current.pause_buying ?? 0,
+            trading_mode: current.trading_mode || 'DAY'
         });
 
         const newValues = JSON.stringify({
@@ -720,15 +748,17 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
             max_candidates_per_lane: newMaxCandidatesPerLane,
             max_buying_power: newMaxBuyingPower,
             agent_orders_per_page: newAgentOrdersPerPage,
-            pause_buying: newPauseBuying
+            pause_buying: newPauseBuying,
+            trading_mode: newTradingMode
         });
 
         const updateStmt = db.prepare(`
             UPDATE screener_config
-            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, max_buying_power = ?, agent_orders_per_page = ?, pause_buying = ?, updated_at = ?, updated_by = ?
+            SET min_price = ?, min_market_cap = ?, min_volume = ?, min_rvol = ?, max_rvol = ?, max_candidates_per_lane = ?, max_buying_power = ?, agent_orders_per_page = ?, pause_buying = ?, trading_mode = ?, updated_at = ?, updated_by = ?
             WHERE id = 1
         `);
-        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, newMaxBuyingPower, newAgentOrdersPerPage, newPauseBuying, now, user);
+        updateStmt.run(newMinPrice, newMinMarketCap, newMinVolume, newMinRvol, newMaxRvol, newMaxCandidatesPerLane, newMaxBuyingPower, newAgentOrdersPerPage, newPauseBuying, newTradingMode, now, user);
+        process.env.TRADING_MODE = newTradingMode;
 
         const auditStmt = db.prepare(`
             INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
@@ -747,7 +777,8 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
                 max_candidates_per_lane: newMaxCandidatesPerLane,
                 max_buying_power: newMaxBuyingPower,
                 agent_orders_per_page: newAgentOrdersPerPage,
-                pause_buying: Boolean(newPauseBuying === 1)
+                pause_buying: Boolean(newPauseBuying === 1),
+                trading_mode: newTradingMode
             },
             limits: SCREENER_CONFIG_LIMITS,
             updated_at: now,
@@ -756,6 +787,46 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
     } catch (err) {
         console.error('[Dashboard] Error updating screener config:', err);
         return res.status(500).json({ error: 'Gagal mengemas kini konfigurasi screener: ' + err.message });
+    }
+});
+
+// Endpoint: Pertukaran Mod Dagangan Interaktif (DAY vs SWING) - HOM-351
+app.post('/api/trading-mode', authenticateDashboard, async (req, res) => {
+    try {
+        if (!req.body || typeof req.body !== 'object') {
+            return res.status(400).json({ error: 'Body mestilah objek JSON yang sah.' });
+        }
+        const { mode } = req.body;
+        if (!mode || typeof mode !== 'string' || !mode.trim()) {
+            return res.status(400).json({ error: 'Parameter "mode" (string: DAY atau SWING) diperlukan.' });
+        }
+        const normalizedMode = mode.trim().toUpperCase();
+        if (normalizedMode !== 'DAY' && normalizedMode !== 'SWING') {
+            return res.status(400).json({ error: 'Mod dagangan tidak sah. Nilai yang diterima: "DAY" atau "SWING".' });
+        }
+
+        const db = getScreenerDb();
+        const current = db.prepare('SELECT trading_mode FROM screener_config WHERE id = 1').get();
+        const prevMode = current && current.trading_mode ? current.trading_mode : 'DAY';
+        const now = new Date().toISOString();
+        const user = String(req.authUser || 'anonymous').replace(/[\r\n]/g, '').slice(0, 100);
+
+        db.prepare('UPDATE screener_config SET trading_mode = ?, updated_at = ?, updated_by = ? WHERE id = 1').run(normalizedMode, now, user);
+        db.prepare(`
+            INSERT INTO screener_config_audit (timestamp, user, action, previous_values, new_values)
+            VALUES (?, ?, 'UPDATE_TRADING_MODE', ?, ?)
+        `).run(now, user, JSON.stringify({ trading_mode: prevMode }), JSON.stringify({ trading_mode: normalizedMode }));
+
+        process.env.TRADING_MODE = normalizedMode;
+
+        return res.json({
+            status: 'OK',
+            trading_mode: normalizedMode,
+            message: `Mod dagangan berjaya ditukar kepada ${normalizedMode}.`
+        });
+    } catch (err) {
+        console.error('[Dashboard] Error toggling trading_mode:', err);
+        return res.status(500).json({ error: 'Gagal mengemas kini mod dagangan: ' + err.message });
     }
 });
 

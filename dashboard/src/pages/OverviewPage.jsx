@@ -57,6 +57,9 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
     (i) => String(i.lane || '').toUpperCase() === 'SETUP'
   ).length;
 
+  const activeTradingMode = String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase();
+  const isSwingMode = activeTradingMode === 'SWING';
+
   const previewItems = items.slice(0, 4);
 
   return (
@@ -114,6 +117,17 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
 
         {/* Quick Status Pills */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Chip
+            size="small"
+            id="chip-trading-mode-overview"
+            label={isSwingMode ? 'MOD: SWING (MULTI-DAY)' : 'MOD: DAY (INTRADAY)'}
+            sx={{
+              fontWeight: 700,
+              borderRadius: 1.5,
+              backgroundColor: isSwingMode ? 'rgba(105, 108, 255, 0.16)' : 'rgba(3, 195, 236, 0.16)',
+              color: isSwingMode ? '#696cff' : '#03c3ec',
+            }}
+          />
           <Chip
             size="small"
             icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important' }} />}
@@ -583,6 +597,32 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                 </Box>
 
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                        Mod Dagangan Aktif
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
+                        {isSwingMode
+                          ? 'Radar Top-Down (09:00, 13:00, 16:30 NY) + Pemicu 1H'
+                          : 'Imbasan Intraday 300s (5M) + Wyckoff 5M/15M'}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      id="chip-diagnostics-trading-mode"
+                      label={isSwingMode ? 'SWING (MULTI-DAY)' : 'DAY (INTRADAY)'}
+                      sx={{
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        borderRadius: 1,
+                        backgroundColor: isSwingMode ? 'rgba(105, 108, 255, 0.16)' : 'rgba(3, 195, 236, 0.16)',
+                        color: isSwingMode ? '#696cff' : '#03c3ec',
+                      }}
+                    />
+                  </Box>
+                  <Divider />
+
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>

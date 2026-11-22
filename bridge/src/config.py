@@ -9,6 +9,11 @@ class BridgeConfig:
     TELNET_PORT: int = int(os.getenv("MOOMOO_TELNET_PORT", "22222"))
     MOOMOO_TRD_ENV: str = os.getenv("MOOMOO_TRD_ENV", "SIMULATE")
 
+    # Trading Mode Configuration (HOM-328 / Issue #14 / Blueprint Sec 7)
+    TRADING_MODE: str = os.getenv("TRADING_MODE", "DAY").upper().strip()
+    if TRADING_MODE not in ("DAY", "SWING"):
+        TRADING_MODE = "DAY"
+
     # Security Tokens (Zero Default Secrets: must be explicitly provided in environment)
     PAPERCLIP_BRIDGE_SECRET: str = os.getenv("PAPERCLIP_BRIDGE_SECRET", "")
     BRIDGE_SERVICE_TOKEN: str = os.getenv("BRIDGE_SERVICE_TOKEN", "")
@@ -35,6 +40,28 @@ class BridgeConfig:
     # API Protocol Encryption
     RSA_KEY_PATH: Path = OPEND_SESSION_DATA_DIR / "rsa_key.pem"
     ENABLE_PROTO_ENCRYPT: bool = os.getenv("ENABLE_PROTO_ENCRYPT", "true").lower() in ("true", "1", "yes")
+
+    @classmethod
+    def get_trading_mode(cls) -> str:
+        """
+        Dynamically reads active TRADING_MODE from screener_config.sqlite with fallback to env.
+        """
+        config_db = cls.SHARED_DATA_DIR / "screener_config.sqlite"
+        if config_db.exists():
+            try:
+                import sqlite3
+                conn = sqlite3.connect(str(config_db), timeout=2.0)
+                cursor = conn.cursor()
+                cursor.execute("SELECT trading_mode FROM screener_config WHERE id = 1")
+                row = cursor.fetchone()
+                conn.close()
+                if row and row[0]:
+                    mode = str(row[0]).strip().upper()
+                    if mode in ("DAY", "SWING"):
+                        return mode
+            except Exception:
+                pass
+        return cls.TRADING_MODE
 
     @classmethod
     def ensure_rsa_key(cls) -> Path:

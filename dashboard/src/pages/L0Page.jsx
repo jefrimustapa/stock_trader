@@ -149,6 +149,9 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
   const countdownFormatted = `${String(countdownMinutes).padStart(2, '0')}:${String(countdownSeconds).padStart(2, '0')}`;
   const countdownProgressPct = Math.min(100, Math.max(0, Math.round(((scanIntervalSeconds - secondsLeft) / scanIntervalSeconds) * 100)));
 
+  const tradingMode = String(dataPayload?.watchlist?.trading_mode || localConfig?.trading_mode || dataPayload?.trading_mode || 'DAY').toUpperCase();
+  const isSwingMode = tradingMode === 'SWING';
+
   return (
     <Box id="page-l0" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2.5, sm: 3 } }}>
       {/* Page Header */}
@@ -235,20 +238,22 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
               width: 48,
               height: 48,
               borderRadius: '10px',
-              backgroundColor: sneatTokens.warning.soft,
+              backgroundColor: isSwingMode ? 'rgba(105, 108, 255, 0.16)' : sneatTokens.warning.soft,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: sneatTokens.warning.main,
-              boxShadow: '0 4px 12px 0 rgba(255, 171, 0, 0.25)',
+              color: isSwingMode ? '#696cff' : sneatTokens.warning.main,
+              boxShadow: isSwingMode ? '0 4px 12px 0 rgba(105, 108, 255, 0.25)' : '0 4px 12px 0 rgba(255, 171, 0, 0.25)',
               flexShrink: 0,
             }}
           >
-            <TimerOutlinedIcon sx={{ fontSize: 26 }} />
+            {isSwingMode ? <ShowChartIcon sx={{ fontSize: 26 }} /> : <TimerOutlinedIcon sx={{ fontSize: 26 }} />}
           </Box>
           <Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Countdown Imbasan L0 Screener (Kitaran 5 Minit / 300s)
+              {isSwingMode
+                ? 'Radar Pemantauan Berjadual & Adaptif Top-Down L0 (Swing Trading)'
+                : 'Countdown Imbasan L0 Screener (Kitaran 5 Minit / 300s)'}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.2 }}>
               <Typography
@@ -256,21 +261,21 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 variant="h4"
                 sx={{
                   fontWeight: 800,
-                  color: sneatTokens.warning.main,
+                  color: isSwingMode ? '#696cff' : sneatTokens.warning.main,
                   fontFamily: 'monospace',
                   letterSpacing: 1,
                   lineHeight: 1,
-                  fontSize: { xs: '1.75rem', sm: '2.1rem' },
+                  fontSize: { xs: '1.45rem', sm: '1.85rem' },
                 }}
               >
-                {countdownFormatted}
+                {isSwingMode ? '09:00, 13:00, 16:30 NY' : countdownFormatted}
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                sehingga kemas kini senarai pantau seterusnya
+                {isSwingMode ? 'jadual struktur 4H/Daily + pemicu 1H zon minat' : 'sehingga kemas kini senarai pantau seterusnya'}
               </Typography>
             </Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.4, display: 'block' }}>
-              Cap masa semasa: <strong>{dataAsOf}</strong> • Status pasaran: <strong>{marketStatus}</strong> ({isMarketOpen ? 'Dibuka' : 'Ditutup'})
+              Cap masa semasa: <strong>{dataAsOf}</strong> • Status pasaran: <strong>{marketStatus}</strong> ({isMarketOpen ? 'Dibuka' : 'Ditutup'}) • Mod: <strong>{tradingMode}</strong>
             </Typography>
           </Box>
         </Box>
@@ -278,21 +283,23 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
         <Box sx={{ width: { xs: '100%', md: 260 }, display: 'flex', flexDirection: 'column', gap: 0.8 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-              Kemajuan kitaran imbasan
+              {isSwingMode ? 'Status Radar Top-Down' : 'Kemajuan kitaran imbasan'}
             </Typography>
-            <Typography variant="caption" sx={{ color: sneatTokens.warning.main, fontWeight: 700 }}>
-              {countdownProgressPct}%
+            <Typography variant="caption" sx={{ color: isSwingMode ? '#696cff' : sneatTokens.warning.main, fontWeight: 700 }}>
+              {isSwingMode ? 'AKTIF (4H / 1H)' : `${countdownProgressPct}%`}
             </Typography>
           </Box>
           <LinearProgress
             variant="determinate"
-            value={countdownProgressPct}
+            value={isSwingMode ? 100 : countdownProgressPct}
             sx={{
               height: 8,
               borderRadius: 4,
-              backgroundColor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.15)' : 'rgba(255, 171, 0, 0.12)',
+              backgroundColor: (t) => t.palette.mode === 'dark'
+                ? (isSwingMode ? 'rgba(105, 108, 255, 0.15)' : 'rgba(255, 171, 0, 0.15)')
+                : (isSwingMode ? 'rgba(105, 108, 255, 0.12)' : 'rgba(255, 171, 0, 0.12)'),
               '& .MuiLinearProgress-bar': {
-                backgroundColor: sneatTokens.warning.main,
+                backgroundColor: isSwingMode ? '#696cff' : sneatTokens.warning.main,
                 borderRadius: 4,
               },
             }}
