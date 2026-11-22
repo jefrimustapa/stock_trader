@@ -86,6 +86,12 @@ async function runSuite() {
     const btn40Class = await btn40.getAttribute('class');
     assertCheck('"40 Lilin" is initially contained/active variant', btn40Class.includes('MuiButton-contained'));
 
+    // Record initial bounding boxes to test button stability
+    const box40Init = await btn40.boundingBox();
+    const boxPlusInit = await btnPlus.boundingBox();
+    const boxLabelInit = await labelLocator.first().boundingBox();
+    console.log(`   Initial btn40 X:${box40Init.x} Y:${box40Init.y}, btnPlus X:${boxPlusInit.x} Y:${boxPlusInit.y}, label width:${boxLabelInit.width}`);
+
     // Capture screenshot in default 40 Lilin mode
     const shot40 = path.join(QA_DIR, 'hom368-kline-40-lilin.png');
     await page.screenshot({ path: shot40 });
@@ -100,6 +106,12 @@ async function runSuite() {
     const btn40ClassAfterAll = await btn40.getAttribute('class');
     assertCheck('"Semua" button is now active (MuiButton-contained)', btnAllClass.includes('MuiButton-contained'));
     assertCheck('"40 Lilin" button is now inactive (not contained)', !btn40ClassAfterAll.includes('MuiButton-contained'));
+
+    const boxPlusAfterAll = await btnPlus.boundingBox();
+    const boxLabelAfterAll = await labelLocator.first().boundingBox();
+    assertCheck('"+" zoom button X position does not shift after clicking Semua', Math.abs(boxPlusAfterAll.x - boxPlusInit.x) <= 1);
+    assertCheck('"+" zoom button Y position does not shift (no row wrap)', Math.abs(boxPlusAfterAll.y - boxPlusInit.y) <= 1);
+    assertCheck('Label element width is fixed to prevent button movement', Math.abs(boxLabelAfterAll.width - boxLabelInit.width) <= 1);
 
     const labelAfterAll = await labelLocator.first().textContent();
     console.log(`   Label after clicking Semua: "${labelAfterAll}"`);
@@ -136,6 +148,12 @@ async function runSuite() {
     const btnAllClassZoom = await btnAll.getAttribute('class');
     assertCheck('"40 Lilin" button highlight is cleared in custom zoom', !btn40ClassZoom.includes('MuiButton-contained'));
     assertCheck('"Semua" button highlight is cleared in custom zoom', !btnAllClassZoom.includes('MuiButton-contained'));
+
+    const boxPlusZoom = await btnPlus.boundingBox();
+    const boxLabelZoom = await labelLocator.first().boundingBox();
+    assertCheck('"+" zoom button X position does not shift during custom zoom', Math.abs(boxPlusZoom.x - boxPlusInit.x) <= 1);
+    assertCheck('"+" zoom button Y position does not shift during custom zoom', Math.abs(boxPlusZoom.y - boxPlusInit.y) <= 1);
+    assertCheck('Label width remains fixed during custom zoom', Math.abs(boxLabelZoom.width - boxLabelInit.width) <= 1);
 
     const labelZoom = await labelLocator.first().textContent();
     console.log(`   Label after zooming in: "${labelZoom}"`);

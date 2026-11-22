@@ -477,7 +477,7 @@ export function KlineDrawer({ open, onClose, stock }) {
           color: isUp ? '#28C76F' : '#EA5455',
           timeStr: typeof param.time === 'number'
             ? new Date(param.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : String(param.time),
+            : String(param.time).replace(/\s*00:00:00$/, ''),
         });
       } else {
         setHoverOhlc(null);
@@ -533,7 +533,7 @@ export function KlineDrawer({ open, onClose, stock }) {
     low: Number(latestCandle.low),
     close: Number(latestCandle.close),
     volume: Number(latestCandle.volume || 0),
-    timeStr: latestCandle.time_str || (latestCandle.time ? String(latestCandle.time) : ''),
+    timeStr: (latestCandle.time_str || (latestCandle.time ? String(latestCandle.time) : '')).replace(/\s*00:00:00$/, ''),
     color: Number(latestCandle.close) >= Number(latestCandle.open) ? '#28C76F' : '#EA5455',
   } : null);
 
@@ -1030,13 +1030,13 @@ export function KlineDrawer({ open, onClose, stock }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                flexWrap: 'wrap',
+                flexWrap: isMobilePortrait ? 'wrap' : 'nowrap',
                 gap: isSmallHeight || isMobilePortrait ? 0.75 : 1.5,
                 flexShrink: 0,
               }}
             >
               {displayOhlc ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: isSmallHeight || isMobilePortrait ? 1 : 1.75, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: isSmallHeight || isMobilePortrait ? 1 : 1.75, flexWrap: isMobilePortrait ? 'wrap' : 'nowrap', minWidth: 0, overflow: 'hidden' }}>
                   <Chip
                     size="small"
                     label={displayOhlc.timeStr || interval.toUpperCase()}
@@ -1087,7 +1087,7 @@ export function KlineDrawer({ open, onClose, stock }) {
               )}
 
               {/* Zoom and Scale Controls */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
                 <ButtonGroup size="small" variant="outlined" sx={{ height: isSmallHeight || isMobilePortrait ? 22 : 26 }}>
                   <Button
                     onClick={handleShowRecent}
@@ -1097,6 +1097,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                       fontWeight: 700,
                       textTransform: 'none',
                       px: isMobilePortrait ? 0.75 : 1,
+                      minWidth: isMobilePortrait ? 50 : 58,
+                      width: isMobilePortrait ? 50 : 58,
+                      boxSizing: 'border-box',
                       backgroundColor: zoomMode === '40' ? sneatTokens.primary.main : 'transparent',
                       color: zoomMode === '40' ? '#ffffff' : 'inherit',
                       borderColor: sneatTokens.primary.main,
@@ -1116,6 +1119,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                       fontWeight: 700,
                       textTransform: 'none',
                       px: isMobilePortrait ? 0.75 : 1,
+                      minWidth: isMobilePortrait ? 46 : 54,
+                      width: isMobilePortrait ? 46 : 54,
+                      boxSizing: 'border-box',
                       backgroundColor: zoomMode === 'all' ? sneatTokens.primary.main : 'transparent',
                       color: zoomMode === 'all' ? '#ffffff' : 'inherit',
                       borderColor: sneatTokens.primary.main,
@@ -1129,14 +1135,14 @@ export function KlineDrawer({ open, onClose, stock }) {
                   </Button>
                   <Button
                     onClick={handleZoomIn}
-                    sx={{ px: 0.75, minWidth: 24, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    sx={{ px: 0.75, minWidth: 26, width: 26, fontWeight: 800, borderColor: (t) => t.palette.divider }}
                     title="Zum Masuk (+)"
                   >
                     +
                   </Button>
                   <Button
                     onClick={handleZoomOut}
-                    sx={{ px: 0.75, minWidth: 24, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    sx={{ px: 0.75, minWidth: 26, width: 26, fontWeight: 800, borderColor: (t) => t.palette.divider }}
                     title="Zum Keluar (-)"
                   >
                     -
@@ -1155,7 +1161,20 @@ export function KlineDrawer({ open, onClose, stock }) {
                     }}
                   />
                 )}
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.68rem', fontWeight: 600 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    width: isMobilePortrait ? 76 : 85,
+                    minWidth: isMobilePortrait ? 76 : 85,
+                    textAlign: 'left',
+                    display: 'inline-block',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
                   {getCandleCountLabel()}
                 </Typography>
               </Box>
