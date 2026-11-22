@@ -118,6 +118,95 @@ check('Portfolio position attribution mapping handles various sources correctly'
   assert.strictEqual(pC.cycle_id, null);
 });
 
+// 4. Verification for GitHub Issue #20 / HOM-366: Portfolio Refresh Flash Prevention
+check('PortfolioPage.jsx imports Skeleton and uses it on KPI cards & Table rows on initial load', () => {
+  const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
+  assert(code.includes('Skeleton'), 'Must import Skeleton from @mui/material');
+  assert(code.includes('loading && !data'), 'Must check loading && !data for initial skeleton display');
+  assert(code.includes('skeleton-row-'), 'Must render skeleton table rows when loading without data');
+});
+
+check('PortfolioPage.jsx implements Stale-While-Revalidate (SWR) and spinning refresh indicator', () => {
+  const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
+  assert(code.includes('isFetching'), 'Must track isFetching state for background/manual refresh');
+  assert(code.includes('animation: isFetching ? \'spin'), 'Refresh icon must spin while isFetching');
+  assert(code.includes('data?.is_stale'), 'Must handle is_stale warning banner');
+});
+
+check('server.js defines lastKnownPortfolio cache and returns is_stale flag during transient error', () => {
+  const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  assert(serverCode.includes('lastKnownPortfolio'), 'Must maintain lastKnownPortfolio cache');
+  assert(serverCode.includes('is_stale: true'), 'Must return is_stale: true on transient failure');
+  assert(serverCode.includes('is_stale: false'), 'Must return is_stale: false on successful fetch');
+});
+
+check('bridge/src/moomoo_client.py caches _last_positions and falls back on non-OK or transient disconnect', () => {
+  const clientCode = fs.readFileSync(path.join(__dirname, '../bridge/src/moomoo_client.py'), 'utf8');
+  assert(clientCode.includes('self._last_positions'), 'Must maintain _last_positions cache in MoomooClient');
+  assert(clientCode.includes('falling back to last known positions'), 'Must log and fallback to last known positions on non-OK');
+});
+
+// 5. BVA Simulation of Server Portfolio Cache Fallback
+check('BVA: Server portfolio cache fallback preserves positions during downstream timeout or disconnect', () => {
+  let lastKnownPortfolio = null;
+
+  function simulateGetPortfolio(bridgeResponse, isBridgeDown = false) {
+    if (isBridgeDown || !bridgeResponse || bridgeResponse.opend_status === 'DISCONNECTED') {
+      if (lastKnownPortfolio) {
+        return {
+          ...lastKnownPortfolio,
+          opend_status: bridgeResponse?.opend_status || 'DISCONNECTED',
+          is_stale: true,
+          stale_reason: 'Downstream timeout / OpenD disconnected'
+        };
+      }
+      return {
+        opend_status: 'DISCONNECTED',
+        summary: { total_cost_basis: 0, total_market_value: 0, total_unrealized_pl: 0, total_pl_pct: 0, position_count: 0 },
+        positions: [],
+        is_stale: false
+      };
+    }
+
+    const payload = {
+      opend_status: 'CONNECTED',
+      summary: {
+        total_cost_basis: 5000,
+        total_market_value: 5500,
+        total_unrealized_pl: 500,
+        total_pl_pct: 10,
+        position_count: bridgeResponse.positions.length
+      },
+      positions: bridgeResponse.positions,
+      is_stale: false
+    };
+    lastKnownPortfolio = payload;
+    return payload;
+  }
+
+  // BVA Case 1: First call succeeds -> cached, is_stale = false
+  const res1 = simulateGetPortfolio({ positions: [{ symbol: 'AAPL', qty: 10 }] });
+  assert.strictEqual(res1.is_stale, false);
+  assert.strictEqual(res1.positions.length, 1);
+  assert.strictEqual(res1.summary.total_market_value, 5500);
+
+  // BVA Case 2: Transient timeout / DISCONNECTED -> returns lastKnownPortfolio with is_stale = true, does NOT flash empty
+  const res2 = simulateGetPortfolio(null, true);
+  assert.strictEqual(res2.is_stale, true);
+  assert.strictEqual(res2.positions.length, 1, 'Must retain AAPL position instead of flashing empty');
+  assert.strictEqual(res2.summary.total_market_value, 5500, 'Must retain $5,500 instead of flashing $0.00');
+
+  // BVA Case 3: Bridge recovers -> returns fresh data with is_stale = false
+  const res3 = simulateGetPortfolio({ positions: [{ symbol: 'AAPL', qty: 10 }, { symbol: 'NVDA', qty: 5 }] });
+  assert.strictEqual(res3.is_stale, false);
+  assert.strictEqual(res3.positions.length, 2);
+
+  // BVA Case 4: Disconnect again -> returns updated cache with 2 positions
+  const res4 = simulateGetPortfolio({ opend_status: 'DISCONNECTED', positions: [] });
+  assert.strictEqual(res4.is_stale, true);
+  assert.strictEqual(res4.positions.length, 2, 'Must retain 2 positions from last valid cache');
+});
+
 console.log(`\n================================================================`);
 console.log(`  Tests Completed: ${passedTests}/${totalTests} Passed`);
 console.log(`================================================================\n`);

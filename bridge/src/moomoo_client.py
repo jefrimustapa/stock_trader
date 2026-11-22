@@ -435,6 +435,7 @@ class MoomooClient:
         self._last_status: str = "DISCONNECTED"
         self._last_error: Optional[str] = None
         self._available_accounts: List[Dict[str, Any]] = []
+        self._last_positions: List[Dict[str, Any]] = []
         self._opend_manager: Any = None
         self._quote_ctx: Any = None
         self._trade_ctx: Any = None
@@ -1116,14 +1117,14 @@ class MoomooClient:
         return self._total_equity
 
     def query_positions(self) -> List[Dict[str, Any]]:
-        """Queries active stock positions from Moomoo OpenD Paper Trading."""
+        """Queries active stock positions from Moomoo OpenD Paper Trading with cached fallback."""
         if not self._connected:
-            return []
+            return list(getattr(self, '_last_positions', []))
         if self.trd_env != "SIMULATE":
             raise SimulateOnlySecurityError("FATAL: Live trading position queries prohibited.")
         ctx = self.get_trade_context()
         if ctx is None:
-            return []
+            return list(getattr(self, '_last_positions', []))
         try:
             acc_num = int(self._account_id) if self._account_id and str(self._account_id).isdigit() else 0
             ret_code, df_pos = ctx.position_list_query(
@@ -1131,24 +1132,33 @@ class MoomooClient:
                 acc_id=acc_num,
                 refresh_cache=True
             )
-            if ret_code == RET_OK and df_pos is not None and not df_pos.empty:
+            if ret_code == RET_OK:
                 positions = []
-                for _, row in df_pos.iterrows():
-                    positions.append({
-                        "position_id": str(row.get("position_id", "")),
-                        "code": str(row.get("code", "")),
-                        "stock_name": str(row.get("stock_name", "")),
-                        "qty": int(row.get("qty", 0)),
-                        "can_sell_qty": int(row.get("can_sell_qty", 0)),
-                        "cost_price": float(row.get("cost_price", 0.0)),
-                        "nominal_price": float(row.get("nominal_price", 0.0)),
-                        "pl_val": float(row.get("pl_val", 0.0)),
-                        "pl_ratio": float(row.get("pl_ratio", 0.0))
-                    })
+                if df_pos is not None and not df_pos.empty:
+                    for _, row in df_pos.iterrows():
+                        positions.append({
+                            "position_id": str(row.get("position_id", "")),
+                            "code": str(row.get("code", "")),
+                            "stock_name": str(row.get("stock_name", "")),
+                            "qty": int(row.get("qty", 0)),
+                            "can_sell_qty": int(row.get("can_sell_qty", 0)),
+                            "cost_price": float(row.get("cost_price", 0.0)),
+                            "nominal_price": float(row.get("nominal_price", 0.0)),
+                            "pl_val": float(row.get("pl_val", 0.0)),
+                            "pl_ratio": float(row.get("pl_ratio", 0.0))
+                        })
+                self._last_positions = positions
                 return positions
+
+            # Transient OpenD non-OK error: fallback to last known positions
+            logger.warning("OpenD position_list_query non-OK ret_code=%s; falling back to last known positions", ret_code)
+            if hasattr(self, '_last_positions') and self._last_positions:
+                return list(self._last_positions)
             return []
         except Exception as e:
             logger.error("Error querying positions from OpenD: %s", e)
+            if hasattr(self, '_last_positions') and self._last_positions:
+                return list(self._last_positions)
             return []
 
     def query_orders(self) -> List[Dict[str, Any]]:
