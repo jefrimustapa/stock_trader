@@ -1,115 +1,122 @@
-# Blueprint Seni Bina Pilihan A (L0 -> L4): US Stock Analyst & Trader (Versi 3.5 Definitif (Authentik Integration))
+# Architectural Blueprint Option A (L0 -> L4): US Stock Analyst & Trader (Version 3.5 Definitive (Authentik Integration))
 
-**Rujukan Tugasan:** HOM-114 (Induk: HOM-47, Audit QA: HOM-118, HOM-119, HOM-121, HOM-122, HOM-123)  
-**Status:** Mod Penyelidikan & Perancangan (Research & Planning Sifar Kod)  
-**Pemohon:** Jefri  
-**Arkitek / Software Lead:** Hakeem  
-**Penyemak Bebas / QA Gatekeeper:** Zahrin  
-
----
-
-## 1. Ringkasan Eksekutif & Prinsip Seni Bina (Pilihan A)
-
-Blueprint Versi 3.5 Definitif (Authentik Integration) ini menyatukan keseluruhan spesifikasi seni bina L0 hingga L4 ke dalam satu dokumen rasmi lengkap. Dokumen ini menyelesaikan 100% isu M1–M4 dan semakan audit QA Zahrin (HOM-118, HOM-119, HOM-121, HOM-122, dan HOM-123) tanpa sebarang percanggahan konfigurasi, isu keselamatan, atau kecacatan sintaks.
-
-### Prinsip Teras Seni Bina:
-1. **Decoupled & Deterministik-Dahulu (Python First):** 80% pemprosesan data berat, pengiraan volum, penapisan keselamatan, had risiko modal, dan loop eksekusi pantas diselesaikan oleh kod Python deterministik tanpa LLM. Ejen AI hanya dipanggil untuk taakulan kualitatif pada 3–5 kaunter terbaik.
-2. **Pengurusan Kuota Realistik Moomoo OpenAPI:** Mematuhi had sebenar OpenAPI:
-   - Kuota kuotasi masa nyata dikira per *(simbol $\times$ jenis data)*.
-   - Kuota K-line sejarah dihadkan kepada 100 simbol unik per 30 hari bergolek.
-   - Menggunakan API rasmi Moomoo `get_stock_screen` (Stock Screening V2, 244+ faktor di pelayan broker) untuk tapisan Universe awal tanpa menghabiskan kuota K-line tempatan.
-3. **Penguatkuasaan Keselamatan L3 dalam Kod Bridge (Bukan Bergantung pada LLM):** Semua Hard Rules (2% risiko modal, 5% daily drawdown, sekatan penny stock, waktu pasaran, dan peraturan PDT) dikuatkuasakan secara mandatori dalam kod backend Python Bridge sebelum `place_order`. Ejen Danial bertindak sebagai pegawai audit dan pematuhan, bukan pintu veto tunggal.
-4. **Pengurusan Exit Client-Side (Exit Sentinel Daemon):** OpenAPI tidak menyokong parameter Bracket/OCO secara natif. Logik Partial TP (50%), Break-Even Move, Chandelier Trailing Stop, dan Time-based exit diuruskan secara berdedikasi oleh **L4 Exit Sentinel Python Daemon**.
-5. **Dwi-Fokus Ejen L1 (Discovery vs Active Portfolio Watch):** Ejen Tariq dan Nawwar meneliti calon baharu dari L0 (Discovery Loop) serta memantau saham aktif dalam pegangan (Active Position Watch) untuk mengesan amaran awal pembalikan arah atau berita kecemasan.
-6. **Keselamatan Infrastruktur Berlapis (Defense-in-Depth):**
-   - Authentik SSO (auth.julietmike.net / OIDC & Forward Auth).
-   - Pengesahan token JWT (`Cf-Access-Jwt-Assertion`) di peringkat origin Dashboard/Bridge bagi menghalang pintasan rangkaian dalaman.
-   - Pengasingan port & pengesahan berfokus: Port 11111/22222 OpenD terasing sepenuhnya dalam rangkaian dalaman `stock_internal` (tanpa terbitan ke hos). Web Dashboard mengesahkan JWT Authentik (auth.julietmike.net) di origin. Port 8000 Bridge diterbitkan khusus ke loopback hos sahaja (`127.0.0.1:8000`) dan dilindungi sepenuhnya oleh Shared Secret Token (`PAPERCLIP_BRIDGE_SECRET`) bagi capaian ejen Paperclip (Haziq, Danial, Tariq, Nawwar), manakala panggilan dalaman daripada Dashboard disahkan melalui `X-Service-Token`.
+**Task Reference:** HOM-114 (Parent: HOM-47, QA Audit: HOM-118, HOM-119, HOM-121, HOM-122, HOM-123)  
+**Status:** Research & Planning Mode (Zero-Code Planning)  
+**Requester:** Jefri  
+**Architect / Software Lead:** Hakeem  
+**Independent Reviewer / QA Gatekeeper:** Zahrin  
 
 ---
 
-## 2. Gambaran Seni Bina End-to-End (L0 -> L4)
+## 1. Executive Summary & Architectural Principles (Option A)
+
+This Blueprint Version 3.5 Definitive (Authentik Integration) consolidates all L0 to L4 architectural specifications into a single official reference document. It resolves 100% of issues M1–M4 and QA audit reviews by Zahrin (HOM-118, HOM-119, HOM-121, HOM-122, and HOM-123) with zero configuration discrepancies, zero security gaps, and zero syntax flaws.
+
+### Core Architectural Principles:
+1. **Decoupled & Deterministic-First (Python First):**
+   - 80% of heavy data processing, volume calculation, safety filters, capital risk limits, and fast execution loops run in deterministic Python code without LLMs.
+   - AI agents are called only for qualitative reasoning on the top 3–5 candidates.
+2. **Realistic Moomoo OpenAPI Quota Management:**
+   - Real-time quotation quota is calculated per *(symbol $\times$ data type)*.
+   - Historical K-line quota is capped at 100 unique symbols per 30-day rolling window.
+   - Uses official Moomoo API `get_stock_screen` (Stock Screening V2, 244+ cloud server-side factors) for initial Universe filtering without consuming local K-line quota.
+3. **L3 Safety Enforcement in Bridge Code (Not Dependent on LLMs):**
+   - All Hard Rules (2% capital risk, 5% daily drawdown, penny stock restrictions, market trading hours, and PDT rules) are mandatorily enforced in Python Bridge backend code before `place_order`.
+   - Danial acts as an audit and compliance officer, not a single point of failure or sole veto gate.
+4. **Client-Side Exit Management (Exit Sentinel Daemon):**
+   - OpenAPI does not natively support Bracket/OCO order parameters.
+   - Partial TP (50%), Break-Even Move, Chandelier Trailing Stop, and Time-based exit logic are managed by a dedicated **L4 Exit Sentinel Python Daemon**.
+5. **Dual-Focus L1 Agents (Discovery vs Active Portfolio Watch):**
+   - Tariq and Nawwar inspect new candidates from L0 (Discovery Loop).
+   - They also monitor active holdings (Active Position Watch) for early reversal warnings or breaking news threats.
+6. **Layered Defense-in-Depth Security:**
+   - Authentik SSO (`auth.julietmike.net` / OIDC & Forward Auth).
+   - Cryptographic JWT verification (`Cf-Access-Jwt-Assertion`) at Dashboard and Bridge origin to prevent internal network bypass.
+   - Port isolation & focused verification: Ports 11111/22222 of OpenD are isolated inside internal `stock_internal` network (no host publication).
+   - Web Dashboard verifies Authentik JWT (`auth.julietmike.net`) at origin.
+   - Bridge port 8000 is published exclusively to host loopback (`127.0.0.1:8000`) protected by a Shared Secret Token (`PAPERCLIP_BRIDGE_SECRET`) for Paperclip agents (Haziq, Danial, Tariq, Nawwar).
+   - Internal calls from Dashboard are verified via `X-Service-Token`.
+
+---
+
+## 2. End-to-End Architectural Overview (L0 -> L4)
 
 ```text
                   ┌────────────────────────────────────────────────────────┐
-                  │                 Pasaran Saham US Equities              │
+                  │                 US Equities Stock Market               │
                   └───────────────────────────┬────────────────────────────┘
                                               │
                                               ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ L0: INFRASTRUKTUR & SCREENER DETERMINISTIK (Docker Stack)                                │
+│ L0: DETERMINISTIC INFRASTRUCTURE & SCREENER (Docker Stack)                               │
 │  - Moomoo OpenD Daemon (Container 1: Headless Linux CLI, Port 11111/22222)              │
-│  - Python L0 Screener (Container 2: get_stock_screen V2 + Quota Budget Manager)           │
-│  - Output: /data/watchlist/us_active_watchlist.json (Top 10-20 kaunter)                  │
+│  - Python L0 Screener (Container 2: get_stock_screen V2 + Quota Budget Manager)          │
+│  - Output: /data/watchlist/us_active_watchlist.json (Top 10-20 candidates)               │
 └───────────────────────┬──────────────────────────────────────┬───────────────────────────┘
-                        │ Watchlist Baru (Discovery)           │ Data Posisi Semasa
+                        │ New Watchlist (Discovery)            │ Active Position Data
                         ▼                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ L1: LAPISAN KECERDASAN & ANALISIS (Dual-Focus Intelligence Agents - Paperclip)           │
+│ L1: INTELLIGENCE & ANALYSIS LAYER (Dual-Focus Intelligence Agents - Paperclip)           │
 │  - Tariq (Technical Analyst): Fail-Fast Confluence (Wyckoff + Wave + SMC + VPVR + ATR)   │
-│    * Input: OHLCV JSON + Metrik Prakira Python (Bukan tangkapan skrin imej)              │
-│    * Pipeline A: Kaji calon entri (3-5 kaunter terbaik)                                  │
-│    * Pipeline B: Pantau kaunter aktif untuk tanda-tanda keletihan/reversal               │
-│  - Nawwar (Sentiment Scout): 4-Teras Analisis (SEC EDGAR, Earnings Beat, Macro, Radar)   │
+│    * Input: OHLCV JSON + Precomputed Python Metrics (Not chart screenshots)              │
+│    * Pipeline A: Evaluate entry candidates (top 3-5 candidates)                          │
+│    * Pipeline B: Monitor active positions for exhaustion/reversal signals                │
+│  - Nawwar (Sentiment Scout): 4-Pillar Analysis (SEC EDGAR, Earnings Beat, Macro, Radar)  │
 └───────────────────────┬──────────────────────────────────────┬───────────────────────────┘
-                        │ Laporan Teknikal (JSON)              │ Laporan Sentimen (JSON)
+                        │ Technical Report (JSON)              │ Sentiment Report (JSON)
                         └──────────────────────┬───────────────┘
                                                ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ L2: KETUA STRATEGI & PORTFOLIO (Portfolio Lead - Paperclip)                              │
-│  - Haziq: Sintesis tesis, pemarkahan (0-100), saiz modal Fractional Risk                 │
-│  - Parameter Exit Policy: Menetapkan TP1, Trailing Offset, dan syarat pembatalan awal    │
+│ L2: PORTFOLIO LEAD & STRATEGY (Portfolio Lead - Paperclip)                               │
+│  - Haziq: Thesis synthesis, scoring (0-100), Fractional Risk capital sizing               │
+│  - Exit Policy Parameters: Defines TP1, Trailing Offset, and early cancellation rules    │
 └──────────────────────────────────────────────┬───────────────────────────────────────────┘
-                                               │ Cadangan Pesanan (Order Proposal + Rules)
+                                               │ Order Proposal (Order Proposal + Rules)
                                                ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ L3: PENGAWAL RISIKO & PEMATUHAN (Risk Gatekeeper Agent + Hard Code Enforcer)            │
-│  - Danial: Audit pematuhan tesis, semakan logik risiko, pendaftaran audit trail          │
+│ L3: RISK GATEKEEPER & COMPLIANCE (Risk Gatekeeper Agent + Hard Code Enforcer)            │
+│  - Danial: Thesis compliance audit, risk logic verification, audit trail logging         │
 └──────────────────────────────────────────────┬───────────────────────────────────────────┘
-                                               │ Pesanan Diluluskan
+                                               │ Approved Order
                                                ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ L4: ANTARA MUKA BROKER, ENJIN EXIT & DASHBOARD                                           │
-│  - Python Bridge Enforcer: Semakan Hard Rules Mandatori (BVA 2% risk, 5% drawdown, PDT)  │
+│ L4: BROKER INTERFACE, EXIT ENGINE & DASHBOARD                                            │
+│  - Python Bridge Enforcer: Mandatory Hard Rules Verification (BVA 2% risk, 5% DD, PDT)   │
 │  - Moomoo OpenAPI Execution: Normal/Limit Order + Idempotency Key (CltOrderID)           │
-│  - Exit Sentinel Daemon (Python): Kitaran semakan status order, TP1 (50%), Trailing Stop,│
-│    Break-Even shift, dan Time-Exit mandatori (15:45 America/New_York)                              │
-│  - Web Dashboard Dedicated (FastAPI + React / Streamlit):                                │
-│    * Authentik SSO (auth.julietmike.net) + Pengesahan JWT Assertion di Origin                      │
-│    * Paparan PnL, Open Trades, Watchlist, Ejen Logs & Manual Kill Switch                 │
-│    * Panel Sesi OpenD: Status, Tukar Akaun (acc_id), dan Relay OTP 2FA Telnet            │
+│  - Exit Sentinel Daemon (Python): Order state loop, TP1 (50%), Trailing Stop,            │
+│    Break-Even shift, and mandatory Time-Exit (15:45 America/New_York)                    │
+│  - Dedicated Web Dashboard (FastAPI + React / Streamlit):                                │
+│    * Authentik SSO (auth.julietmike.net) + Origin JWT Assertion Verification             │
+│    * PnL display, Open Trades, Watchlist, Agent Logs & Manual Kill Switch                │
+│    * OpenD Session Panel: Status, Switch Account (acc_id), and Telnet 2FA OTP Relay      │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Spesifikasi Terperinci Setiap Lapisan
+## 3. Detailed Specifications per Layer
 
-### 3.1. L0: Infrastruktur, Pengurusan Kuota & Screener Deterministik
+### 3.1. L0: Infrastructure, Quota Management & Deterministic Screener
 
-#### A. Spesifikasi Dockerfile & Docker Compose Stack
-Memandangkan Moomoo tidak menyediakan imej Docker rasmi, sistem menggunakan **Dockerfile tersuai** berasaskan Debian/Ubuntu rasmi yang memuat turun binari OpenD Linux daripada portal rasmi Moomoo:
+#### A. Dockerfile & Docker Compose Stack Specifications
+Because Moomoo does not supply an official Docker image, the system uses a **custom Dockerfile** based on official Debian/Ubuntu that downloads the official OpenD Linux binary from Moomoo portal:
 
 ```dockerfile
 # Dockerfile.opend
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y wget ca-certificates telnet netcat curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/opend
-# Muat turun OpenD versi stabil Linux x86_64 berserta semakan integriti SHA256 (Penyelesaian P2 HOM-123)
+# Download stable OpenD Linux x86_64 binary with SHA256 integrity verification (Resolution P2 HOM-123)
 ARG OPEND_VERSION=8.2.3708
 ARG OPEND_SHA256
-RUN test -n "$OPEND_SHA256" || (echo "RALAT KESELAMATAN: OPEND_SHA256 wajib dibekalkan semasa build Fasa 1!" && exit 1) \
-    && wget -q https://software-file.moomoo.com/OpenD_${OPEND_VERSION}_Linux.tar.gz -O OpenD.tar.gz \
-    && echo "${OPEND_SHA256}  OpenD.tar.gz" | sha256sum -c - \
-    && tar -zxvf OpenD.tar.gz \
-    && rm OpenD.tar.gz
+RUN test -n "$OPEND_SHA256" || (echo "SECURITY ERROR: OPEND_SHA256 is required during Phase 1 build!" && exit 1)     && wget -q https://software-file.moomoo.com/OpenD_${OPEND_VERSION}_Linux.tar.gz -O OpenD.tar.gz     && echo "${OPEND_SHA256}  OpenD.tar.gz" | sha256sum -c -     && tar -zxvf OpenD.tar.gz     && rm OpenD.tar.gz
 EXPOSE 11111 22222
-# PENTING (Pembetulan M3): -telnet_ip=0.0.0.0 dalam kontena supaya Bridge pada rangkaian stock_internal boleh capai port 22222 bagi relay OTP 2FA.
-# Port 22222 TIDAK diterbitkan ke hos luar bagi mengelakkan capaian tidak sah dari luar kontena.
+# IMPORTANT (Fix M3): -telnet_ip=0.0.0.0 inside container so Bridge on stock_internal can reach port 22222 for 2FA OTP relay.
+# Port 22222 is NOT published to host to avoid unauthorized external access.
 CMD ["./OpenD", "-api_ip=0.0.0.0", "-api_port=11111", "-telnet_ip=0.0.0.0", "-telnet_port=22222"]
 ```
 
-Fail orkestrasi `docker-compose.yml`:
+Orchestration file `docker-compose.yml`:
 ```yaml
 version: '3.8'
 
@@ -120,7 +127,7 @@ services:
       dockerfile: Dockerfile.opend
     container_name: stock_moomoo_opend
     restart: unless-stopped
-    # Port 11111 dan 22222 hanya didedahkan dalam rangkaian dalaman stock_internal (tiada terbitan ke hos).
+    # Ports 11111 and 22222 are only exposed inside internal stock_internal network (no host publication).
     expose:
       - "11111"
       - "22222"
@@ -170,8 +177,8 @@ services:
     restart: unless-stopped
     depends_on:
       - moomoo-opend
-    # PENTING (Penyelarasan M2 HOM-121): Diterbitkan HANYA ke loopback localhost hos (127.0.0.1)
-    # untuk membolehkan ejen Paperclip (Haziq/Danial) berhubung dari luar Docker stack.
+    # IMPORTANT (Coordination M2 HOM-121): Published ONLY to localhost loopback (127.0.0.1)
+    # to allow Paperclip agents (Haziq/Danial) to connect from outside Docker stack.
     ports:
       - "127.0.0.1:8000:8000"
     environment:
@@ -200,79 +207,89 @@ networks:
     external: true
 ```
 
-#### B. Topologi Pengasingan Kontena: Moomoo OpenD vs Trading Dashboard (Pemisahan Tanggungjawab & Keselamatan Berlapis)
-Berdasarkan keputusan seni bina dan arahan Jefri, gateway broker Moomoo OpenD dan Trading Dashboard dijalankan di dalam **kontena yang berbeza (terpisah sepenuhnya)** mengikut prinsip keselamatan berlapis (*Defense-in-Depth*):
+#### B. Container Isolation Topology: Moomoo OpenD vs Trading Dashboard (Separation of Concerns & Defense-in-Depth)
+Moomoo OpenD broker gateway and Trading Dashboard run in separate, isolated containers:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│ Rangkaian Terasing Luaran (npm_default / Cloudflare Tunnel)             │
+│ External Isolated Network (npm_default / Cloudflare Tunnel)            │
 │   └── stock_trading_dashboard (Node.js Express, Port 3000)             │
 │         - Web UI https://stock-trader.beta.julietmike.net/             │
-│         - Dilindungi Authentik SSO & Forward Auth                      │
-│         - Mengambil data melalui HTTP dalaman dengan X-Service-Token   │
+│         - Protected by Authentik SSO & Forward Auth                    │
+│         - Fetches data via internal HTTP with X-Service-Token          │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTP Internal
+                                    │ Internal HTTP
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│ Rangkaian Terpencil Dalaman (stock_internal / stock_network)           │
+│ Internal Isolated Network (stock_internal / stock_network)             │
 │                                                                        │
 │   ├── stock_mcp_bridge (Python FastAPI, Port 8000)                     │
-│   │     - Menguatkuasakan 8 Hard Rules modal                           │
-│   │     - Berhubung dengan OpenD API (11111) & Telnet CLI (22222)      │
-│   │     - Menyalurkan status OpenD & baki akaun ke Dashboard           │
+│   │     - Enforces 8 capital Hard Rules                                │
+│   │     - Communicates with OpenD API (11111) & Telnet CLI (22222)     │
+│   │     - Feeds OpenD status & account balances to Dashboard           │
 │   │                                                                    │
 │   ├── stock_screener_daemon (Python Background Daemon)                 │
-│   │     - Menarik data pasaran sebenar melalui OpenQuoteContext (11111)│
-│   │     - Menulis senarai kaunter aktif ke /app/shared_data/watchlist  │
+│   │     - Pulls real market data via OpenQuoteContext (11111)          │
+│   │     - Writes active watchlist to /app/shared_data/watchlist        │
 │   │                                                                    │
 │   └── stock_moomoo_opend (Headless Linux CLI Daemon)                   │
-│         - Binari rasmi Moomoo OpenD (Port 11111 API, Port 22222 Telnet)│
-│         - Terpencil 100% daripada akses web awam                       │
-│         - Volume persisten: opend_session_data -> /root/.com.moomoo... │
+│         - Official Moomoo OpenD binary (Port 11111 API, Port 22222 CLI)│
+│         - 100% isolated from public web access                         │
+│         - Persistent volume: opend_session_data -> /root/.com.moomoo...│
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Peranan 4 Kontena Berasingan:**
+**Roles of 4 Separate Containers:**
 1. **`stock_moomoo_opend` (OpenD Daemon)**:
-   - Kontena *headless Linux CLI* rasmi Moomoo.
-   - Terpencil 100% dalam rangkaian dalaman `stock_internal` (tiada pendedahan port ke hos atau internet awam).
-   - Menyimpan fail sesi dan token broker di Docker named volume `opend_session_data` (`/root/.com.moomoo.OpenD`).
+   - Official headless Linux CLI container.
+   - 100% isolated inside internal network `stock_internal` (no host or public exposure).
+   - Stores session files and broker tokens in named volume `opend_session_data` (`/root/.com.moomoo.OpenD`).
 2. **`stock_trading_dashboard` (Trading Dashboard)**:
-   - Aplikasi web Node.js Express (port 3000) yang disambungkan ke rangkaian `npm_default` bagi capaian pengguna di `https://stock-trader.beta.julietmike.net/` di bawah perlindungan Authentik SSO.
-   - Dashboard **tidak bercakap terus dengan OpenD**, sebaliknya mengambil metrik paparan status, persekitaran (`SIMULATE`), nombor akaun, dan baki tunai/ekuiti daripada `mcp-bridge` melalui HTTP dalaman dengan `X-Service-Token`.
+   - Node.js Express web application (port 3000) connected to `npm_default`.
+   - Accessible at `https://stock-trader.beta.julietmike.net/` behind Authentik SSO.
+   - Dashboard **never talks directly to OpenD**.
+   - Fetches status metrics, environment (`SIMULATE`), account ID, and balances from `mcp-bridge` via internal HTTP with `X-Service-Token`.
 3. **`stock_mcp_bridge` (REST Bridge)**:
-   - Backend Python FastAPI yang menguatkuasakan 8 Hard Rules dan menguruskan perhubungan API (port 11111) serta Telnet CLI (port 22222) ke OpenD.
+   - Python FastAPI backend enforcing 8 Hard Rules.
+   - Manages API connections (port 11111) and Telnet CLI (port 22222) to OpenD.
 4. **`stock_screener_daemon` (Screener Daemon)**:
-   - Daemon latar belakang Python yang menarik kaunter Universe daripada OpenD melalui kuota selamat dan menulis ke `watchlist.json`.
+   - Background Python daemon pulling Universe stocks from OpenD using quota-safe calls.
+   - Writes candidate stocks to `watchlist.json`.
 
-**Sebab & Kelebihan Pengasingan Kontena:**
-1. **Keselamatan Berlapis (Defense-in-Depth)**: Sekiranya dashboard web diakses di internet, pengguna tiada sebarang laluan langsung ke port atau proses OpenD broker.
-2. **Kemandirian Kitaran Hayat (Lifecycle Isolation)**: Mengemas kini kod dashboard atau merestart kontena dashboard tidak memutuskan sesi aktif OpenD. Sebaliknya, ujian restart OpenD untuk mengesahkan sesi kekal boleh dijalankan tanpa meranapkan Dashboard web.
+**Reasons & Benefits of Container Isolation:**
+1. **Layered Security (Defense-in-Depth)**:
+   - If public web dashboard is accessed, no direct path exists to OpenD broker ports or process.
+2. **Lifecycle Isolation**:
+   - Updating dashboard code or restarting dashboard container does not terminate active OpenD session.
+   - OpenD restart tests do not disrupt web dashboard availability.
 
-#### C. Pengurusan Bajet Kuota Moomoo OpenAPI (Realiti vs Batasan)
-1. **Penyelesaian Had K-line 30-Hari (100 Simbol Bergolek):**
-   - L0 **DILARANG** memanggil `request_history_kline` untuk ribuan saham pasaran.
-   - Sebaliknya, tapisan Stage 1 menggunakan **API Rasmi `get_stock_screen` (Stock Screening V2)**. Fungsi ini menghantar kriteria kuantitatif terus ke pelayan awan Moomoo, dan pelayan memulangkan senarai simbol yang telah siap ditapis tanpa menggunakan sebarang kuota K-line tempatan.
-   - Panggilan `request_history_kline` **hanya dibenarkan untuk Top 10–20 kaunter** yang melepasi tapisan Stage 2.
-   - Sistem merekod pangkalan data tempatan SQLite (`quota_tracker.db`) untuk menjejak baki kuota 100 simbol 30-hari dan memaparkannya di Dashboard.
-2. **Pecahan Bajet Kuota Masa Nyata (Subscribed Data Quota):**
-   - Had maksimum: 100 kuota serentak.
-   - Strategi Langganan Berhemah: Setiap kaunter hanya melanggan `SubType.QUOTE` (1 unit) dan `SubType.K_15M` (1 unit) = 2 kuota per kaunter.
-   - Untuk 15 kaunter aktif: $15 \times 2 = 30$ kuota terpakai (meninggalkan 70 kuota simpanan selamat bagi kaunter posisi aktif dan buffer sistem).
+#### C. Moomoo OpenAPI Quota Budget Management (Realities vs Constraints)
+1. **30-Day K-line Limit Solution (100 Rolling Symbols):**
+   - L0 is **STRICTLY FORBIDDEN** from calling `request_history_kline` across thousands of market stocks.
+   - Stage 1 filtering uses **Official API `get_stock_screen` (Stock Screening V2)**.
+   - Executes quantitative filters directly on Moomoo cloud servers without consuming local K-line quota.
+   - Calling `request_history_kline` is **allowed only for Top 10–20 candidates** passing Stage 2.
+   - Local SQLite database (`quota_tracker.db`) tracks 100-symbol rolling 30-day quota and displays balance on dashboard.
+2. **Subscribed Data Quota Breakdown:**
+   - Maximum limit: 100 concurrent quotas.
+   - Prudent Subscription Strategy: Each stock subscribes only `SubType.QUOTE` (1 unit) and `SubType.K_15M` (1 unit) = 2 quota units per stock.
+   - For 15 active stocks: $15 \times 2 = 30$ quota units used.
+   - Leaves 70 safety buffer units for active open positions and system headroom.
 
-#### D. Formula Penapisan Multi-Stage
+#### D. Multi-Stage Screening Formulas
 1. **Stage 1: Cloud Stock Screening (`get_stock_screen` V2):**
-   - Harga Semasa ($P$): $P \ge \$5.00$
-   - Permodalan Pasaran: $MarketCap \ge \$500\text{ M}$
-   - Volum Harian Purata: $ADV_{20} \ge 1,000,000$ saham
-   - Perubahan Harga Harian ($\Delta P\%$): $+2.0\% \le \Delta P \le +12.0\%$
+   - Current Price ($P$): $P \ge \$5.00$
+   - Market Capitalization: $MarketCap \ge \$500\text{ M}$
+   - Average Daily Volume: $ADV_{20} \ge 1,000,000$ shares
+   - Daily Price Change ($\Delta P\%$): $+2.0\% \le \Delta P \le +12.0\%$
 2. **Stage 2: Relative Strength vs Benchmark (RS to SPY):**
-   - Menghitung nisbah kekuatan relatif: $RS = \frac{\Delta P_{stock}}{\Delta P_{SPY}}$. Saham yang bertahan hijau ketika SPY merah diberikan keutamaan.
+   - Relative Strength ratio: $RS = \frac{\Delta P_{stock}}{\Delta P_{SPY}}$.
+   - Stocks holding green while SPY is red are prioritized.
 3. **Stage 3: Volume Spread & Squeeze Detection (Python Math):**
-   - $RVOL \ge 2.0$ berbanding purata waktu sama.
-   - Bollinger Band Squeeze (lebar band 20-period berada dalam persentil 20 terendah menandakan letusan volatiliti bakal bermula).
+   - $RVOL \ge 2.0$ compared to same-time historical average.
+   - Bollinger Band Squeeze (20-period bandwidth in lowest 20th percentile signals imminent volatility expansion).
 
-#### E. Struktur Data Watchlist (JSON Schema Rasmi)
+#### E. Watchlist Data Structure (Official JSON Schema)
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -311,40 +328,45 @@ Berdasarkan keputusan seni bina dan arahan Jefri, gateway broker Moomoo OpenD da
 
 ---
 
-### 3.2. L1: Lapisan Kecerdasan AI — Dwi-Fokus & Fail-Fast Confluence Stack
+### 3.2. L1: AI Intelligence Layer — Dual-Focus & Fail-Fast Confluence Stack
 
-#### A. Format Input Tariq (Bukan Imej Carta)
-Tariq menerima input berstruktur **OHLCV JSON berserta metrik prakira Python** (Support/Resistance, Squeeze, POC, ATR). Ini menjimatkan 90% kos token dan membolehkan ujian automasi unit dijalankan tanpa bergantung pada pemprosesan visi imej yang perlahan dan mahal.
+#### A. Tariq Input Format (Structured JSON, Not Chart Images)
+- Tariq receives structured **OHLCV JSON with precomputed Python metrics** (Support/Resistance, Squeeze, POC, ATR).
+- Saves 90% token costs.
+- Enables automated unit testing without relying on slow, expensive visual processing.
 
-#### B. Hierarki Pelaksanaan Fail-Fast 5-Lapisan
-Urutan pelaksanaan diatur dari yang paling murah/pantas kepada analisis kognitif tinggi:
-1. **Langkah 1 (Deterministik Python - Lapisan 4 & 5):**
-   - Menghitung *Volume Profile (POC)* dan *ATR-14*.
-   - Menapis keluar saham yang mempunyai jurang spread harga tidak wajar (*illiquid bid-ask spread*).
-2. **Langkah 2 (Wyckoff Screening Cepat oleh Tariq - Lapisan 1):**
-   - Menilai fasa pasaran. Jika carta berada dalam fasa *Distribution* atau *Markdown*, kaunter **DITOLAK SERTA-MERTA** (*Fail-Fast*).
-3. **Langkah 3 (Elliott Wave & SMC In-Depth Analysis - Lapisan 2 & 3):**
-   - Hanya **3 hingga 5 kaunter terbaik** yang melepasi Langkah 2 akan dianalisis gelombang motifnya (mencari permulaan Wave 3, mengelak Wave 5) dan paras masuk sniper (zon *Fair Value Gap / Order Block*).
+#### B. 5-Layer Fail-Fast Execution Hierarchy
+Execution order runs from cheapest/fastest to highest cognitive analysis:
+1. **Step 1 (Deterministic Python - Layers 4 & 5):**
+   - Computes *Volume Profile (POC)* and *ATR-14*.
+   - Filters out stocks with illiquid bid-ask spreads.
+2. **Step 2 (Fast Wyckoff Screening by Tariq - Layer 1):**
+   - Assesses market phase.
+   - If chart is in *Distribution* or *Markdown*, candidate is **REJECTED IMMEDIATELY** (*Fail-Fast*).
+3. **Step 3 (Elliott Wave & SMC In-Depth Analysis - Layers 2 & 3):**
+   - Only **top 3 to 5 candidates** passing Step 2 undergo motive wave analysis (identifying Wave 3 start, avoiding Wave 5).
+   - Determines sniper entry levels (Fair Value Gap / Order Block zones).
 
-#### C. Spesifikasi Nawwar (Sentiment & Macro Intelligence) & Skema JSON Penuh
+#### C. Nawwar Specifications (Sentiment & Macro Intelligence) & Full JSON Schema
 
-1. **Katalis Berita & SEC Filings:**
-   - Menyemak Form 8-K (peristiwa material: kelulusan FDA, perkongsian AI, kontrak bernilai tinggi), Form 4 (pembelian saham oleh orang dalam / *insider buying*), dan Form 10-Q/K.
-   - **Gate Earnings Mandatori:** Menolak kaunter sekiranya tarikh laporan pendapatan dijadualkan dalam tempoh < 48 jam akan datang bagi mengelakkan kejutan jurang harga (*earnings gap risk*).
+1. **News Catalysts & SEC Filings:**
+   - Evaluates Form 8-K (material events: FDA approval, AI partnership, high-value contracts).
+   - Evaluates Form 4 (insider buying) and Form 10-Q/K.
+   - **Mandatory Earnings Gate:** Rejects candidate if earnings report date is within < 48 hours to prevent earnings gap risk.
 
-2. **Pemarkahan Sentimen Kuantitatif ($S_{sent}$):**
-   - Skala markah: **-100 (Sangat Panik / Berisiko Ekstrem) hingga +100 (Sangat Bullish / Katalis Kuat)**.
-   - Ambang Entri: Hanya kaunter dengan skor sentimen $S_{sent} \ge +60$ layak dipertimbangkan untuk portfolio.
+2. **Quantitative Sentiment Scoring ($S_{sent}$):**
+   - Score range: **-100 (Extreme Panic / Risk) to +100 (Strongly Bullish / High Catalyst)**.
+   - Entry Threshold: Only candidates with $S_{sent} \ge +60$ qualify for portfolio consideration.
 
-3. **Pengawal Kalendar Makro (Macro Gatekeeper):**
-   - Memantau kalendar peristiwa ekonomi berimpak tinggi US (Mesyuarat Kadar Faedah Fed / FOMC, CPI, NFP).
-   - Menyekat pembukaan posisi baharu dalam tempoh 30 minit sebelum dan selepas pengumuman data makro berimpak tinggi.
+3. **Macro Calendar Gatekeeper:**
+   - Tracks high-impact US economic events (Fed FOMC, CPI, NFP).
+   - Blocks opening new positions 30 minutes before and after high-impact macro announcements.
 
-4. **Radar Berita Tergempar (Active Breaking News Sentinel):**
-   - Beroperasi secara deterministik melalui padanan kata kunci negatif (*SEC investigation, fraud, CEO resignation, lawsuit*) pada suapan berita RSS.
-   - Panggilan LLM hanya dicetuskan apabila padanan berita ditemui bagi mengesahkan tahap ancaman dan menjana isyarat `EMERGENCY_CATALYST_THREAT`.
+4. **Active Breaking News Sentinel:**
+   - Operates deterministically via negative keyword matching (*SEC investigation, fraud, CEO resignation, lawsuit*) on RSS feeds.
+   - Calls LLM only when a keyword match is found to assess threat severity and emit `EMERGENCY_CATALYST_THREAT`.
 
-5. **Skema JSON Lengkap Output Nawwar:**
+5. **Full JSON Output Schema for Nawwar:**
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -390,107 +412,109 @@ Urutan pelaksanaan diatur dari yang paling murah/pantas kepada analisis kognitif
 }
 ```
 
-#### D. Pemantauan Dwi-Fokus (Active Portfolio Watch)
-Tariq dan Nawwar mengulang semakan bagi setiap kaunter yang sedang dibuka posisinya dalam portfolio:
-- **Mod Day Trading:** Semakan berkala setiap 15 minit untuk mengesan anjakan momentum intraday atau keletihan trend mikro.
-- **Mod Swing Trading (Pemantauan Adaptif Top-Down):** Semakan berkala berstruktur pada timeframe 4H / Daily (3 kali sehari atau semasa bar-close), yang bertukar secara dinamik dan adaptif kepada pemantauan selang 1-jam (1H) apabila harga menghampiri paras minat institusi, aras Take Profit, atau zon Stop Loss bagi mengesan pengesahan pembalikan atau ancaman luar jangka dengan lebih persis tanpa membazirkan kuota API.
+#### D. Dual-Focus Monitoring (Active Portfolio Watch)
+Tariq and Nawwar continuously monitor active portfolio positions:
+- **Day Trading Mode:** Periodic review every 15 minutes to detect intraday momentum shifts or micro-trend exhaustion.
+- **Swing Trading Mode (Adaptive Top-Down Monitoring):** Structured reviews on 4H / Daily timeframes (3 times daily or on bar close), dynamically switching to 1-hour (1H) intervals when price approaches institutional interest zones, TP targets, or SL levels.
 
 ---
 
-### 3.3. L2: Ketua Portfolio, Strategi & Pengurusan Exit
+### 3.3. L2: Portfolio Lead, Strategy & Exit Management
 
-`Haziq` bertanggungjawab menggabungkan analisis L1 dan mengeluarkan cadangan pesanan berstruktur:
+`Haziq` synthesizes L1 analyses and generates structured order proposals:
 
-#### A. Pemarkahan Tesis Gabungan & Normalisasi Markah (Penyelesaian N2)
-- **Normalisasi Markah Sebelum Gabungan:**
-  - $S_{tech}$ dijana oleh Tariq dalam skala **0 hingga +100** (0 = Lemah/Tiada Struktur, 100 = Konfluen Wyckoff + Wave 3 + FVG Sempurna).
-  - $S_{sent}$ dijana oleh Nawwar dalam julat asal **-100 hingga +100**. Sebelum disintesis, $S_{sent}$ dinormalisasikan ke skala 0-100 menggunakan formula:
+#### A. Combined Thesis Scoring & Normalization (Resolution N2)
+- **Score Normalization Before Synthesis:**
+  - $S_{tech}$ is generated by Tariq on a **0 to +100** scale (0 = Weak/No Structure, 100 = Wyckoff + Wave 3 + FVG Confluence).
+  - $S_{sent}$ is generated by Nawwar in range **-100 to +100**.
+  - Before synthesis, $S_{sent}$ is normalized to 0–100 scale:
     $$S_{sent\_norm} = \frac{S_{sent} + 100}{2}$$
-  - **Formula Sintesis Pemarkahan Akhir:**
+  - **Final Synthesis Scoring Formula:**
     $$S_{total} = (0.65 \times S_{tech}) + (0.35 \times S_{sent\_norm})$$
-  - **Penyelarasan Pagar Kelulusan Entri (Penyelesaian N2 HOM-121):**
-    - **Pagar 1 (Saringan Awal Nawwar L1):** Nawwar menolak sebarang kaunter yang mempunyai skor sentimen $S_{sent} < +60$ (bersamaan nilai ternormal $S_{sent\_norm} < 80$). Hanya kaunter dengan sentimen positif kukuh dibawa ke mesyuarat portfolio Haziq.
-    - **Pagar 2 (Sintesis Portfolio Haziq L2):** Ambang mutlak adalah $S_{total} \ge 65.0$, dengan syarat minimum teknikal $S_{tech} \ge 60.0$ dan sentimen $S_{sent\_norm} \ge 80.0$ (iaitu $S_{sent} \ge +60$). Mana-mana kaunter di bawah ambang ini ditolak serta-merta.
+  - **Entry Approval Gates (Resolution N2 HOM-121):**
+    - **Gate 1 (Nawwar L1 Initial Filter):** Nawwar rejects any candidate with sentiment score $S_{sent} < +60$ ($S_{sent\_norm} < 80$).
+    - **Gate 2 (Haziq L2 Portfolio Synthesis):** Absolute threshold is $S_{total} \ge 65.0$, with minimum technical score $S_{tech} \ge 60.0$ and sentiment score $S_{sent\_norm} \ge 80.0$ ($S_{sent} \ge +60$). Candidates below threshold are rejected immediately.
 
-#### B. Penentuan Saiz Posisi (Fixed Fractional Risk) & Penyelarasan Risiko
+#### B. Position Sizing (Fixed Fractional Risk) & Risk Alignment
 $$RiskAmount = TotalEquity \times 0.015\ (1.5\%\ \text{risk per trade})$$
 $$PerShareRisk = |EntryPrice - StopLossPrice|$$
 $$\text{PositionSize (Shares)} = \min\left(\left\lfloor \frac{RiskAmount}{PerShareRisk} \right\rfloor,\ \left\lfloor \frac{0.20 \times TotalEquity}{EntryPrice} \right\rfloor\right)$$
-- Maksimum pendedahan satu kaunter tidak melebihi 20% daripada jumlah ekuiti portfolio.
-- **Penyelarasan Nilai Risiko (Penyelesaian N2 HOM-121):** Nilai $StopLossPrice$ dalam formula saiz posisi di atas adalah **sama dan selaras secara eksplisit** dengan $\text{Broker Hard Stop Loss}$ ($EntryPrice - 1.5 \times ATR_{14}$), memastikan nilai $PerShareRisk = 1.5 \times ATR_{14}$ tepat sama dalam perancangan risiko mahupun pelaksanaan broker.
+- Maximum single-stock exposure does not exceed 20% of total portfolio equity.
+- **Risk Alignment (Resolution N2 HOM-121):** $StopLossPrice$ in formula explicitly matches **Broker Hard Stop Loss** ($EntryPrice - 1.5 \times ATR_{14}$), ensuring $PerShareRisk = 1.5 \times ATR_{14}$ matches in planning and execution.
 
-#### C. Penyelarasan Pemilikan Exit Strategy (Exit Owner Matrix)
-Untuk menghapuskan pertindihan pemilikan, tanggungjawab keluar posisi ditetapkan secara tegas:
-- **Haziq (L2):** Menetapkan **polisi dan formula exit** semasa cadangan pesanan dijana.
-- **Danial (L3):** Mengesahkan polisi exit mematuhi Hard Rules.
-- **Exit Sentinel Daemon (L4):** **PEMILIK EKSEKUSI TUNGGAL.** Daemon Python ini memantau pasaran setiap saat dan menghantar pesanan jual sebenar.
+#### C. Exit Strategy Ownership Matrix
+To eliminate ambiguous ownership, exit responsibilities are strictly separated:
+- **Haziq (L2):** Defines **exit policies and formulas** during order proposal generation.
+- **Danial (L3):** Confirms exit policy complies with Hard Rules.
+- **Exit Sentinel Daemon (L4):** **SOLE EXECUTION OWNER.** Python daemon monitors market tick-by-tick and submits actual sell orders.
 
-#### D. Formula Exit 4-Tier Definitif
+#### D. Definitive 4-Tier Exit Formula
 1. **Tier 1 (Partial TP 50% & Risk-Free Shift):**
-   - Sasaran: $TP_1 = Entry + (1.5 \times |Entry - SL|)$ (Berasaskan nisbah R:R 1:1.5).
-   - Apabila $TP_1$ tercapai, Exit Sentinel menjual 50% saham dan menaikkan Stop Loss baki saham ke **Break-Even ($Entry + komisen$)**.
+   - Target: $TP_1 = Entry + (1.5 \times |Entry - SL|)$ (based on 1:1.5 R:R).
+   - When $TP_1$ is reached, Exit Sentinel sells 50% of shares and raises Stop Loss of remaining shares to **Break-Even ($Entry + \text{commissions}$)**.
 2. **Tier 2 (Chandelier Trailing Exit):**
-   - Baki 50% saham dikawal oleh formula trailing: $TrailingStop = HighestHigh_{intraday} - (2.0 \times ATR_{14})$.
+   - Remaining 50% shares governed by trailing formula: $TrailingStop = HighestHigh_{intraday} - (2.0 \times ATR_{14})$.
 3. **Tier 3 (Early Exhaustion Exit / Emergency Threat Exit):**
-   - Selaras dengan prinsip pemilikan exit tunggal (Exit Sentinel sebagai eksekutif), Haziq, Tariq atau Nawwar **tidak menghantar pesanan jualan terus ke broker**.
-   - Sebaliknya, mereka menghantar isyarat `EXIT_REQUEST` berstruktur (dengan alasan dan ID posisi) ke endpoint Bridge L4 (`/api/v1/trade/exit-request`) menggunakan token pengesahan rasmi `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>`. Exit Sentinel yang menerima isyarat ini akan mengesahkan kesahihan token, membatalkan pesanan stop tertunda di broker, dan menutup posisi pada harga pasaran (*market exit*).
+   - Agents (Haziq, Tariq, Nawwar) **never submit sell orders directly to broker**.
+   - They send a structured `EXIT_REQUEST` signal (with reason and position ID) to L4 Bridge endpoint (`/api/v1/trade/exit-request`) using `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>`.
+   - Exit Sentinel verifies token, cancels pending stop orders at broker, and closes position at market price.
 4. **Tier 4 (Time-Based Day Trading Exit):**
-   - Tepat jam **15:45 America/New_York**, Exit Sentinel menutup mandatori semua posisi terbuka bagi mod Day Trading.
+   - Exactly at **15:45 America/New_York**, Exit Sentinel mandatorily closes all open Day Trading positions.
 
 ---
 
-### 3.4. L3: Pengawal Risiko, Pematuhan & Pintu Keselamatan Modal
+### 3.4. L3: Risk Gatekeeper, Compliance & Capital Protection Gate
 
-**PERUBAHAN STRUKTUR PENTING:** Kawalan Hard Rules tidak lagi diserahkan semata-mata kepada LLM Danial. Kesemua 8 Hard Rules dikodkan secara **deterministik dalam Python Bridge L4** sebagai penguatkuasa mutlak. Danial bertindak sebagai pegawai audit dan dokumentasi pematuhan.
+**CRITICAL STRUCTURAL CHANGE:** Hard Rules enforcement is no longer delegated solely to LLM Danial. All 8 Hard Rules are encoded **deterministically in Python Bridge L4** as absolute enforcers. Danial acts as compliance auditor and audit trail logger.
 
-#### Senarai 8 Hard Rules Deterministik & Matriks Ujian BVA Penuh (Penyelesaian N3)
-*Nota Waktu: Seluruh logik waktu menggunakan zon waktu rasmi pasaran New York: `America/New_York` (menangani peralihan Daylight Saving Time EST/EDT secara automatik).*
+#### List of 8 Deterministic Hard Rules & Full BVA Test Matrix (Resolution N3)
+*Time Note: All time logic uses official New York market time: `America/New_York` (automatically handles EST/EDT transitions).*
 
-1. **Maksimum Risiko per Dagangan:** Had risiko modal per dagangan $\le 2.0\%$ daripada ekuiti semasa.
-2. **Daily Drawdown Limit (Circuit Breaker):** Kerugian terkumpul harian $\le 5.0\%$ daripada ekuiti pembukaan hari (nilai ekuiti pembukaan disimpan secara kekal dalam `equity_baseline.sqlite` tepat jam 09:30:00 `America/New_York`).
-3. **Peraturan PDT (Pattern Day Trader Guard):** Untuk ekuiti margin < USD 25,000, maksimum **3 transaksi day trade dalam 5 hari dagangan bergolek**. Transaksi ke-4 ditolak terus.
-4. **Penapisan Penny Stock:** Harga belian wajib $\ge \$5.00$.
-5. **Had Saiz Pesanan vs Kecairan:** Saiz pesanan $\le 1.0\%$ daripada $ADV_{20}$ kaunter.
-6. **Sekatan Waktu Dagangan Entri:** Pesanan entri baharu hanya dibenarkan dari jam 09:45:00 hingga 15:44:59 `America/New_York`. Tepat jam 15:45:00, entri disekat dan mod Time-Exit diaktifkan.
-7. **Idempotensi Pesanan (Duplicate Prevention):** Setiap pesanan membawa `CltOrderID` berasaskan UUID + Hash Tesis. Percubaan menghantar pesanan sama ditolak dengan kod HTTP 409 Conflict.
-8. **Manual Kill Switch:** Endpoint `/api/v1/trade/kill-switch` yang membatalkan semua pesanan aktif dan mencetuskan pesanan jualan pasaran bagi semua pegangan dalam masa $< 3$ saat.
+1. **Max Risk per Trade:** Capital risk per trade $\le 2.0\%$ of current equity.
+2. **Daily Drawdown Limit (Circuit Breaker):** Daily cumulative loss $\le 5.0\%$ of opening equity (opening baseline stored in `equity_baseline.sqlite` at 09:30:00 `America/New_York`).
+3. **PDT Rule Guard:** For margin equity < USD 25,000, maximum **3 day trades in 5 rolling trading days**. 4th trade rejected hard.
+4. **Penny Stock Filter:** Buy price must be $\ge \$5.00$.
+5. **Order Size vs Liquidity:** Order size $\le 1.0\%$ of $ADV_{20}$.
+6. **Entry Trading Hours Restriction:** New entry orders allowed only from 09:45:00 to 15:44:59 `America/New_York`. At 15:45:00, entry is blocked and Time-Exit mode is activated.
+7. **Order Idempotency (Duplicate Prevention):** Each order carries `CltOrderID` based on UUID + Thesis Hash. Duplicate attempts rejected with HTTP 409 Conflict.
+8. **Manual Kill Switch:** Endpoint `/api/v1/trade/kill-switch` cancels all active orders and triggers market sell for all holdings in $< 3$ seconds.
 
-#### Matriks Ujian Nilai Sempadan (BVA Test Matrix) untuk 8 Peraturan:
-| No | Peraturan | Nilai Sempadan Diuji (Boundary Values) | Jangkaan Hasil |
+#### Boundary Value Analysis (BVA) Test Matrix for 8 Rules:
+| No | Rule | Boundary Values Tested | Expected Outcome |
 | :--- | :--- | :--- | :--- |
-| **R1** | Risiko Modal (2.0%) | 1.99%, 2.00% vs 2.01% | 1.99% & 2.00% LULUS; 2.01% DITOLAK |
-| **R2** | Daily Drawdown (5.0%) | 4.99%, 5.00% vs 5.01% | 4.99% & 5.00% LULUS; 5.01% CIRCUIT BREAKER AKTIF |
-| **R3** | Had PDT (< USD 25k) | Transaksi ke-3 vs Transaksi ke-4 | Transaksi ke-3 LULUS; Transaksi ke-4 DITOLAK KERAS |
-| **R4** | Penny Stock Filter | USD 5.00 vs USD 4.99 | USD 5.00 LULUS; USD 4.99 DITOLAK |
-| **R5** | Saiz vs ADV20 (1.0%) | 1.00% daripada ADV vs 1.01% | 1.00% LULUS; 1.01% DITOLAK |
-| **R6a** | Waktu Entri Awal | 09:44:59 vs 09:45:00 NY | 09:44:59 DITOLAK; 09:45:00 LULUS |
-| **R6b** | Waktu Entri Akhir | 15:44:59 vs 15:45:00 NY | 15:44:59 LULUS; 15:45:00 DITOLAK |
-| **R7** | Idempotensi CltOrderID | CltOrderID Baru vs CltOrderID Berulang | Baru LULUS; Berulang DITOLAK (409) |
-| **R8** | Kill Switch Latency | Pencetus Kill Switch semasa ada 5 posisi aktif | Semua pesanan batal + posisi rata dalam < 3s |
+| **R1** | Capital Risk (2.0%) | 1.99%, 2.00% vs 2.01% | 1.99% & 2.00% PASS; 2.01% REJECTED |
+| **R2** | Daily Drawdown (5.0%) | 4.99%, 5.00% vs 5.01% | 4.99% & 5.00% PASS; 5.01% CIRCUIT BREAKER ACTIVE |
+| **R3** | PDT Limit (< USD 25k) | 3rd Trade vs 4th Trade | 3rd Trade PASS; 4th Trade HARD REJECT |
+| **R4** | Penny Stock Filter | USD 5.00 vs USD 4.99 | USD 5.00 PASS; USD 4.99 REJECTED |
+| **R5** | Size vs ADV20 (1.0%) | 1.00% of ADV vs 1.01% | 1.00% PASS; 1.01% REJECTED |
+| **R6a** | Early Entry Time | 09:44:59 vs 09:45:00 NY | 09:44:59 REJECTED; 09:45:00 PASS |
+| **R6b** | Late Entry Time | 15:44:59 vs 15:45:00 NY | 15:44:59 PASS; 15:45:00 REJECTED |
+| **R7** | CltOrderID Idempotency | New CltOrderID vs Duplicate CltOrderID | New PASS; Duplicate REJECTED (409) |
+| **R8** | Kill Switch Latency | Trigger Kill Switch with 5 active positions | All orders cancelled + flat positions in < 3s |
 
 ---
 
-### 3.5. L4: Antara Muka Broker, Pengendalian Sesi & Web Dashboard
+### 3.5. L4: Broker Interface, Session Handling & Web Dashboard
 
-#### A. Kitaran Status Pesanan, Broker Hard SL & Rekonsiliasi Posisi (Penyelesaian M1)
+#### A. Order Status Lifecycle, Broker Hard SL & Position Reconciliation (Resolution M1)
 
-1. **State Machine Kitaran Pesanan Lengkap (Termasuk Pengendalian Kegagalan):**
+1. **Complete Order State Machine (Including Failure Handling):**
    ```text
-   [SUBMITTED] ──(Ditolak broker/risk)──> [REJECTED]
+   [SUBMITTED] ──(Rejected broker/risk)──> [REJECTED]
        │
-   (Diterima OpenD)
+   (Accepted OpenD)
        ▼
-   [PENDING] ──(Dibatalkan pengguna/timeout)──> [CANCELLED]
+   [PENDING] ──(Cancelled user/timeout)──> [CANCELLED]
        │
-   (Pelaksanaan Isian)
-       ├─────────────────────────────────> [PARTIAL_FILL] ──(Isian baki tamat)──┐
-       │                                                                        │
-       ▼                                                                        ▼
-   [FILLED] ──> [LET_BROKER_HARD_SL] ──> [MONITORING_BY_SENTINEL]
+   (Fill Execution)
+       ├─────────────────────────────────> [PARTIAL_FILL] ──(Remaining fill expires)──┐
+       │                                                                              │
+       ▼                                                                              ▼
+   [FILLED] ──> [SET_BROKER_HARD_SL] ──> [MONITORING_BY_SENTINEL]
                                                │
                                  ┌─────────────┴─────────────┐
                                  ▼                           ▼
-                     [TP1_REACHED] (Jual 50%)        [EARLY_EXIT_SIGNAL] (Tariq/Nawwar)
+                     [TP1_REACHED] (Sell 50%)        [EARLY_EXIT_SIGNAL] (Tariq/Nawwar)
                                  │                           │
                                  ▼                           ▼
                      [UPDATE_BROKER_SL_TO_BE]        [MARKET_CLOSE_SENTINEL]
@@ -502,334 +526,333 @@ Untuk menghapuskan pertindihan pemilikan, tanggungjawab keluar posisi ditetapkan
                      [TRAILING_HIT_CLOSED] ──> [CANCEL_LEFTOVER_BROKER_ORDERS]
    ```
 
-2. **Perlindungan Stop di Peringkat Broker (Broker Hard SL):**
-   - OpenAPI `place_order` menyokong pesanan jenis `STOP` / `STOP_LIMIT`.
-   - **Mekanisme Keselamatan Failsafe:** Sebaik sahaja pesanan belian disahkan `FILLED`, Bridge **serta-merta mendaftarkan pesanan Hard Stop Loss di pelayan broker Moomoo** pada paras risiko maksimum ($Entry - 1.5 \times ATR$).
-   - Dengan kaedah ini, sekiranya kontena Exit Sentinel, OpenD, atau sambungan internet terputus, modal tetap **100% dilindungi oleh pelayan broker Moomoo**.
-   - Exit Sentinel hanya mengemas kini (*modify / replace order*) had pesanan stop tersebut di broker apabila $TP_1$ tercapai (ke paras Break-Even) atau semasa Trailing Stop mendaki.
+2. **Broker-Side Stop Protection (Broker Hard SL):**
+   - OpenAPI `place_order` supports `STOP` / `STOP_LIMIT` order types.
+   - **Failsafe Mechanism:** As soon as buy order is confirmed `FILLED`, Bridge **immediately registers Hard Stop Loss on Moomoo broker server** at maximum risk level ($Entry - 1.5 \times ATR$).
+   - If Exit Sentinel, OpenD, or internet connection fails, capital remains **100% protected on Moomoo broker servers**.
+   - Exit Sentinel modifies or replaces stop orders at broker when $TP_1$ is reached (to Break-Even) or as Trailing Stop ratchets up.
 
-3. **Protokol Rekonsiliasi Posisi Pos-Restart (Position Reconciliation Engine):**
-   - Semasa startup kontena `mcp-bridge` / `exit-sentinel`, atau selepas berlaku gangguan/sambungan semula (*reconnect*):
-     a. Sentinel memanggil `position_list_query` untuk mendapatkan senarai kedudukan sebenar di akaun broker.
-     b. Sentinel memanggil `order_list_query` untuk mendapatkan status semua pesanan aktif/tertunda.
-     c. Sentinel membandingkan posisi sebenar dengan pangkalan data tempatan (`positions_state.sqlite`).
-     d. Sekiranya terdapat kedudukan terbuka tanpa rekod pemantauan Sentinel, sistem secara automatik membina semula penjejak posisi (*re-hydrate state*) dan mendaftarkan pelan exit yang sepadan.
-     e. Rekonsiliasi berkala dijalankan setiap **60 saat** bagi memastikan tiada jurang antara rekod lokal dan baki broker.
+3. **Post-Restart Position Reconciliation Protocol:**
+   - On startup of `mcp-bridge` / `exit-sentinel`, or after reconnect:
+     a. Sentinel calls `position_list_query` to fetch actual broker positions.
+     b. Sentinel calls `order_list_query` to check active/pending orders.
+     c. Sentinel compares actual broker positions with local database (`positions_state.sqlite`).
+     d. If open positions exist without Sentinel tracking records, system automatically re-hydrates position state and registers exit plans.
+     e. Periodic reconciliation runs every **60 seconds** to verify zero drift between local records and broker account.
 
 4. **Sentinel Heartbeat & Dead Man's Switch:**
-   - Exit Sentinel menghantar denyutan nadi (*heartbeat timestamp*) setiap 5 saat ke Redis/fail status berkongsi.
-   - Sekiranya tiada heartbeat melebihi 15 saat, Bridge membunyikan amaran kritikal ke Dashboard dan menyekat pembukaan posisi baharu secara automatik.
+   - Exit Sentinel sends heartbeat timestamp every 5 seconds to shared status store.
+   - If no heartbeat is received for > 15 seconds, Bridge triggers critical dashboard alert and blocks new position openings.
 
-5. **Jurang Perbezaan Mod SIMULATE vs REAL:**
-   - *SIMULATE (Paper):* Pesanan adalah *Good-for-Day*, tiada sokongan transaksi luar waktu (*pre/post-market*), dan tiada *deals push*.
-   - *Rancangan Ujian Menutup Jurang:* Pengujian integrasi Fasa 3 mengesahkan status isian melalui kaedah polling berkala `get_order_list` (bukan semata-mata bergantung pada push stream deals), memastikan kod yang sama berfungsi 100% tanpa perubahan apabila beralih ke mod REAL.
+5. **Differences: SIMULATE vs REAL Mode:**
+   - *SIMULATE (Paper):* Orders are Good-for-Day, no pre/post-market support, no deals push.
+   - *Gap Closing Test Plan:* Integration tests verify fill status using periodic polling `get_order_list` (2-second interval), ensuring identical code functions seamlessly when transitioning to REAL mode.
 
-6. **Pertukaran Mod Selamat:**
-   - Suis mod dikawal oleh variabel `MOOMOO_TRD_ENV=SIMULATE|REAL`.
-   - Mod `REAL` terkunci dan memerlukan suntikan kata laluan dagangan melalui pemboleh ubah rahsia peribadi (*Paperclip Secret*), bukan fail konfigurasi terbuka.
+6. **Safe Mode Switching:**
+   - Mode controlled via environment variable `MOOMOO_TRD_ENV=SIMULATE|REAL`.
+   - `REAL` mode is locked and requires trading password injection through private Paperclip Secret, never plain-text configuration files.
 
-#### B. Pengurusan Log Masuk, Log Keluar & Tukar Akaun OpenD
-- **Satu Proses OpenD = Satu Akaun Moomoo.**
-- **Tukar Akaun Dagangan (`acc_id`):** Dibuat terus melalui panggilan SDK tanpa me-restart kontena (contoh: bertukar antara akaun Paper Trading 1 dan 2).
-- **Prosedur Sign-Out Sesi OpenD (Penyelesaian N7):**
-  - Panel tetapan Web Dashboard menyediakan butang *Sign-Out Sesi OpenD*.
-  - Apabila diklik, backend Bridge menghantar arahan telnet penamatan sesi (arahan `logout` atau penutupan sesi soket Telnet rasmi yang disahkan semasa Fasa 1) ke OpenD Port 22222, mematikan sambungan aktif ke pelayan Moomoo, dan membersihkan fail token sesi sementara dalam folder `opend_session_data`.
-  - Kontena OpenD direstart secara terkawal dalam mod terputus (*disconnected idle state*) sehingga log masuk baharu dimulakan oleh pengguna.
-- **Tukar Akaun Log Masuk Moomoo Berbeza:** Memerlukan proses Sign-Out di atas, pengemaskinian konfigurasi akaun log masuk, dan restart kontena OpenD.
-- **Aliran OTP 2FA:** Backend Bridge menyediakan modul *Telnet Relay* yang menghubungkan port 22222 OpenD (melalui rangkaian `stock_internal`) ke antaramuka Web Dashboard. Pengguna memasukkan kod OTP pada kotak dialog web, dan Bridge menghantar arahan `input_phone_verify_code -code=XXXXXX` ke OpenD.
+#### B. OpenD Login, Logout & Account Switching
+- **One OpenD Process = One Moomoo Account.**
+- **Switch Trading Account (`acc_id`):** Executed directly via SDK calls without restarting container (e.g. switching between Paper Trading accounts 1 and 2).
+- **OpenD Session Sign-Out Procedure (Resolution N7):**
+  - Web Dashboard settings panel provides *Sign-Out OpenD Session* button.
+  - When clicked, Bridge backend sends session termination Telnet command (`logout`) to OpenD Port 22222, closes active broker connections, and clears temporary session tokens in `opend_session_data`.
+  - OpenD container restarts in controlled disconnected idle state until user initiates new login.
+- **Switch Different Moomoo Login Account:** Requires Sign-Out procedure above, updating login configuration, and restarting OpenD container.
+- **2FA OTP Flow:** Bridge backend provides Telnet Relay connecting OpenD port 22222 (via `stock_internal`) to Web Dashboard modal. User enters OTP code in web UI, and Bridge sends `input_phone_verify_code -code=XXXXXX` to OpenD.
 
-#### C. Keselamatan Asal, Pengesahan JWT Cloudflare & Laluan Ejen Paperclip (Penyelesaian M2)
+#### C. Origin Security, Cloudflare JWT & Paperclip Agent Path (Resolution M2)
 
-1. **Pengehosan Berfasa & Domain:**
-   - Fasa 1 hingga 3 (Sandbox/Pengujian): `https://stock-trader.beta.julietmike.net/` (Mematuhi piawaian subdomain sandbox syarikat).
-   - Fasa 4 (Produksi Nyata): `https://stock.julietmike.net` (Hanya selepas kelulusan bertulis eksplisit Jefri).
+1. **Phased Hosting & Domains:**
+   - Phases 1 to 3 (Sandbox/Testing): `https://stock-trader.beta.julietmike.net/` (complies with company sandbox standards).
+   - Phase 4 (Live Production): `https://stock.julietmike.net` (only after explicit written approval from Jefri).
 
-2. **Pengesahan JWT Authentik (auth.julietmike.net) di Peringkat Origin (Dashboard & Bridge):**
-   - Setiap permintaan masuk melalui Authentik (auth.julietmike.net) disahkan tandatangan kriptografinya menggunakan sijil awam Cloudflare (`https://<team-domain>.cloudflareaccess.com/cdn-cgi/access/certs`).
-   - Semakan mandatori pada token `Cf-Access-Jwt-Assertion`:
-     - Pengesahan **Audience Tag (`aud`)**: Mesti sepadan dengan AUD aplikasi Authentik (auth.julietmike.net).
-     - Pengesahan **Issuer (`iss`)**: Mesti sepadan dengan `https://<team-domain>.cloudflareaccess.com`.
-     - Pengesahan Tarikh Luput (`exp`) dan caching JWKS tempatan selama 1 jam.
-     - Sekiranya pengepala tiada atau tidak sah: Akses ditolak serta-merta dengan HTTP 403 Forbidden.
+2. **Authentik JWT Verification (auth.julietmike.net) at Origin (Dashboard & Bridge):**
+   - Inbound requests through Authentik (`auth.julietmike.net`) have cryptographic signatures verified via Cloudflare public certificates (`https://<team-domain>.cloudflareaccess.com/cdn-cgi/access/certs`).
+   - Mandatory checks on `Cf-Access-Jwt-Assertion`:
+     - Audience Tag (`aud`): Must match Authentik application AUD.
+     - Issuer (`iss`): Must match `https://<team-domain>.cloudflareaccess.com`.
+     - Expiration (`exp`) and local JWKS caching for 1 hour.
+     - Missing or invalid header returns immediate HTTP 403 Forbidden.
 
-3. **Kawalan Keselamatan Bridge (Port 8000) & Laluan Dwi-Capaian (Penyelarasan M2 HOM-121):**
-   - **Pendedahan Terhad:** Port 8000 **TIDAK didedahkan kepada internet atau antaramuka awam (0.0.0.0)**. Port ini dipetakan secara eksklusif ke loopback hos sahaja (`127.0.0.1:8000:8000`) serta rangkaian dalaman Docker `stock_internal`.
-   - **Laluan 1 — Web Dashboard ke Bridge (Rangkaian `stock_internal`):**
-     - Dashboard berhubung terus ke `http://mcp-bridge:8000` melalui DNS dalaman Docker.
-     - Setiap permintaan wajib menyertakan pengepala servis dalaman: `X-Service-Token: Bearer <BRIDGE_SERVICE_TOKEN>`.
-   - **Laluan 2 — Ejen Paperclip (Haziq, Danial, Tariq, & Nawwar) ke Bridge (Localhost Loopback):**
-     - Ejen Paperclip yang beroperasi di peringkat hos mencapai Bridge melalui `http://127.0.0.1:8000`.
-     - Setiap permintaan daripada ejen wajib menyertakan pengepala kebenaran rahsia: `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>`.
-     - Setiap endpoint sensitif (`/api/v1/trade/submit`, `/api/v1/trade/kill-switch`) mengesahkan token `PAPERCLIP_BRIDGE_SECRET` ini. Percubaan capaian tanpa token sah ditolak serta-merta dengan kod HTTP 401 Unauthorized atau 403 Forbidden.
+3. **Bridge Security Controls (Port 8000) & Dual Access Paths (Resolution M2 HOM-121):**
+   - **Restricted Exposure:** Port 8000 is **NOT exposed to public interfaces (0.0.0.0)**. Mapped exclusively to host loopback (`127.0.0.1:8000:8000`) and internal Docker network `stock_internal`.
+   - **Path 1 — Web Dashboard to Bridge (`stock_internal`):**
+     - Dashboard connects directly to `http://mcp-bridge:8000` via internal Docker DNS.
+     - Every request must include internal header: `X-Service-Token: Bearer <BRIDGE_SERVICE_TOKEN>`.
+   - **Path 2 — Paperclip Agents (Haziq, Danial, Tariq, Nawwar) to Bridge (Localhost Loopback):**
+     - Paperclip agents running on host reach Bridge via `http://127.0.0.1:8000`.
+     - Every request must include secret authorization header: `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>`.
+     - Sensitive endpoints (`/api/v1/trade/submit`, `/api/v1/trade/kill-switch`) enforce `PAPERCLIP_BRIDGE_SECRET`. Unauthorized requests return HTTP 401 Unauthorized or 403 Forbidden.
 
 ---
 
-### 3.6. Anggaran Kos Token & Kecekapan Sistem (Token & Latency Budget)
+### 3.6. Token Cost Estimates & System Efficiency (Token & Latency Budget)
 
-| Komponen | Peranan | Model / Enjin | Anggaran Kekerapan | Kos Token per Hari | Kependaman (*Latency*) |
+| Component | Role | Model / Engine | Estimated Frequency | Daily Token Cost | Latency |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **L0 Screener** | Imbasan pasaran & POC | Python Math | Setiap 5 minit | **0 Token ($0.00)** | ~0.05 saat |
-| **L1 Tariq** | Fasa Wyckoff & Wave | Claude 3.5 Sonnet | 3-5 kaunter, 4x sehari | ~12,000 token (~$0.04) | ~4-6 saat |
-| **L1 Nawwar** | Katalis & Kalendar | Gemini 1.5 Flash | 5 kaunter, 4x sehari | ~8,000 token (~$0.002) | ~1-2 saat |
-| **L2 Haziq** | Sintesis Tesis | Claude 3.5 Sonnet | 2 cadangan per hari | ~4,000 token (~$0.015) | ~3-5 saat |
-| **L3 Danial** | Semakan Audit | Claude 3.5 Haiku | 2 audit per hari | ~2,000 token (~$0.002) | ~1 saat |
-| **L4 Sentinel** | Trailing Stop & Exit | Python Daemon | Setiap saat | **0 Token ($0.00)** | < 0.01 saat |
-| **JUMLAH** | - | - | - | **~26,000 token (~$0.06/hari)** | **Sangat Cekap & Pantas** |
+| **L0 Screener** | Market Scan & POC | Python Math | Every 5 minutes | **0 Tokens ($0.00)** | ~0.05 sec |
+| **L1 Tariq** | Wyckoff & Wave Phase | Claude 3.5 Sonnet | 3-5 candidates, 4x daily | ~12,000 tokens (~$0.04) | ~4-6 sec |
+| **L1 Nawwar** | Catalysts & Calendar | Gemini 1.5 Flash | 5 candidates, 4x daily | ~8,000 tokens (~$0.002) | ~1-2 sec |
+| **L2 Haziq** | Thesis Synthesis | Claude 3.5 Sonnet | 2 proposals daily | ~4,000 tokens (~$0.015) | ~3-5 sec |
+| **L3 Danial** | Audit Verification | Claude 3.5 Haiku | 2 audits daily | ~2,000 tokens (~$0.002) | ~1 sec |
+| **L4 Sentinel** | Trailing Stop & Exit | Python Daemon | Every second | **0 Tokens ($0.00)** | < 0.01 sec |
+| **TOTAL** | - | - | - | **~26,000 tokens (~$0.06/day)** | **High Efficiency & Speed** |
 
 ---
 
-## 4. Kriteria Penerimaan Boleh Uji & Pelan Berfasa (Roadmap)
+## 4. Testable Acceptance Criteria & Phased Roadmap
 
-| Fasa | Skop & Komponen | Kriteria Penerimaan Boleh Uji & Terukur (Measurable Acceptance Criteria) | Pagar Kelulusan |
+| Phase | Scope & Components | Measurable Acceptance Criteria | Approval Gate |
 | :--- | :--- | :--- | :--- |
-| **Fasa 1: L0 Infra & Screener** | Setup Docker Compose (OpenD Linux CLI, Screener V2, Bridge REST, Quota Tracker, & Recon Engine). | 1. Fail `watchlist.json` dijana tepat setiap 300s $\pm$ 5s dan 100% lulus validasi skema JSON Schema validator.<br>2. Kuota K-line 30-hari kekal terhad: penambahan simbol baharu $\le 5$ simbol/hari dan penggunaan kuota K-line $\le 15$ simbol selepas 3 hari ujian.<br>3. Ujian BVA Python Bridge melepasi 100% kes ujian bagi kesemua 8 peraturan keselamatan modal (termasuk kes sempadan 2.01%, 5.01%, USD 4.99, transaksi PDT ke-4, dan sempadan waktu 15:44:59 vs 15:45:00).<br>4. Ujian Kill Switch: arahan `/kill-switch` berjaya membatalkan pesanan tertunda dan menutup kedudukan dalam masa $< 3.0$ saat.<br>5. Ujian Keselamatan Dwi-Laluan Bridge Port 8000: (a) Capaian daripada Web Dashboard tanpa `X-Service-Token` ditolak 401 Unauthorized; (b) Capaian daripada Ejen Paperclip di `127.0.0.1:8000` tanpa `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>` ditolak 401/403; (c) Capaian Web Dashboard dari luar tanpa `Cf-Access-Jwt-Assertion` yang sah ditolak 403 Forbidden di origin (0% kebocoran).<br>6. Ujian Sesi Telnet OpenD: Arahan penamatan sesi/logout Telnet pada OpenD sebenar disahkan berfungsi dengan sesi broker tamat sepenuhnya dan fail sesi sementara dibersihkan. | Lulus semakan kod & laporan bukti ujian BVA oleh Zahrin (QA). |
-| **Fasa 2: Ejen Analisis & Exit Engine** | Prompt Tariq, Nawwar, Haziq, pendaftaran MCP Tools, dan logik Exit Sentinel. | 1. Tariq menghasilkan penilaian teknikal berstruktur JSON dengan nilai $S_{tech} \in [0, 100]$ dalam masa $\le 8.0$ saat tanpa kegagalan parsing.<br>2. Nawwar menolak 100% kaunter simulasi yang mempunyai earnings $< 48$ jam atau amaran makro FOMC/CPI.<br>3. Normalisasi $S_{sent\_norm}$ dan sintesis $S_{total}$ mematuhi formula matematik dengan ketepatan perpuluhan 100%.<br>4. Ujian rekonsiliasi: apabila kontena Sentinel direstart secara paksa semasa ada 2 posisi aktif simulasi, Sentinel berjaya menemui semula (*re-hydrate*) posisi tersebut melalui `position_list_query` dalam masa $< 5.0$ saat dan meletakkan Hard SL semula. | Kelulusan prompt ejen & reka bentuk oleh Jefri. |
-| **Fasa 3: Dagangan Kertas Automatik (Paper Trading)** | Automasi penuh hujung-ke-hujung di akaun Moomoo Paper Trading (Mod `SIMULATE`). | 1. Jurang SIMULATE vs REAL ditutup: status isian disahkan melalui kaedah berkala `get_order_list` (polling 2 saat) dengan kelewatan pengesanan $< 3$ saat.<br>2. Ujian eksekusi TP1: Apabila harga mencapai $TP_1$, Exit Sentinel berjaya menjual tepat 50% kuantiti dan memindahkan stop order broker ke paras Break-Even.<br>3. Ujian Time-Exit: Tepat jam 15:45:00 `America/New_York`, kesemua posisi terbuka mod Day Trading ditutup 100% sebelum jam 15:46:00.<br>4. Dashboard memaparkan metrik PnL dan status OpenD secara masa nyata di `https://stock-trader.beta.julietmike.net/` di bawah perlindungan Cloudflare SSO. | Semakan metrik prestasi & pematuhan risiko oleh Jefri. |
-| **Fasa 4: Pengaktifan Akaun Sebenar (Live Switch)** | Pertukaran tetapan `MOOMOO_TRD_ENV=REAL` dengan modal permulaan konservatif. | 1. 100% pematuhan peraturan PDT (transaksi ke-4 dalam 5 hari dihalang secara keras).<br>2. Kata laluan dagangan disuntik selamat melalui secret Paperclip tanpa rekod plain-text dalam log, commit, atau komen task.<br>3. Broker Hard Stop Loss disahkan aktif di pelayan broker sejurus selepas isian pertama pada akaun nyata. | Kelulusan bertulis eksplisit Jefri dalam thread task. |
+| **Phase 1: L0 Infra & Screener** | Docker Compose setup (OpenD Linux CLI, Screener V2, Bridge REST, Quota Tracker, & Recon Engine). | 1. `watchlist.json` generated every 300s $\pm$ 5s passing 100% JSON Schema validation.<br>2. 30-day K-line quota strictly controlled: new symbols added $\le 5$ symbols/day, K-line quota usage $\le 15$ symbols after 3 days.<br>3. Python Bridge BVA tests pass 100% test cases across all 8 capital safety rules (including 2.01%, 5.01%, USD 4.99, 4th PDT trade, and 15:44:59 vs 15:45:00 boundaries).<br>4. Kill Switch test: `/kill-switch` cancels pending orders and closes positions in $< 3.0$ seconds.<br>5. Dual-Path Bridge Port 8000 Security: (a) Dashboard access without `X-Service-Token` rejected 401; (b) Paperclip Agent access on `127.0.0.1:8000` without `Authorization: Bearer <PAPERCLIP_BRIDGE_SECRET>` rejected 401/403; (c) External Dashboard access without valid `Cf-Access-Jwt-Assertion` rejected 403 at origin (0% leak).<br>6. OpenD Telnet Session test: Telnet logout on real OpenD terminates session completely and clears temporary tokens. | Code review pass & BVA test report signed off by Zahrin (QA). |
+| **Phase 2: Analysis Agents & Exit Engine** | Prompts for Tariq, Nawwar, Haziq, MCP Tools registration, and Exit Sentinel logic. | 1. Tariq generates structured JSON technical evaluation with $S_{tech} \in [0, 100]$ in $\le 8.0$ seconds without parsing failures.<br>2. Nawwar rejects 100% simulated candidates with earnings $< 48$ hours or FOMC/CPI macro alerts.<br>3. $S_{sent\_norm}$ normalization and $S_{total}$ synthesis match mathematical formulas with 100% decimal accuracy.<br>4. Reconciliation test: Forced restart of Sentinel container with 2 active simulated positions re-hydrates state via `position_list_query` in $< 5.0$ seconds and re-establishes Hard SL. | Agent prompts & design approved by Jefri. |
+| **Phase 3: Automated Paper Trading** | End-to-end automation on Moomoo Paper Trading account (`SIMULATE` mode). | 1. SIMULATE vs REAL gap closed: Fill status verified via periodic `get_order_list` (2-second polling) with detection lag $< 3$ seconds.<br>2. TP1 execution test: When price hits $TP_1$, Exit Sentinel sells exactly 50% quantity and moves broker stop order to Break-Even.<br>3. Time-Exit test: At 15:45:00 `America/New_York`, 100% open Day Trading positions closed before 15:46:00.<br>4. Dashboard displays real-time PnL and OpenD status metrics at `https://stock-trader.beta.julietmike.net/` behind Cloudflare SSO. | Performance metrics & risk compliance review signed off by Jefri. |
+| **Phase 4: Live Account Activation** | Switch setting to `MOOMOO_TRD_ENV=REAL` with conservative starting capital. | 1. 100% PDT rule compliance (4th trade in 5 days hard blocked).<br>2. Trading password securely injected via Paperclip Secret without plain-text records in logs, commits, or comments.<br>3. Broker Hard Stop Loss confirmed active on broker server immediately after first fill on live account. | Explicit written approval by Jefri in task thread. |
 
 ---
 
-## 5. Kesimpulan & Penyerahan
+## 5. Conclusion & Delivery
 
-Dokumen Blueprint Versi 3.5 Definitif (Authentik Integration) ini telah menyelesaikan 100% maklum balas audit semakan QA Zahrin (HOM-118, HOM-119, HOM-121, HOM-122, dan HOM-123):
-1. **Penyatuan Penuh 16 Item & Skema JSON Lengkap:** Kesemua spesifikasi L0–L4, Docker Compose, formula multi-stage, dan skema JSON rasmi Tariq & Nawwar disatukan dalam satu dokumen utuh.
-2. **Pengurusan Kuota & API Rasmi:** Tapisan awan `get_stock_screen` V2 dan penjejakan kuota 30-hari menyelesaikan kekangan kuota K-line Moomoo OpenAPI secara realistik.
-3. **Failsafe Broker Hard Stop & Rekonsiliasi:** Pendaftaran serta-merta Hard SL di pelayan Moomoo broker melindungi modal 100% sekiranya kontena terputus, disokong oleh enjin rekonsiliasi 60-saat dan denyutan nadi Sentinel 5-saat.
-4. **Seni Bina Keselamatan Dwi-Laluan:** Port 8000 Bridge dihadkan ke loopback hos `127.0.0.1:8000` dengan perlindungan `PAPERCLIP_BRIDGE_SECRET` bagi ejen Paperclip, manakala Web Dashboard dilindungi oleh pengesahan JWT Authentik (auth.julietmike.net) di origin dan token servis dalaman.
-5. **Format & Kriteria Terukur:** Formula matematik LaTeX dibetulkan 100% tanpa aksara kawalan, matriks ujian BVA bagi 8 peraturan lengkap, dan kriteria penerimaan terukur kuantitatif disediakan bagi setiap fasa.
+This Blueprint Version 3.5 Definitive (Authentik Integration) document resolves 100% of audit feedback from QA Zahrin (HOM-118, HOM-119, HOM-121, HOM-122, and HOM-123):
+1. **Full Consolidation of 16 Items & Complete JSON Schemas:** All L0–L4 specifications, Docker Compose, multi-stage formulas, and official JSON schemas for Tariq & Nawwar are integrated into one coherent document.
+2. **Quota Management & Official API:** Cloud screening via `get_stock_screen` V2 and 30-day quota tracking resolve Moomoo OpenAPI K-line limits realistically.
+3. **Failsafe Broker Hard Stop & Reconciliation:** Immediate registration of Hard SL on Moomoo broker server protects capital 100% during container outages, supported by 60-second reconciliation and 5-second Sentinel heartbeat.
+4. **Dual-Path Security Architecture:** Bridge Port 8000 is restricted to host loopback `127.0.0.1:8000` with `PAPERCLIP_BRIDGE_SECRET` protection for Paperclip agents, while Web Dashboard is protected by Authentik JWT verification at origin and internal service tokens.
+5. **Standardized Formatting & Measurable Criteria:** Clean LaTeX formulas without control character corruption, complete BVA test matrix for 8 rules, and measurable acceptance criteria for each phase.
 
-Dokumen ini diterbitkan dalam task document **`blueprint-option-a` (Versi 3.5 Definitif (Authentik Integration))** untuk semakan akhir QA Zahrin dan kelulusan rasmi Jefri.
-
-
----
-
-## Tambahan v3.8: MEMO Rekabentuk Antaramuka & Integriti Data (Arahan Jefri 2026-11-16)
-
-1. **MEMO Rekabentuk Antaramuka (Dilarang Label Cliché)**:
-   - DILARANG menambah label-label cliché, kad penerangan berulang, atau teks hiasan yang tidak mempunyai kegunaan operasi dan tidak diperlukan oleh pengguna (contoh: kad prinsip teori saiz posisi institusi, penjelasan berulang fungsi ejen, atau label bertindan L1/L2/L3 yang mengelirukan).
-   - Antaramuka mestilah kemas, padat, berfungsi (*utilitarian*), dan terus memaparkan kawalan atau metrik tindakan pengguna.
-
-2. **MEMO Integriti Data & Visualisasi Ejen (Wajib Data Sebenar)**:
-   - Wajib guna DATA SEBENAR daripada saluran paip (`watchlist.json` / broker). DILARANG menggunakan senarai calon mockup/rekaan yang tiada kaitan dengan senarai pantau (*watchlist*) semasa.
-   - Buang label kod teknikal dalaman yang tidak diperlukan (seperti `(L1_TECHNICAL)`, `(L4_DISPATCH)` pada chip pilihan kaunter).
-   - Halaman pemantauan aktiviti ejen (`#/agents`) wajib memaparkan bilangan sebenar kaunter semasa yang lulus (cth. `Kaunter Semasa Lulus: X / Y`) berserta pengekodan warna (*color-coding*) yang jelas: Hijau (*Success*) bagi kaunter yang lulus/diterima dan Neutral/Muted bagi kaunter yang ditolak.
-
+Published in task document **`blueprint-option-a` (Version 3.5 Definitive (Authentik Integration))** for final QA sign-off by Zahrin and official approval by Jefri.
 
 ---
 
-## 6. Seni Bina & Orkestrasi Ejen Paperclip L1–L4 (Fasa 3 Definitif - HOM-317)
+## Addendum v3.8: UI Design & Data Integrity MEMO (Jefri Directive 2026-11-16)
 
-### 6.1 Pemetaan Model Ejen Sebenar di Paperclip (Sifar Claude)
-Berasaskan ketetapan pemohon (Jefri), sistem menggunakan 100% model Google Gemini yang dikonfigurasikan di Paperclip tanpa sebarang kebergantungan kepada model Claude:
+1. **UI Design MEMO (No Cliché Labels)**:
+   - FORBIDDEN to add cliché labels, redundant explanatory cards, or decorative text without operational utility (e.g. theoretical position sizing cards, repetitive agent explanations, or confusing stacked L1/L2/L3 badges).
+   - UI must remain clean, dense, utilitarian, and focused directly on user actions and operational metrics.
 
-| Ejen | Peranan | ID Ejen Paperclip | Adapter | Model Rasmi Semasa | Tanggungjawab |
+2. **Data Integrity & Agent Visualization MEMO (Mandatory Real Data)**:
+   - Mandatory use of REAL DATA from pipeline (`watchlist.json` / broker). FORBIDDEN to use mocked candidate lists disconnected from active watchlist.
+   - Remove unnecessary internal technical labels (such as `(L1_TECHNICAL)`, `(L4_DISPATCH)` on candidate chips).
+   - Agent activity page (`#/agents`) must show exact count of passing candidates (e.g. `Passing Candidates: X / Y`) with clear color-coding: Green (*Success*) for passed candidates and Neutral/Muted for rejected candidates.
+
+---
+
+## 6. Paperclip Agent Architecture & Orchestration L1–L4 (Phase 3 Definitive - HOM-317)
+
+### 6.1 Real Agent Model Mapping in Paperclip (Zero Claude)
+Per requester (Jefri) directive, the system uses 100% Google Gemini models configured in Paperclip with zero Claude dependencies:
+
+| Agent | Role | Paperclip Agent ID | Adapter | Current Official Model | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Trade: Tariq** | L1 Technical Analyst | `9c686b86-0a97-46ae-9705-edb8840a5440` | Antigravity | `gemini-4-hydrogen-medium` | Fasa Wyckoff, carta candlestick 60-hari Moomoo (`get_history_kline` / `get_cur_kline_with_sub`), aras sokongan/rintangan, skor $S_{tech}$ |
-| **Trade: Nawwar** | L1 Sentiment Scout | `82e5a99e-368c-4f5f-b18d-b5ecaafbc40f` | Antigravity | `gemini-3.8-flash-medium` | Sentimen berita Moomoo (`get_news_for_symbol`), pengesahan hard gate tarikh earnings (< 5 hari) (`get_earnings_calendar`), skor $S_{sent}$ |
-| **Trade: Haziq** | L2 Portfolio Lead / Trader | `612c7171-d5f1-405b-9be3-aca66e24b7db` | Antigravity | `gemini-4-hydrogen-medium` | Sintesis $S_{total} = 0.65 S_{tech} + 0.35 S_{sent\_norm}$, pemilihan ranking terbaik, formula saiz posisi 1.5% modal, sasaran SL & TP |
-| **Trade: Danial** | L3 Risk & Execution Officer | `bcbd0bd4-b10b-4000-b0a7-c21fc6147336` | Antigravity | `gemini-3.8-flash-medium` | Audit ketat 10 Hard Rules (termasuk Pause Buying), penghantaran pesanan belian ke Bridge Port 8000 |
+| **Trade: Tariq** | L1 Technical Analyst | `9c686b86-0a97-46ae-9705-edb8840a5440` | Antigravity | `gemini-4-hydrogen-medium` | Wyckoff phase, 60-day candlestick charts via Moomoo (`get_history_kline` / `get_cur_kline_with_sub`), support/resistance levels, $S_{tech}$ score |
+| **Trade: Nawwar** | L1 Sentiment Scout | `82e5a99e-368c-4f5f-b18d-b5ecaafbc40f` | Antigravity | `gemini-3.8-flash-medium` | Moomoo news sentiment (`get_news_for_symbol`), earnings gate check (< 5 days) (`get_earnings_calendar`), $S_{sent}$ score |
+| **Trade: Haziq** | L2 Portfolio Lead / Trader | `612c7171-d5f1-405b-9be3-aca66e24b7db` | Antigravity | `gemini-4-hydrogen-medium` | Synthesizes $S_{total} = 0.65 S_{tech} + 0.35 S_{sent\_norm}$, top ranking selection, 1.5% capital position sizing, SL & TP targets |
+| **Trade: Danial** | L3 Risk & Execution Officer | `bcbd0bd4-b10b-4000-b0a7-c21fc6147336` | Antigravity | `gemini-3.8-flash-medium` | Strict audit of 10 Hard Rules (including Pause Buying), order dispatch to Bridge Port 8000 |
 
-### 6.2 Mekanisme Panggilan Bangun (Wake Chain)
+### 6.2 Wake Chain Mechanism
 ```text
 +------------------------------------------------------------------------+
 | L0 Screener (Python Daemon)                                            |
-| Menjana 3-5 calon saham terbaik (lorong Momentum & Setup)              |
+| Generates top 3-5 candidates (Momentum & Setup lanes)                  |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Wake oleh Screener Event)
+                                    v (Woken by Screener Event)
 +------------------------------------------------------------------------+
 | Bridge Dispatcher Service (bridge/src/paperclip_dispatcher.py)         |
-| Mencetuskan Paperclip wake selari untuk Tariq & Nawwar                 |
+| Triggers parallel Paperclip wake for Tariq & Nawwar                    |
 +-------------------+--------------------------------+-------------------+
                     |                                |
                     v (Wake L1A)                     v (Wake L1B)
 +--------------------------------------+ +-------------------------------+
 | L1 Tariq (Technical Analyst)         | | L1 Nawwar (Sentiment Scout)   |
 | - Model: gemini-4-hydrogen-medium    | | - Model: gemini-3.8-flash-med |
-| - Analisis Wyckoff & K-Line          | | - Semak Earnings & Makro Gate |
-| - Pulangkan S_tech [0, 100]          | | - Pulangkan S_sent            |
+| - Wyckoff & K-Line Analysis          | | - Check Earnings & Macro Gate |
+| - Returns S_tech [0, 100]            | | - Returns S_sent              |
 +-------------------+------------------+ +---------------+---------------+
                     |                                |
                     +----------------+---------------+
-                                     | (Kedua-dua L1 siap)
-                                     v (WAKE HAZIQ oleh Bridge Dispatcher)
+                                     | (Both L1 complete)
+                                     v (WAKE HAZIQ by Bridge Dispatcher)
 +------------------------------------------------------------------------+
 | L2 Haziq (Portfolio Lead / Trader)                                     |
 | - Model: gemini-4-hydrogen-medium                                      |
-| - Sintesis S_total, pilih ranking tertinggi, saiz posisi, SL & TP      |
+| - Synthesizes S_total, selects top ranking, position sizing, SL & TP   |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (WAKE DANIAL oleh Haziq sendiri)
+                                    v (WAKE DANIAL by Haziq)
 +------------------------------------------------------------------------+
 | L3 Danial (Risk & Compliance Officer)                                  |
 | - Model: gemini-3.8-flash-medium                                       |
-| - Audit ketat 10 Hard Rules (termasuk Pause Buying)                    |
-| - Jika Lulus: Danial hantar order ke Bridge Port 8000 via loopback     |
+| - Strict audit of 10 Hard Rules (including Pause Buying)               |
+| - If Passed: Danial submits order to Bridge Port 8000 via loopback     |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Eksekusi Pesanan)
+                                    v (Order Execution)
 +------------------------------------------------------------------------+
 | L4 Broker Execution (Moomoo OpenD)                                     |
-| Laksana pesanan di akaun Paper Trading (TrdEnv.SIMULATE)               |
+| Executes order in Paper Trading account (TrdEnv.SIMULATE)              |
 +------------------------------------------------------------------------+
 ```
 
-### 6.3 10 Hard Rules Keselamatan Danial (L3 Gatekeeper)
-1. Had risiko kerugian per transaksi: Maksimum 2% daripada ekuiti akaun.
-2. Had kejatuhan harian (Daily Drawdown): Maksimum 5% penurunan modal dalam sehari.
-3. Penapisan saham berharga rendah (Penny Stock): Harga saham wajib >= $5.00.
-4. Had kecairan pasaran: Kuantiti belian tidak melebihi 1% daripada purata volum dagangan harian kaunter.
-5. Waktu operasi pasaran: Hanya beroperasi sewaktu sesi dagangan pasaran US dibuka (09:45 - 15:45 waktu New York).
-6. Pencegahan posisi berganda: Menolak pembelian jika saham yang sama telah mempunyai posisi terbuka aktif.
-7. Sekatan pendapatan korporat (Earnings Gate): Menolak kaunter sekiranya tarikh pengumuman keputusan pendapatan adalah dalam tempoh 5 hari.
-8. Status sambungan broker: Memastikan sambungan sesi Moomoo OpenD hidup dan sihat.
-9. Mod persekitaran dagangan: Wajib mod simulasi (`TrdEnv.SIMULATE`).
-10. Kawalan Jeda Pembelian (Pause Buying): Apabila status `pause_buying = True`, Danial menolak serta-merta sebarang pesanan BUY baharu, manakala Tariq melangkau panggilan K-line OpenAPI bagi menjimatkan kuota 30-hari.
+### 6.3 Danial's 10 Safety Hard Rules (L3 Gatekeeper)
+1. Capital risk limit per transaction: Maximum 2% of account equity.
+2. Daily drawdown limit: Maximum 5% capital loss in a day.
+3. Penny stock filter: Stock price must be $\ge \$5.00$.
+4. Market liquidity limit: Purchase quantity $\le 1\%$ of average daily volume ($ADV_{20}$).
+5. Market trading hours: Operates only during regular US market trading hours (09:45 - 15:45 New York time).
+6. Duplicate position prevention: Rejects purchase if stock already has an open position.
+7. Earnings gate restriction: Rejects candidate if earnings announcement date is within 5 days.
+8. Broker connection health: Verifies Moomoo OpenD session is connected and healthy.
+9. Trading environment mode: Must be simulation mode (`TrdEnv.SIMULATE`).
+10. Pause Buying control: When `pause_buying = True`, Danial immediately rejects all new BUY orders, while Tariq skips OpenAPI K-line calls to save 30-day quota.
 
-### 6.4 Antaramuka & Dashboard (React MUI SPA)
-1. **Laman Portfolio (`#/portfolio`)**: Memaparkan ringkasan modal, tunai, PnL bersih, dan senarai pegangan kaunter aktif dengan harga belian sebenar (*bought price*) dan harga semasa (*current price*).
-2. **Suis Jeda Pembelian (Pause Buying Toggle)**: Membolehkan pengendali menjeda pembelian baharu secara langsung dari papan pemuka.
-3. **Pemberitahuan & Countdown**: Pemasa kiraan detik automatik bagi jadual imbasan L0 seterusnya.
-
----
-
-## 7. Seni Bina Mod Dagangan (Trading Modes: Day Trading vs Swing Trading)
-
-**Rujukan Tugasan:** HOM-319, HOM-320 (Induk: HOM-47, HOM-114)  
-**Status:** Mod Dagangan Berbilang (Multi-Mode Trading Architecture)  
-**Arkitek / Software Lead:** Fakhri & Hakeem  
-**Penyemak Bebas / QA Gatekeeper:** Zahrin  
+### 6.4 Dashboard & UI (React MUI SPA)
+1. **Portfolio Page (`#/portfolio`)**: Displays capital summary, cash, net PnL, and active holdings with bought price and current price.
+2. **Pause Buying Toggle**: Allows operator to pause new purchases directly from dashboard.
+3. **Notifications & Countdown**: Automated countdown timer showing scheduled time for next L0 scan.
 
 ---
 
-### 7.1 Perbandingan & Analisis Kesesuaian 4 Gaya Dagangan (Trading Styles)
+## 7. Trading Modes Architecture (Day Trading vs Swing Trading)
 
-Bagi menentukan keserasian operasi pasaran dengan ekosistem ejen Paperclip dan Moomoo OpenAPI, penilaian menyeluruh dilakukan ke atas 4 gaya dagangan utama:
+**Task Reference:** HOM-319, HOM-320 (Parent: HOM-47, HOM-114)  
+**Status:** Multi-Mode Trading Architecture  
+**Architect / Software Lead:** Fakhri & Hakeem  
+**Independent Reviewer / QA Gatekeeper:** Zahrin  
 
-| Dimensi Penilaian | 1. Scalping | 2. Day Trading (Intraday) | 3. Swing Trading (Multi-Day) | 4. Position Trading (Investing) |
+---
+
+### 7.1 Comparison & Suitability Analysis of 4 Trading Styles
+
+To assess market compatibility with Paperclip agent workflows and Moomoo OpenAPI, an evaluation of 4 primary trading styles was conducted:
+
+| Assessment Dimension | 1. Scalping | 2. Day Trading (Intraday) | 3. Swing Trading (Multi-Day) | 4. Position Trading (Investing) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Horizon Masa Pegangan** | Beberapa saat hingga beberapa minit | Beberapa minit hingga jam (Ditutup sebelum 15:45 NY) | Beberapa hari hingga beberapa minggu | Beberapa minggu hingga beberapa bulan/tahun |
-| **Timeframe Analisis K-line** | Sub-minit (10s, 30s, 1M) | Minit (1M, 5M, 15M) | Struktur 4H / Daily (D1) dengan pemicu adaptif 1-Jam (1H) | Mingguan (Weekly) dan Bulanan (Monthly) |
-| **Latensi & Respons AI Paperclip** | **TIDAK SESUAI**<br>Latensi LLM Paperclip (1–5 saat per ejen) terlalu perlahan untuk pergerakan pantas order book. | **SESUAI (Lalai Asal)**<br>Pemantauan selang 5-minit L0 screener memberi masa mencukupi bagi analisis Tariq/Nawwar/Haziq. | **SANGAT SESUAI (Disokong Penuh)**<br>Struktur 4H/Daily bebas tekanan latensi saat; pemantauan 1H adaptif memberi masa mencukupi bagi analisis pemicu. | **BOLEH TETAPI KURANG EFISIEN**<br>Kitaran dagangan terlalu perlahan untuk utiliti sistem ejen aktif berautonomi. |
-| **Penggunaan Kuota Moomoo OpenAPI** | **MEMBAZIR / GAGAL**<br>Melepasi had kadar 10 req/s dan menghabiskan kuota kuotasi masa nyata serta-merta. | **SEDERHANA / TERKAWAL**<br>Dipantau rapi melalui kuota 100 simbol K-line 30-hari dan saringan awan `get_stock_screen` V2. | **SANGAT JIMAT (>75% Penjimatan)**<br>Pemantauan makro 4H/Daily berkala dengan pengaktifan adaptif 1H hanya berhampiran zon minat/tindakan (maks 3–5 simbol aktif). | **MINIMUM**<br>Penggunaan kuota K-line hampir sifar kerana semakan hanya berlaku seminggu sekali. |
-| **Penggunaan Token & Kos LLM** | Sangat Tinggi ($5.00–$20.00/hari) | Rendah–Sederhana (~$0.06/hari mengikut Jadual 3.5) | Sangat Rendah (~$0.015–$0.025/hari; saringan berkala 4H/Daily dengan semakan 1H adaptif bersasar) | Sangat Rendah (<$0.005/hari) |
-| **Implikasi Peraturan PDT (FINRA)** | **KRITIKAL**<br>Terikat ketat peraturan Pattern Day Trader (maks 3 day trades dalam 5 hari bergolek jika ekuiti < $25k). | **TERIKAT**<br>Wajib dipantau oleh Hard Rule Danial (#5) bagi akaun bawah $25,000. | **BEBAS PDT**<br>Posisi yang dipegang merentas malam (*overnight hold*) dan ditutup pada hari berlainan tidak dikira sebagai day trade. | **BEBAS PDT**<br>Tiada sebarang isu berkaitan had PDT. |
-| **Risiko Pasaran Luar Waktu (Overnight Gap)** | **SIFAR**<br>Tiada pegangan semalaman. | **SIFAR**<br>Ditutup sepenuhnya sebelum jam 15:45 NY. | **ADA (Perlu Mitigasi)**<br>Terdedah kepada lonjakan/kejatuhan harga pra-pasaran (*pre-market gap*) akibat berita semalaman. | **TINGGI**<br>Terdedah kepada kitaran makro ekonomi dan turun naik pendapatan suku tahunan. |
-| **Status Keserasian Seni Bina** | **DITOLAK SECARA TEGAS**<br>Tidak disokong oleh seni bina Paperclip + Moomoo. | **DISOKONG (MOD: DAY)**<br>Mod operasi standard intraday yang aktif. | **DISOKONG (MOD: SWING)**<br>Mod pilihan baharu yang sangat efisien dan ekonomik melalui pemantauan adaptif top-down. | **DI LUAR SKOP UTAMA**<br>Tidak dioptimumkan untuk ejen perdagangan aktif. |
+| **Holding Horizon** | Few seconds to few minutes | Few minutes to hours (Closed before 15:45 NY) | Few days to few weeks | Several weeks to months/years |
+| **K-line Timeframe** | Sub-minute (10s, 30s, 1M) | Minutes (1M, 5M, 15M) | 4H / Daily (D1) with adaptive 1-Hour (1H) trigger | Weekly and Monthly |
+| **Paperclip AI Latency** | **UNSUITABLE**<br>Paperclip LLM latency (1–5 sec/agent) too slow for fast order book moves. | **SUITABLE (Default)**<br>5-minute L0 interval provides sufficient time for Tariq/Nawwar/Haziq analysis. | **HIGHLY SUITABLE (Full Support)**<br>4H/Daily structure free from second-level latency pressure; adaptive 1H trigger provides ample analysis time. | **POSSIBLE BUT INEFFICIENT**<br>Trading cycle too slow for active autonomous agent system. |
+| **Moomoo OpenAPI Quota** | **EXHAUSTED / FAILS**<br>Exceeds 10 req/s rate limit and consumes real-time quote quota immediately. | **MODERATE / CONTROLLED**<br>Managed via 100-symbol rolling 30-day K-line quota and cloud `get_stock_screen` V2. | **HIGHLY CONSERVATIVE (>75% Savings)**<br>Periodic 4H/Daily macro checks with adaptive 1H activation only near action zones (max 3–5 active symbols). | **MINIMAL**<br>Near-zero K-line quota usage since reviews run weekly. |
+| **Token Usage & LLM Cost** | Very High ($5.00–$20.00/day) | Low–Moderate (~$0.06/day per Table 3.5) | Very Low (~$0.015–$0.025/day; periodic 4H/Daily scans with targeted 1H checks) | Very Low (<$0.005/day) |
+| **PDT Rule (FINRA) Impact** | **CRITICAL**<br>Strictly bound by PDT rule (max 3 day trades in 5 rolling days if equity < $25k). | **BOUND**<br>Must be enforced by Danial Hard Rule (#5) for accounts under $25,000. | **PDT FREE**<br>Overnight holds closed on different trading days do not count as day trades. | **PDT FREE**<br>Zero PDT constraint issues. |
+| **Overnight Gap Risk** | **ZERO**<br>No overnight holdings. | **ZERO**<br>Fully closed before 15:45 NY. | **EXISTS (Requires Mitigation)**<br>Exposed to pre-market gaps from overnight news. | **HIGH**<br>Exposed to macroeconomic cycles and earnings volatility. |
+| **Architectural Compatibility** | **STRICTLY REJECTED**<br>Not supported by Paperclip + Moomoo architecture. | **SUPPORTED (MODE: DAY)**<br>Standard active intraday mode. | **SUPPORTED (MODE: SWING)**<br>Highly efficient, economical mode via adaptive top-down monitoring. | **OUT OF SCOPE**<br>Not optimized for active trading agents. |
 
 ---
 
-### 7.2 Perincian Seni Bina & Pelaksanaan Swing Trading
+### 7.2 Swing Trading Architecture & Implementation Details
 
-Mod Swing Trading (`TRADING_MODE=SWING`) direka untuk menangkap pergerakan gelombang trend harga sederhana (3–10 hari) dengan memanfaatkan kestabilan teknikal timeframe lebih tinggi, menghapuskan hingar intraday (*fewer false breakouts*), dan mengurangkan kos operasi API melalui **Pemantauan Adaptif Top-Down (Adaptive Top-Down Multi-Timeframe Monitoring: 4H/Daily -> 1H)**:
+Swing Trading mode (`TRADING_MODE=SWING`) captures multi-day trend swings (3–10 days) by leveraging higher timeframe technical stability, eliminating intraday noise, and minimizing API costs via **Adaptive Top-Down Multi-Timeframe Monitoring (4H/Daily -> 1H)**:
 
 ```text
 +------------------------------------------------------------------------+
-| 1. L0 Screener (Saringan Multi-Day & Pengesanan Zon Minat)             |
-|    - Struktur Makro 4H / Daily: 20-EMA breakout, volume surge 50-SMA   |
-|    - Kitaran imbasan: Baseline berkala (09:00, 13:00, 16:30 NY)        |
-|    - Pengesanan Zon Minat: Menandakan calon berhampiran S/R / Order Block|
+| 1. L0 Screener (Multi-Day Screening & Zone of Interest Detection)      |
+|    - 4H / Daily Macro Structure: 20-EMA breakout, volume surge 50-SMA  |
+|    - Scan loop: Baseline schedule (09:00, 13:00, 16:30 NY)             |
+|    - Zone of Interest: Flags candidates near S/R / Order Blocks        |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Calon Struktur 4H/Daily)
+                                    v (4H/Daily Structure Candidates)
 +------------------------------------------------------------------------+
-| 2. L1 Analisis Dwi-Ejen (Top-Down 4H/Daily & Pemicu Adaptif 1H)        |
-|    - Tariq (Teknikal): Wyckoff & SMC 4H/Daily; Pemicu 1H bila dalam zon|
-|    - Nawwar (Sentimen): Saringan Earnings Gate (< 14 hari) & Makro     |
+| 2. L1 Dual-Agent Analysis (Top-Down 4H/Daily & Adaptive 1H Trigger)    |
+|    - Tariq (Technical): Wyckoff & SMC 4H/Daily; 1H Trigger in zone     |
+|    - Nawwar (Sentiment): Earnings Gate (< 14 days) & Macro Radar       |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Tesis S_total & Saiz Posisi)
+                                    v (Thesis S_total & Position Sizing)
 +------------------------------------------------------------------------+
-| 3. L2 Haziq (Perancangan Perdagangan Swing)                            |
-|    - Saiz risiko modal dikurangkan kepada 1.0% (Mitigasi overnight gap)|
-|    - Nisbah R:R sasaran diperluas (Minimum 1:3; SL persis 1.5x ATR 1H) |
+| 3. L2 Haziq (Swing Trade Planning)                                     |
+|    - Capital risk size reduced to 1.0% (Mitigates overnight gap risk)  |
+|    - Target R:R expanded (Minimum 1:3; precise SL at 1.5x 1H ATR)      |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Audit Pematuhan & Had Perlindungan)
+                                    v (Compliance Audit & Protection Limits)
 +------------------------------------------------------------------------+
-| 4. L3 Danial (Pematuhan Had Perlindungan)                              |
-|    - Pengecualian Time-Exit 15:45 NY (Membenarkan pegangan semalaman)  |
-|    - Pengesahan pesanan Good-Til-Cancelled (TimeInForce.GTC)           |
+| 4. L3 Danial (Protection Limits Compliance)                            |
+|    - Exempts 15:45 NY Time-Exit (Permits overnight holding)            |
+|    - Confirms Good-Til-Cancelled orders (TimeInForce.GTC)              |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Eksekusi Pesanan GTC & Pemantauan)
+                                    v (GTC Order Execution & Monitoring)
 +------------------------------------------------------------------------+
-| 5. L4 Broker & Exit Sentinel (Pemantauan Adaptif Berterusan)           |
-|    - Hard Stop Loss GTC diletakkan terus di pelayan broker Moomoo      |
-|    - Trailing Stop bar penutupan 4H/Daily + pengetatan adaptif 1H      |
+| 5. L4 Broker & Exit Sentinel (Continuous Adaptive Monitoring)          |
+|    - GTC Hard Stop Loss placed directly on Moomoo broker server        |
+|    - 4H/Daily bar-close Trailing Stop + adaptive 1H tightening         |
 +------------------------------------------------------------------------+
 ```
 
-#### 1. Timeframe & Analisis Teknikal L1 (Tariq): Pendekatan Adaptif Top-Down
-- **Pendekatan Pemantauan Adaptif Top-Down (Adaptive Top-Down Multi-Timeframe Monitoring):**
+#### 1. Timeframe & Technical Analysis L1 (Tariq): Adaptive Top-Down Approach
+- **Adaptive Top-Down Multi-Timeframe Monitoring:**
   - **Top-Down Structure (4H / Daily):**
-    - Digunakan untuk menentukan arah aliran trend utama (*macro trend direction*), fasa pengumpulan/pengagihan Wyckoff utama, dan zon sokongan/rintangan institusi (SMC Order Blocks, Fair Value Gaps).
-    - Meminimumkan pecahan palsu (*fewer false breakouts*) dan hingar pasaran intraday, di samping memelihara kuota API K-line.
+    - Determines macro trend direction, major Wyckoff accumulation/distribution phases, and institutional S/R zones (SMC Order Blocks, Fair Value Gaps).
+    - Minimizes false breakouts and intraday noise while conserving K-line quota.
   - **Adaptive 1H Trigger (Precision Entry & Exit):**
-    - Apabila harga pasaran menghampiri zon minat (*Level of Interest* / SMC Order Block) pada carta 4H, sistem secara automatik beralih kepada selang 1-jam (`KLType.K_60M`) secara adaptif.
-    - Timeframe 1H membolehkan pengesahan pemicu kemasukan (*Change of Character* / CHoCH) secara lebih pantas, penentuan aras Stop Loss yang lebih ketat ($1.5 \times ATR_{1H}$) untuk nisbah Risiko-ke-Ganjaran (R:R) yang lebih optimum, serta pengesanan awal keletihan momentum pembalikan.
-- **Pengurusan Kuota K-line & Langganan Dinamik:**
-  - Tariq memanggil `get_cur_kline_with_sub` bagi `KLType.K_DAY` dan `KLType.K_60M`.
-  - Panggilan K-line 1H diaktifkan secara adaptif dan terhad kepada calon aktif dalam zon minat (maksimum 3–5 simbol serentak) bagi menjamin kuota 100 simbol bulanan Moomoo OpenAPI tidak terjejas. Langganan 1H dibatalkan serta-merta apabila calon keluar daripada julat zon minat atau apabila pesanan telah selesai diisi/dibatalkan.
+    - When price approaches a Level of Interest (SMC Order Block) on 4H chart, system adaptively switches to 1-hour interval (`KLType.K_60M`).
+    - 1H timeframe enables faster entry trigger confirmation (Change of Character / CHoCH), tighter Stop Loss ($1.5 \times ATR_{1H}$) for optimized R:R, and early detection of reversal exhaustion.
+- **K-line Quota Management & Dynamic Subscription:**
+  - Tariq calls `get_cur_kline_with_sub` for `KLType.K_DAY` and `KLType.K_60M`.
+  - 1H K-line calls are activated adaptively and restricted to active candidates in interest zones (max 3–5 symbols concurrently) to protect 100-symbol rolling 30-day quota.
+  - 1H subscription is unsubscribed as soon as candidate moves out of action zone or order is filled/cancelled.
 
-#### 2. Penapisan Katalis & Kalendar L1 (Nawwar)
-- **Peraturan Sekatan Pendapatan (Earnings Gate) 14-Hari:**
-  - Di bawah Day Trading, sekatan pendapatan ditetapkan pada < 5 hari.
-  - Di bawah Swing Trading, kaunter ditolak sekiranya tarikh pengumuman pendapatan syarikat berada dalam tempoh **14 hari** dari tarikh kemasukan (`days_to_earnings < 14`). Ini mengelakkan pegangan multi-day terperangkap dalam lonjakan volatiliti *Earnings Announcement* yang boleh menembusi Stop Loss melalui jurang harga semalaman (*overnight price gap*).
-- **Semakan Sentimen & Berita Makro:**
-  - Nawwar menyemak kalendar mesyuarat FOMC, pelepasan data CPI/PPI, dan berita sektor berimpak tinggi yang merangkumi horizon 7–14 hari.
+#### 2. Catalyst & Calendar Filtering L1 (Nawwar)
+- **14-Day Earnings Gate Rule:**
+  - Under Day Trading, earnings gate is set to < 5 days.
+  - Under Swing Trading, candidate is rejected if earnings date falls within **14 days** of entry (`days_to_earnings < 14`).
+  - Prevents multi-day holdings from getting trapped in overnight gap volatility.
+- **Sentiment & Macro News Checks:**
+  - Nawwar inspects FOMC meetings, CPI/PPI releases, and high-impact sector news across a 7–14 day horizon.
 
-#### 3. Kitaran Pemantauan Adaptif (Adaptive Wake & Screening Loop)
-Berbanding Day Trading yang menjalankan imbasan tetap setiap 300 saat (5 minit) semasa pasaran aktif, Swing Trading menggabungkan kitaran berjadual makro dengan pemantauan bersyarat adaptif:
-- **Kitaran Asas Struktur 4H / Daily (Baseline Structure Loop):**
-  - **09:00 NY (Pra-Pasaran / Pre-Market Sync):** Memeriksa harga pra-pasaran, mengesahkan integriti kedudukan semalaman (*overnight hold*), dan menyemak amaran berita luar jangka.
-  - **13:00 NY (Pertengahan Sesi / Mid-Day 4H Bar Close):** Menilai penutupan bar 4H pertama sesi biasa, menyaring momentum volum, dan mengemas kini senarai kaunter yang mendekati zon minat.
-  - **16:30 NY (Pasca-Pasaran / Post-Market Daily Bar Close):** Menjalankan rekonsiliasi harian selepas pasaran ditutup, mengira semula paras Chandelier Trailing Stop berasaskan harga penutup harian, dan mengemas kini pangkalan data portfolio.
-- **Kitaran Pemicu Adaptif 1H (Adaptive 1H Precision Trigger Loop):**
-  - Diaktifkan secara dinamik HANYA bagi kaunter portfolio terbuka atau calon radar yang berada dalam zon toleransi harga ($\le 1.0 \times ATR$ daripada Order Block atau aras sasaran).
-  - Beroperasi pada setiap penutupan bar 1-jam waktu pasaran (10:30, 11:30, 12:30, 13:30, 14:30, 15:30 NY) bagi merebut peluang entri berdiskaun dan pengesahan pembalikan candlestick.
-  - Kembali ke kitaran asas 4H/Daily secara automatik sekiranya harga bergerak keluar dari zon tindakan.
-- **Pemicu Amaran Volatiliti / Jurang Harga (Volatility Alert Trigger):**
-  - Sekiranya berlaku pergerakan harga luar biasa melebihi $2.5 \times ATR$, Exit Sentinel membina pemicu segera untuk membangunkan ejen pemantau tanpa menunggu kitaran jam seterusnya.
+#### 3. Adaptive Wake & Screening Loop
+Unlike Day Trading which scans every 300 seconds (5 minutes) during market hours, Swing Trading combines scheduled macro reviews with conditional adaptive monitoring:
+- **Baseline Structure Loop (4H / Daily):**
+  - **09:00 NY (Pre-Market Sync):** Checks pre-market pricing, verifies overnight position integrity, reviews breaking news alerts.
+  - **13:00 NY (Mid-Day 4H Bar Close):** Evaluates first 4H bar close, checks volume momentum, updates candidates nearing action zones.
+  - **16:30 NY (Post-Market Daily Bar Close):** Runs end-of-day reconciliation, recalculates Chandelier Trailing Stop off daily close, updates portfolio database.
+- **Adaptive 1H Precision Trigger Loop:**
+  - Dynamically activated ONLY for active portfolio holdings or radar candidates within price tolerance ($\le 1.0 \times ATR$ from Order Block or target).
+  - Operates on each market 1-hour bar close (10:30, 11:30, 12:30, 13:30, 14:30, 15:30 NY).
+  - Reverts to baseline 4H/Daily schedule automatically if price moves out of action zone.
+- **Volatility Alert Trigger:**
+  - If unexpected price movement $> 2.5 \times ATR$ occurs, Exit Sentinel triggers immediate agent wake without waiting for next scheduled hourly bar close.
 
-#### 4. Pengurusan Pesanan & Had Perlindungan (GTC vs Good-For-Day)
-- **Peralihan ke Pesanan GTC (Good-Til-Cancelled):**
-  - Parameter pesanan Moomoo OpenAPI ditukar daripada `time_in_force = TimeInForce.DAY` kepada `time_in_force = TimeInForce.GTC`.
-  - Pesanan had (*limit entry*) dan pesanan henti rugi (*Hard Stop Loss*) kekal aktif di pelayan broker Moomoo merentas sesi dagangan sehingga dipenuhi atau dibatalkan secara eksplisit oleh sistem.
-- **Pengecualian Mandatori Peraturan Time-Exit 15:45 NY:**
-  - Hard Rule #5 Danial diubahsuai secara dinamik: Arahan tutup automatik pada jam 15:45 NY hanya diaktifkan sekiranya `TRADING_MODE=DAY`. Bagi `TRADING_MODE=SWING`, kedudukan dibenarkan untuk dipegang semalaman (*overnight hold*).
-- **Mitigasi Risiko Jurang Harga Semalaman (Overnight Gap Risk Mitigation):**
-  - **Pengurangan Saiz Risiko Modal:** Saiz risiko maksimum per transaksi dikurangkan daripada 1.5%–2.0% (Day) kepada **maksimum 1.0% daripada nilai ekuiti akaun** (Swing).
-  - **Hard SL Wajib di Broker:** Exit Sentinel memastikan setiap kedudukan belian yang berjaya diisi disusuli serta-merta dengan pesanan *Stop Loss Order* GTC yang berdaftar terus pada pelayan broker Moomoo bagi melindungi modal sekiranya pasaran dibuka menjunam (*gap-down opening*).
+#### 4. Order Management & Protection Limits (GTC vs Good-For-Day)
+- **Transition to GTC (Good-Til-Cancelled) Orders:**
+  - Moomoo OpenAPI order parameter switches from `time_in_force = TimeInForce.DAY` to `time_in_force = TimeInForce.GTC`.
+  - Limit entry orders and Hard Stop Loss orders remain active on Moomoo server across trading sessions until filled or explicitly cancelled.
+- **Mandatory Exemption from 15:45 NY Time-Exit:**
+  - Danial Hard Rule #5 adjusts dynamically: 15:45 NY close order is active only when `TRADING_MODE=DAY`. When `TRADING_MODE=SWING`, positions are held overnight.
+- **Overnight Gap Risk Mitigation:**
+  - **Reduced Capital Risk Sizing:** Maximum risk per transaction reduced from 1.5%–2.0% (Day) to **maximum 1.0% of account equity** (Swing).
+  - **Mandatory Broker Hard SL:** Exit Sentinel ensures filled buy orders are immediately followed by GTC Stop Loss orders on Moomoo broker server to guard against severe gap-down opens.
 
 ---
 
-### 7.3 Penggunaan Toggle Konfigurasi `TRADING_MODE` (DAY | SWING)
+### 7.3 `TRADING_MODE` Configuration Toggle (DAY | SWING)
 
-Sistem menyokong pertukaran mod operasi melalui pembolehubah persekitaran tunggal tanpa perlu mengubah kod asas:
+System supports operational mode switching via a single environment variable without changing underlying code:
 
 ```bash
-# Konfigurasi di .env atau Docker Environment
-TRADING_MODE=DAY      # Pilihan: DAY (Lalai Intraday) | SWING (Multi-Day Swing)
+# Configuration in .env or Docker Environment
+TRADING_MODE=DAY      # Options: DAY (Default Intraday) | SWING (Multi-Day Swing)
 ```
 
-#### Matriks Perbezaan Tingkah Laku Sistem Mengikut Lapisan (L0 -> L4)
+#### System Behavior Difference Matrix by Layer (L0 -> L4)
 
-| Lapisan Sistem | Parameter / Komponen | Mod DAY (`TRADING_MODE=DAY`) | Mod SWING (`TRADING_MODE=SWING`) |
+| System Layer | Parameter / Component | DAY Mode (`TRADING_MODE=DAY`) | SWING Mode (`TRADING_MODE=SWING`) |
 | :--- | :--- | :--- | :--- |
-| **L0 Screener** | Kekerapan Imbasan | Setiap 300 saat (5 minit) | Baseline 4H / Harian; Imbasan adaptif 1H bagi kaunter zon minat |
-| | Kriteria Saringan | Momentum 5M, Volum Relatif Intraday, Julat Sesi | Struktur 4H/Daily (20-EMA, 50-SMA) + Zon Minat Institusi |
-| **L1 Tariq** | Jenis K-line Moomoo | `KLType.K_5M`, `KLType.K_15M` | `KLType.K_DAY`, `KLType.K_60M` (Pemicu adaptif zon tindakan) |
-| | Horizon Wyckoff | Fasa Intraday Accumulation/Spring | Top-Down: Struktur makro 4H/Daily + CHoCH persis 1H |
-| **L1 Nawwar** | Sekatan Tarikh Earnings | `days_to_earnings < 5` hari | `days_to_earnings < 14` hari |
-| | Skop Analisis Sentimen | Sentimen berita 24-jam & kalendar harian | Trend industri 14-hari & jadual makro FOMC/CPI |
-| **L2 Haziq** | Nisbah Risiko:Ganjaran (R:R) | Minimum 1:2 | Minimum 1:3 (SL persis berasaskan ATR 1H) |
-| | Had Risiko Modal | 1.5% daripada nilai ekuiti | 1.0% daripada nilai ekuiti (Konservatif) |
-| **L3 Danial** | Semakan Had PDT | Wajib dipatuhi (Maks 3 transaksi jika < $25k) | Dikecualikan bagi pegangan > 1 hari perniagaan |
-| | Penguatkuasaan Time-Exit | **Aktif Wajib** (Tutup semua posisi pada 15:45 NY) | **Dinyahaktifkan** (Membenarkan pegangan semalaman) |
+| **L0 Screener** | Scan Frequency | Every 300 seconds (5 minutes) | Baseline 4H / Daily; Adaptive 1H scan for active interest zones |
+| | Screening Criteria | 5M Momentum, Intraday RVOL, Session Range | 4H/Daily structure (20-EMA, 50-SMA) + Institutional Zones of Interest |
+| **L1 Tariq** | Moomoo K-line Types | `KLType.K_5M`, `KLType.K_15M` | `KLType.K_DAY`, `KLType.K_60M` (Adaptive trigger in action zone) |
+| | Wyckoff Horizon | Intraday Accumulation/Spring Phase | Top-Down: 4H/Daily macro structure + precise 1H CHoCH |
+| **L1 Nawwar** | Earnings Date Restriction | `days_to_earnings < 5` days | `days_to_earnings < 14` days |
+| | Sentiment Analysis Scope | 24-hour news sentiment & daily calendar | 14-day industry trends & FOMC/CPI macro schedules |
+| **L2 Haziq** | Risk:Reward (R:R) Ratio | Minimum 1:2 | Minimum 1:3 (Precise SL based on 1H ATR) |
+| | Capital Risk Limit | 1.5% of account equity | 1.0% of account equity (Conservative) |
+| **L3 Danial** | PDT Limit Checks | Strictly enforced (Max 3 trades if < $25k) | Exempt for positions held > 1 business day |
+| | Time-Exit Enforcement | **Mandatory Active** (Close all positions at 15:45 NY) | **Disabled** (Permits overnight holding) |
 | | Parameter `time_in_force` | `TimeInForce.DAY` | `TimeInForce.GTC` |
-| **L4 Sentinel** | Logik Trailing Stop | Intraday Chandelier Trailing (Tick-by-tick) | Daily/4H Bar-Close Trailing + pengetatan adaptif 1H |
-| | Rekonsiliasi Pesanan | Menutup pesanan belum diisi jam 16:00 NY | Mengekalkan pesanan GTC aktif merentas hari |
-| **Dashboard UI** | Paparan Bar Status | Lencana `[MOD: DAY (INTRADAY)]` | Lencana `[MOD: SWING (MULTI-DAY)]` |
-| | Tab Pemantauan | Countdown 5-minit saringan seterusnya | Status pemantauan adaptif top-down (4H baseline & radar 1H) |
-
+| **L4 Sentinel** | Trailing Stop Logic | Intraday Chandelier Trailing (Tick-by-tick) | Daily/4H Bar-Close Trailing + adaptive 1H tightening |
+| | Order Reconciliation | Cancels unfilled orders at 16:00 NY | Keeps GTC orders active across days |
+| **Dashboard UI** | Status Bar Badge | Badge `[MODE: DAY (INTRADAY)]` | Badge `[MODE: SWING (MULTI-DAY)]` |
+| | Monitoring Tab | 5-minute countdown to next scan | Adaptive top-down status (4H baseline & 1H radar) |
