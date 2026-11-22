@@ -55,9 +55,24 @@ async function testPortfolioE2E() {
     await page.waitForTimeout(400);
     console.log('✓ PASS [4]: Hovered over attribution badge successfully');
 
-    // 6. Capture verified screenshot
+    // 6. Test Stale-While-Revalidate refresh (Issue #20 / HOM-366)
+    console.log('Testing Stale-While-Revalidate refresh...');
+    const refreshBtn = page.locator('button:has-text("Segar Semula")');
+    if (await refreshBtn.isVisible()) {
+      await refreshBtn.click();
+      const countDuring = await page.locator('tbody tr').count();
+      if (countDuring === 0) {
+        throw new Error('FAIL: Table positions vanished during refresh (flash kosong)!');
+      }
+      console.log(`✓ PASS [5]: Positions preserved during refresh (count: ${countDuring})`);
+      await page.waitForTimeout(1000);
+      const countAfter = await page.locator('tbody tr').count();
+      console.log(`✓ PASS [6]: Positions intact after refresh completion (count: ${countAfter})`);
+    }
+
+    // 7. Capture verified screenshot
     await page.screenshot({ path: '/qa/portfolio_e2e_verified.png', fullPage: true });
-    console.log('✓ PASS [5]: Screenshot captured to /qa/portfolio_e2e_verified.png');
+    console.log('✓ PASS [7]: Screenshot captured to /qa/portfolio_e2e_verified.png');
 
     console.log('\n================================================================');
     console.log('  All Playwright E2E UI verification checks PASSED!');

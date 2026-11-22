@@ -499,6 +499,53 @@ class TestMoomooClientBVA(unittest.TestCase):
         self.assertEqual(res["candles"][0]["close"], 224.5)
         self.assertEqual(res["candles"][1]["close"], 225.0)
 
+    def test_query_positions_cached_fallback_on_transient_error(self):
+        """Tests Issue #20 / HOM-366: query_positions falls back to cached positions on transient error."""
+        import pandas as pd
+        from unittest.mock import MagicMock
+
+        self.client._connected = True
+        self.client._account_id = "3123530"
+        mock_ctx = MagicMock()
+        self.client._trade_ctx = mock_ctx
+
+        # 1. Success: OpenD returns positions
+        mock_df = pd.DataFrame([{
+            "position_id": "POS-100",
+            "code": "US.AAPL",
+            "stock_name": "Apple Inc.",
+            "qty": 10,
+            "can_sell_qty": 10,
+            "cost_price": 150.0,
+            "nominal_price": 160.0,
+            "pl_val": 100.0,
+            "pl_ratio": 6.67
+        }])
+        mock_ctx.position_list_query.return_value = (0, mock_df)
+
+        positions = self.client.query_positions()
+        self.assertEqual(len(positions), 1)
+        self.assertEqual(positions[0]["code"], "US.AAPL")
+        self.assertEqual(len(self.client._last_positions), 1)
+
+        # 2. Transient non-OK error (ret_code = -1): Must return cached positions
+        mock_ctx.position_list_query.return_value = (-1, "Gateway busy")
+        fallback_pos = self.client.query_positions()
+        self.assertEqual(len(fallback_pos), 1, "Must return cached positions on non-OK ret_code")
+        self.assertEqual(fallback_pos[0]["code"], "US.AAPL")
+
+        # 3. Exception during query: Must return cached positions
+        mock_ctx.position_list_query.side_effect = RuntimeError("Socket timeout")
+        except_pos = self.client.query_positions()
+        self.assertEqual(len(except_pos), 1, "Must return cached positions on exception")
+        self.assertEqual(except_pos[0]["code"], "US.AAPL")
+
+        # 4. Disconnected state: Must return cached positions
+        self.client._connected = False
+        disconn_pos = self.client.query_positions()
+        self.assertEqual(len(disconn_pos), 1, "Must return cached positions when disconnected")
+        self.assertEqual(disconn_pos[0]["code"], "US.AAPL")
+
 
 if __name__ == "__main__":
     unittest.main()
