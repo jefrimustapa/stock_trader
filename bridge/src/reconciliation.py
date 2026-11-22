@@ -125,8 +125,11 @@ class PositionReconciler:
         """Background task executing reconciliation every 60 seconds."""
         while self._running:
             try:
-                # In integrated mode, fetch from moomoo_client
-                logger.info("Executing periodic 60s position reconciliation check...")
+                logger.info("Executing periodic 60s position and order reconciliation check...")
+                from .agent_pipeline import get_agent_pipeline
+                pipeline = get_agent_pipeline()
+                pipeline.sync_broker_orders()
+                pipeline.reconcile_positions_with_orders()
             except Exception as e:
                 logger.error("Reconciliation cycle error: %s", e)
             await asyncio.sleep(self.check_interval)

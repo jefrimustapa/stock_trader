@@ -145,11 +145,46 @@ def trigger_kill_switch(caller: str = Depends(authenticate_request)):
 
 @router.get("/positions")
 def get_positions(caller: str = Depends(authenticate_request)):
-    """Returns open positions with honest gateway connection status."""
+    """Returns open positions with honest gateway connection status and transaction attribution."""
     client = get_moomoo_client()
+    raw_positions = client.query_positions()
+    opend_status = client.get_connection_status()
+
+    from ..agent_pipeline import get_agent_pipeline
+    pipeline = get_agent_pipeline()
+    try:
+        pipeline.reconcile_positions_with_orders()
+    except Exception as e:
+        logger.warning("Position reconciliation warning in get_positions: %s", e)
+
+    enriched_positions = []
+    with pipeline._get_connection() as conn:
+        for p in raw_positions:
+            pos_dict = dict(p)
+            code = str(pos_dict.get("code", "")).strip()
+            clean_sym = code.split(".")[-1] if "." in code else code
+            order_row = conn.execute("""
+                SELECT order_id, cycle_id, source, created_at
+                FROM paper_orders
+                WHERE symbol = ? OR symbol = ?
+                ORDER BY id DESC LIMIT 1
+            """, (code, clean_sym)).fetchone()
+
+            if order_row:
+                pos_dict["source"] = order_row["source"] or "POSITION_RECONCILED"
+                pos_dict["order_id"] = order_row["order_id"]
+                pos_dict["cycle_id"] = order_row["cycle_id"]
+                pos_dict["attribution_date"] = order_row["created_at"]
+            else:
+                pos_dict["source"] = "POSITION_RECONCILED"
+                pos_dict["order_id"] = f"POS-{pos_dict.get('position_id', clean_sym)}"
+                pos_dict["cycle_id"] = "RECONCILIATION"
+                pos_dict["attribution_date"] = None
+            enriched_positions.append(pos_dict)
+
     return {
-        "opend_status": client.get_connection_status(),
-        "positions": client.query_positions()
+        "opend_status": opend_status,
+        "positions": enriched_positions
     }
 
 
