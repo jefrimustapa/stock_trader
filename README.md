@@ -1,92 +1,103 @@
 # US Stock Analyst & Trader (STOCK-TRADER)
 
-Sistem saringan pasaran saham AS (L0 Screener), jambatan komunikasi ejen (MCP Bridge), dan papan pemuka operasi (Operations Dashboard) yang berintegrasi dengan broker Moomoo OpenAPI.
+US market stock screening system (L0 Screener), agent communication bridge (MCP Bridge), and operations dashboard integrated with Moomoo OpenAPI broker.
 
 ---
 
 > [!IMPORTANT]
-> **Rujukan Dokumen Sumber Rasmi (Source of Truth)**:
-> Sila rujuk [BLUEPRINT.md](BLUEPRINT.md) sebagai dokumen rujukan teras bagi senibina keseluruhan sistem, hierarki dan tanggungjawab ejen (L0 Screener, L1 Tariq, L2 Nawwar, L3 Haziq, L4 Danial), aliran orkestrasi kuota Moomoo OpenAPI, serta spesifikasi pangkalan data & API.
+> **Official Source of Truth Document**:
+> Refer to [BLUEPRINT.md](BLUEPRINT.md) as the core reference document for overall system architecture, agent hierarchy and responsibilities (L0 Screener, L1 Tariq, L1 Nawwar, L2 Haziq, L3 Danial, L4 Exit Sentinel), Moomoo OpenAPI quota orchestration, database, and API specifications.
 >
-> Semua pelan tindakan dan reka bentuk khusus mengikut cawangan (*branch implementation plans*) diarkibkan dalam direktori [`plan/`](plan/).
+> All branch-specific implementation plans are archived in [`plan/`](plan/).
 
 ---
 
-## 1. Senibina Sistem (Architecture Overview)
+## 1. System Architecture Overview
 
-Sistem ini terdiri daripada beberapa komponen teras yang diorkestrasikan melalui Docker Compose:
+The system consists of core components orchestrated via Docker Compose:
 
 1. **Moomoo OpenD Gateway (`moomoo-opend`)**:
-   - Kontena `stock_moomoo_opend` mengendalikan sambungan gateway broker Moomoo OpenAPI (protokol binari port 11111 dan telnet port 22222).
-   - Diasingkan sepenuhnya dalam rangkaian dalaman `stock_network` tanpa pendedahan port ke hos awam.
+   - Container `stock_moomoo_opend`.
+   - Handles Moomoo OpenAPI broker gateway connections.
+   - Binary protocol on port 11111, Telnet on port 22222.
+   - Fully isolated inside internal `stock_network`.
+   - No ports exposed to the public host.
 
 2. **L0 Screener Daemon (`screener-daemon`)**:
-   - Kontena `stock_screener_daemon` yang menjalankan enjin Python saringan saham automatik (Dual-Lane: MOMENTUM dan SETUP).
-   - Dilengkapi penjejak kuota keras broker Moomoo OpenAPI (`quota_tracker.py` - had 100 simbol / 30 hari rolling window).
-   - Menyokong bacaan dinamik (*hot-read*) had konfigurasi saringan daripada pangkalan data SQLite WAL (`screener_config.sqlite`).
+   - Container `stock_screener_daemon`.
+   - Runs automated Python stock screening engine.
+   - Dual-lane screening: MOMENTUM and SETUP.
+   - Includes hard quota tracker (`quota_tracker.py`).
+   - Tracks Moomoo limit: 100 symbols per 30-day rolling window.
+   - Supports dynamic hot-read of filter config from SQLite WAL (`screener_config.sqlite`).
 
 3. **MCP Bridge (`mcp-bridge`)**:
-   - Kontena `stock_mcp_bridge` (FastAPI / FastMCP) menyediakan antara muka integrasi dan alatan analisis untuk pasukan ejen (Tariq, Nawwar, Haziq, Danial).
-   - Terikat secara eksklusif ke gelung balik hos (`127.0.0.1:8005`) untuk komunikasi selamat ejen Paperclip.
+   - Container `stock_mcp_bridge` (FastAPI / FastMCP).
+   - Provides integration interface and analysis tools for agent team (Tariq, Nawwar, Haziq, Danial).
+   - Bound exclusively to host loopback (`127.0.0.1:8005`).
+   - Ensures secure Paperclip agent communication.
 
 4. **Trading Dashboard (`trading-dashboard`)**:
-   - Papan pemuka visual berasaskan React, Vite, dan Express.js untuk pemantauan sebut harga masa nyata, status kuota, watchlist, dan konfigurasi had saringan L0.
+   - Visual web dashboard built with React, Vite, and Express.js.
+   - Real-time quotes monitoring, quota status, watchlist, and L0 screener configuration.
 
 ---
 
-## 2. Persekitaran Pengeluaran vs Beta (Environment Topology)
+## 2. Environment Topology: Production vs Beta
 
-Sistem ini mematuhi dasar pengasingan ketat antara persekitaran Pengeluaran (Production) dan Pengujian Beta (Beta Testing):
+The system enforces strict isolation between Production and Beta environments:
 
-### 2.1 Persekitaran Pengeluaran (Production)
-- **Subdomain Rasmi**: `https://trade.julietmike.net/`
-- **Kontena Aplikasi**: `stock_trading_dashboard` (port 3000)
-- **Kawalan Akses / Autentikasi**: Dilindungi oleh **Authentik SSO Outpost** (`auth.julietmike.net`). Pengguna diwajibkan melalui aliran pengesahan identiti korporat sebelum dibenarkan mencapai papan pemuka.
-- **Routing NPM**: Proxy Host 23 (Sijil Let's Encrypt `trade.julietmike.net`, Force SSL, HTTP/2).
+### 2.1 Production Environment
+- **Official Subdomain**: `https://trade.julietmike.net/`
+- **Application Container**: `stock_trading_dashboard` (port 3000).
+- **Access Control / Authentication**: Protected by **Authentik SSO Outpost** (`auth.julietmike.net`). Users must authenticate through corporate identity flow before accessing dashboard.
+- **NPM Routing**: Proxy Host 23 (Let's Encrypt certificate for `trade.julietmike.net`, Force SSL, HTTP/2).
 
-### 2.2 Persekitaran Pengujian Beta (Beta Testing)
-- **Subdomain Rasmi**: `https://stock-trader.beta.julietmike.net/`
-- **Kontena Khusus Beta**:
-  - Servis `trading-dashboard-beta` ditambah ke `docker-compose.yml` (`container_name: stock_trading_dashboard_beta`).
-  - Beroperasi pada rangkaian `stock_network` dan `npm_default`.
-  - Ditetapkan pembolehubah `DISABLE_AUTHENTIK_AUTH=true` bagi melumpuhkan semakan Authentik SSO Outpost khusus untuk beta supaya tidak mengganggu pengujian atau bertembung dengan routing pengeluaran.
-- **Routing NPM**: Proxy Host 26 (Sijil Let's Encrypt `*.beta.julietmike.net`, Force SSL, HTTP/2, WebSocket Upgrade aktif). Dikonfigurasikan untuk memproksi terus (`proxy_pass`) ke kontena `stock_trading_dashboard_beta:3000` tanpa alihan 302.
+### 2.2 Beta Testing Environment
+- **Official Subdomain**: `https://stock-trader.beta.julietmike.net/`
+- **Dedicated Beta Container**:
+  - Service `trading-dashboard-beta` in `docker-compose.yml`.
+  - Container name: `stock_trading_dashboard_beta`.
+  - Runs on `stock_network` and `npm_default` networks.
+  - Sets `DISABLE_AUTHENTIK_AUTH=true` to disable Authentik SSO checks for beta.
+  - Prevents interference with production routing or test workflows.
+- **NPM Routing**: Proxy Host 26 (Let's Encrypt wildcard `*.beta.julietmike.net`, Force SSL, HTTP/2, WebSocket Upgrade enabled). Configured to proxy directly (`proxy_pass`) to container `stock_trading_dashboard_beta:3000` without 302 redirects.
 
 ---
 
-## 3. Menjalankan Perkhidmatan (Docker Compose)
+## 3. Running Services (Docker Compose)
 
-### Menjalankan Persekitaran Pengeluaran:
+### Run Production Environment:
 ```bash
 docker compose up -d moomoo-opend screener-daemon mcp-bridge trading-dashboard
 ```
 
-### Menjalankan Persekitaran Beta untuk Pengujian:
+### Run Beta Environment for Testing:
 ```bash
 docker compose up -d --build trading-dashboard-beta
 ```
 
 ---
 
-## 4. Konfigurasi Saringan Saham L0 (Screener Config)
+## 4. L0 Stock Screener Configuration
 
-Konfigurasi parameter saringan L0 disimpan secara dinamik dalam `shared_data/screener_config.sqlite` (mod WAL):
-- `min_price`: Had harga minimum kaunter (had sempadan: $1.00 hingga $10,000.00).
-- `min_market_cap`: Permodalan pasaran minimum (lalai: $1B).
-- `min_volume`: Volum dagangan harian purata (ADV20).
-- `min_rvol` & `max_rvol`: Julat Volum Relatif (RVOL).
-- `max_candidates_per_lane`: Had maksimum calon yang diproses ke Stage 3 K-line enrichment bagi setiap lorong (julat sempadan sah: **1 hingga 20 kaunter**). Dikawal rapi bagi melindungi bajet kuota K-line Moomoo OpenAPI (100 simbol / 30 hari).
+L0 screening parameters are stored dynamically in `shared_data/screener_config.sqlite` (WAL mode):
+- `min_price`: Minimum stock price limit ($1.00 to $10,000.00).
+- `min_market_cap`: Minimum market capitalization (default: $1B).
+- `min_volume`: Average daily volume (ADV20).
+- `min_rvol` & `max_rvol`: Relative Volume (RVOL) range.
+- `max_candidates_per_lane`: Maximum candidates processed into Stage 3 K-line enrichment per lane (valid range: **1 to 20 stocks**). Strictly controlled to protect Moomoo OpenAPI K-line quota budget (100 symbols / 30 days).
 
 ---
 
-## 5. Pengujian & Jaminan Kualiti (QA)
+## 5. Testing & Quality Assurance (QA)
 
-- **Ujian Unit & BVA**:
+- **Unit & BVA Tests**:
   ```bash
   python3 -m pytest tests/test_max_candidates_lane_bva.py -v
   node dashboard/test_screener_config.js
   ```
-- **Ujian E2E Playwright**:
+- **Playwright E2E Tests**:
   ```bash
   /paperclip/bin/pw-browser run dashboard/test_screener_settings_e2e.js
   ```
