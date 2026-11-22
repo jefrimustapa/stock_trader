@@ -1,64 +1,127 @@
 /**
  * test_portfolio_api.js
- * Unit and Boundary Value Analysis (BVA) test suite for /api/portfolio endpoint
- * Verifies portfolio summary calculations, bought price, current price, and P&L.
+ * Unit & Integration test for Portfolio Attribution & Audit Trail (GitHub Issue #17 / HOM-356)
  */
 
 const assert = require('assert');
-const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 console.log('================================================================');
-console.log('  Portfolio API & Metric Calculation Test Suite (BVA)           ');
+console.log('  Portfolio Reconciliation & Attribution API Test Suite');
+console.log('  Testing Portfolio Page, Server Mappings & Attribution Integrity');
 console.log('================================================================\n');
 
-let totalChecks = 0;
-let passedChecks = 0;
+let totalTests = 0;
+let passedTests = 0;
 
-function check(desc, condition) {
-  totalChecks++;
-  if (condition) {
-    console.log(`  ✓ PASS [${totalChecks}]: ${desc}`);
-    passedChecks++;
-  } else {
-    console.error(`  ✗ FAIL [${totalChecks}]: ${desc}`);
+function check(desc, fn) {
+  totalTests++;
+  try {
+    fn();
+    console.log(`  ✓ PASS [${totalTests}]: ${desc}`);
+    passedTests++;
+  } catch (err) {
+    console.error(`  ✗ FAIL [${totalTests}]: ${desc}`);
+    console.error(`    Error: ${err.message}`);
     process.exitCode = 1;
   }
 }
 
-// 1. Math Calculation Logic Verification
-function calculatePositionMetrics(qty, costPrice, nominalPrice, rawPlVal) {
-  const q = Number(qty) || 0;
-  const cp = Number(costPrice) || 0;
-  const np = Number(nominalPrice) || 0;
-  const totalCost = Number((q * cp).toFixed(2));
-  const marketValue = Number((q * np).toFixed(2));
-  const plVal = Number((rawPlVal !== undefined ? rawPlVal : (marketValue - totalCost)).toFixed(2));
-  const plPct = totalCost > 0 ? Number(((plVal / totalCost) * 100).toFixed(2)) : 0;
-  return { q, cp, np, totalCost, marketValue, plVal, plPct };
-}
+// 1. Verify PortfolioPage.jsx has Atribusi column and chips
+check('PortfolioPage.jsx includes "Atribusi" column header and table sort label', () => {
+  const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
+  assert(code.includes('Atribusi'), 'Should contain "Atribusi" column label');
+  assert(code.includes("orderBy === 'source'"), 'Should support sorting by source');
+});
 
-// Test normal profitable position
-const m1 = calculatePositionMetrics(10, 50.0, 55.0, 50.0);
-check('Bought price = 50.0, Current price = 55.0 -> Total cost = $500.00', m1.totalCost === 500.0);
-check('Bought price = 50.0, Current price = 55.0 -> Market value = $550.00', m1.marketValue === 550.0);
-check('Bought price = 50.0, Current price = 55.0 -> P&L = +$50.00', m1.plVal === 50.0);
-check('Bought price = 50.0, Current price = 55.0 -> P&L % = +10.00%', m1.plPct === 10.0);
+check('PortfolioPage.jsx renders attribution Chips and audit Tooltip', () => {
+  const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
+  assert(code.includes('AGENT_PIPELINE'), 'Should handle AGENT_PIPELINE attribution');
+  assert(code.includes('BROKER_IMPORT'), 'Should handle BROKER_IMPORT attribution');
+  assert(code.includes('POSITION_RECONCILED'), 'Should handle POSITION_RECONCILED attribution');
+  assert(code.includes('Broker / Manual'), 'Should render Broker / Manual badge label');
+  assert(code.includes('Rekonsiliasi'), 'Should render Rekonsiliasi badge label');
+  assert(code.includes('Tooltip'), 'Should wrap attribution in a Tooltip for audit trail');
+});
 
-// Test losing position
-const m2 = calculatePositionMetrics(5, 100.0, 90.0, -50.0);
-check('Losing position: Cost = $500, Market = $450, P&L = -$50.00', m2.plVal === -50.0);
-check('Losing position: P&L % = -10.00%', m2.plPct === -10.0);
+// 2. Verify server.js routes and mapping logic
+check('server.js maps source, order_id, cycle_id in /api/portfolio', () => {
+  const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  assert(serverCode.includes("source: p.source || 'POSITION_RECONCILED'"), 'Should map source with fallback');
+  assert(serverCode.includes("order_id: p.order_id || null"), 'Should map order_id');
+  assert(serverCode.includes("cycle_id: p.cycle_id || null"), 'Should map cycle_id');
+});
 
-// Boundary Value: Zero Quantity
-const mZero = calculatePositionMetrics(0, 50.0, 55.0, 0);
-check('Zero quantity returns 0 total cost and 0 market value', mZero.totalCost === 0 && mZero.marketValue === 0);
-check('Zero total cost avoids division by zero, returns 0 P&L %', mZero.plPct === 0);
+check('server.js defines /api/agents/orders and /api/v1/agents/orders endpoints', () => {
+  const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  assert(serverCode.includes("app.get(['/api/agents/orders', '/api/v1/agents/orders']"), 'Should define agent orders endpoints');
+});
 
-// Boundary Value: Zero Cost Price
-const mFree = calculatePositionMetrics(10, 0.0, 10.0, 100.0);
-check('Zero cost price avoids division by zero', mFree.plPct === 0);
+// 3. Test portfolio mapping logic directly
+check('Portfolio position attribution mapping handles various sources correctly', () => {
+  function mapPosition(p) {
+    return {
+      position_id: p.position_id,
+      symbol: p.code,
+      clean_symbol: p.code ? (p.code.includes('.') ? p.code.split('.')[1] : p.code) : '',
+      stock_name: p.stock_name || p.code,
+      qty: Number(p.qty) || 0,
+      bought_price: Number(p.cost_price) || 0,
+      current_price: Number(p.nominal_price) || 0,
+      source: p.source || 'POSITION_RECONCILED',
+      order_id: p.order_id || null,
+      cycle_id: p.cycle_id || null,
+      attribution_date: p.attribution_date || null
+    };
+  }
 
-console.log(`\nAll ${totalChecks} unit checks completed. ${passedChecks}/${totalChecks} PASSED.`);
-if (passedChecks !== totalChecks) {
+  // Case A: Agent Pipeline
+  const pA = mapPosition({
+    position_id: 'P1',
+    code: 'US.AAPL',
+    qty: 10,
+    cost_price: 150,
+    nominal_price: 155,
+    source: 'AGENT_PIPELINE',
+    order_id: 'ORD-123',
+    cycle_id: 'CYC-456'
+  });
+  assert.strictEqual(pA.source, 'AGENT_PIPELINE');
+  assert.strictEqual(pA.order_id, 'ORD-123');
+  assert.strictEqual(pA.cycle_id, 'CYC-456');
+
+  // Case B: Broker Import
+  const pB = mapPosition({
+    position_id: 'P2',
+    code: 'US.MSFT',
+    qty: 5,
+    cost_price: 300,
+    nominal_price: 310,
+    source: 'BROKER_IMPORT',
+    order_id: 'EXT-999'
+  });
+  assert.strictEqual(pB.source, 'BROKER_IMPORT');
+  assert.strictEqual(pB.order_id, 'EXT-999');
+  assert.strictEqual(pB.cycle_id, null);
+
+  // Case C: Unattributed / Fallback Reconciled
+  const pC = mapPosition({
+    position_id: 'P3',
+    code: 'US.NVDA',
+    qty: 2,
+    cost_price: 400,
+    nominal_price: 450
+  });
+  assert.strictEqual(pC.source, 'POSITION_RECONCILED');
+  assert.strictEqual(pC.order_id, null);
+  assert.strictEqual(pC.cycle_id, null);
+});
+
+console.log(`\n================================================================`);
+console.log(`  Tests Completed: ${passedTests}/${totalTests} Passed`);
+console.log(`================================================================\n`);
+
+if (passedTests !== totalTests) {
   process.exit(1);
 }

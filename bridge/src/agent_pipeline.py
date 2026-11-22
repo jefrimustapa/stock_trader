@@ -52,6 +52,7 @@ class AgentPipeline:
         self.db_path = db_path or BridgeConfig.AGENT_ACTIVITY_DB
         self.hard_rules_engine = HardRulesEngine(BridgeConfig.EQUITY_BASELINE_DB)
         self.moomoo_client = moomoo_client or get_moomoo_client()
+        self.trading_mode = BridgeConfig.TRADING_MODE.upper()
         self._earnings_cache: Dict[str, Any] = {}
         self._init_db()
 
@@ -110,6 +111,9 @@ class AgentPipeline:
                     status TEXT NOT NULL,
                     opend_status TEXT NOT NULL,
                     message TEXT,
+                    time_in_force TEXT DEFAULT 'DAY',
+                    trading_mode TEXT DEFAULT 'DAY',
+                    source TEXT DEFAULT 'AGENT_PIPELINE',
                     created_at TEXT NOT NULL
                 )
             """)
@@ -119,6 +123,8 @@ class AgentPipeline:
                 conn.execute("ALTER TABLE paper_orders ADD COLUMN time_in_force TEXT DEFAULT 'DAY'")
             if "trading_mode" not in paper_cols:
                 conn.execute("ALTER TABLE paper_orders ADD COLUMN trading_mode TEXT DEFAULT 'DAY'")
+            if "source" not in paper_cols:
+                conn.execute("ALTER TABLE paper_orders ADD COLUMN source TEXT DEFAULT 'AGENT_PIPELINE'")
 
             # Migration check: simulation_cycles columns
             sim_cols = [r["name"] for r in conn.execute("PRAGMA table_info(simulation_cycles)").fetchall()]
@@ -936,8 +942,8 @@ class AgentPipeline:
                         INSERT INTO paper_orders (
                             client_order_id, order_id, cycle_id, symbol, order_side,
                             quantity, entry_price, stop_loss_price, take_profit_price,
-                            status, opend_status, message, time_in_force, trading_mode, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            status, opend_status, message, time_in_force, trading_mode, source, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         client_order_id,
                         order_id,
@@ -953,6 +959,7 @@ class AgentPipeline:
                         f"Paper Trading Simulation Order to Moomoo OpenD (Env: {client.trd_env}, Mode: {mode})",
                         order_req_data.get("time_in_force", "DAY"),
                         mode,
+                        "AGENT_PIPELINE",
                         now_utc.isoformat()
                     ))
                     conn.commit()
@@ -1052,17 +1059,20 @@ class AgentPipeline:
         """
         Two-way reconciliation between OpenD broker paper trading orders and local SQLite DB.
         Queries active orders from OpenD (TrdEnv.SIMULATE) and updates paper_orders records.
+        Imports unmatched broker orders as BROKER_IMPORT.
         """
-        client = get_moomoo_client()
+        client = self.moomoo_client or get_moomoo_client()
+        mode = getattr(self, "trading_mode", BridgeConfig.TRADING_MODE).upper()
         if not client.is_connected():
-            return {"synced": False, "reason": "OpenD is not connected", "updated_count": 0}
+            return {"synced": False, "reason": "OpenD is not connected", "updated_count": 0, "imported_count": 0}
 
         try:
             broker_orders = client.query_orders()
             if not broker_orders:
-                return {"synced": True, "updated_count": 0}
+                return {"synced": True, "updated_count": 0, "imported_count": 0}
 
             updated_count = 0
+            imported_count = 0
             with self._get_connection() as conn:
                 for b_ord in broker_orders:
                     b_id = str(b_ord.get("order_id", "")).strip()
@@ -1081,25 +1091,137 @@ class AgentPipeline:
                     elif "SUBMIT" in b_status_raw:
                         mapped_status = "SUBMITTED"
 
-                    cur = conn.execute(
-                        "UPDATE paper_orders SET status = ?, opend_status = 'CONNECTED' WHERE order_id = ? AND status != ?",
-                        (mapped_status, b_id, mapped_status)
-                    )
-                    if cur.rowcount > 0:
-                        updated_count += cur.rowcount
+                    existing = conn.execute(
+                        "SELECT id, status FROM paper_orders WHERE order_id = ?",
+                        (b_id,)
+                    ).fetchone()
+
+                    if existing:
+                        if existing["status"] != mapped_status:
+                            conn.execute(
+                                "UPDATE paper_orders SET status = ?, opend_status = 'CONNECTED' WHERE id = ?",
+                                (mapped_status, existing["id"])
+                            )
+                            updated_count += 1
+                    else:
+                        # Import unmatched external / broker order into paper_orders
+                        b_code = str(b_ord.get("code", "")).strip()
+                        b_side = str(b_ord.get("trd_side", "BUY")).strip().upper()
+                        b_qty = int(b_ord.get("qty", 0))
+                        b_price = float(b_ord.get("price", 0.0))
+                        b_time = str(b_ord.get("create_time", "")) or datetime.now(timezone.utc).isoformat()
+                        conn.execute("""
+                            INSERT INTO paper_orders (
+                                client_order_id, order_id, cycle_id, symbol, order_side,
+                                quantity, entry_price, stop_loss_price, take_profit_price,
+                                status, opend_status, message, time_in_force, trading_mode, source, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            f"BROKER-{b_id}",
+                            b_id,
+                            "EXTERNAL_BROKER",
+                            b_code,
+                            b_side,
+                            b_qty,
+                            b_price,
+                            round(b_price * 0.95, 2),
+                            round(b_price * 1.15, 2),
+                            mapped_status,
+                            "CONNECTED",
+                            f"Imported from OpenD broker order {b_id}",
+                            "DAY",
+                            mode,
+                            "BROKER_IMPORT",
+                            b_time
+                        ))
+                        imported_count += 1
+
                 conn.commit()
 
-            return {"synced": True, "updated_count": updated_count}
+            return {"synced": True, "updated_count": updated_count, "imported_count": imported_count}
         except Exception as e:
             logger.error("Error during sync_broker_orders: %s", e)
-            return {"synced": False, "error": str(e), "updated_count": 0}
+            return {"synced": False, "error": str(e), "updated_count": 0, "imported_count": 0}
+
+    def reconcile_positions_with_orders(self) -> Dict[str, Any]:
+        """
+        Two-way position reconciliation:
+        Queries active positions from OpenD broker. If any open position (qty > 0)
+        lacks an existing transaction record in paper_orders, auto-creates an audit
+        record with source='POSITION_RECONCILED'.
+        """
+        client = self.moomoo_client or get_moomoo_client()
+        mode = getattr(self, "trading_mode", BridgeConfig.TRADING_MODE).upper()
+        if not client.is_connected():
+            return {"synced": False, "reason": "OpenD is not connected", "reconciled_count": 0}
+
+        try:
+            positions = client.query_positions()
+            if not positions:
+                return {"synced": True, "reconciled_count": 0}
+
+            reconciled_count = 0
+            with self._get_connection() as conn:
+                for pos in positions:
+                    raw_code = str(pos.get("code", "")).strip()
+                    pos_id = str(pos.get("position_id", "")).strip()
+                    qty = int(pos.get("qty", 0))
+                    cost_price = float(pos.get("cost_price", 0.0))
+                    if qty <= 0 or not raw_code:
+                        continue
+
+                    clean_sym = raw_code.split(".")[-1] if "." in raw_code else raw_code
+
+                    # Check if any order exists in paper_orders for this symbol
+                    existing = conn.execute("""
+                        SELECT id, source FROM paper_orders
+                        WHERE symbol = ? OR symbol = ?
+                        ORDER BY id DESC LIMIT 1
+                    """, (raw_code, clean_sym)).fetchone()
+
+                    if not existing:
+                        now_str = datetime.now(timezone.utc).isoformat()
+                        client_order_id = f"RECON-{clean_sym}-{int(datetime.now(timezone.utc).timestamp())}"
+                        order_id = f"POS-{pos_id or clean_sym}"
+                        conn.execute("""
+                            INSERT INTO paper_orders (
+                                client_order_id, order_id, cycle_id, symbol, order_side,
+                                quantity, entry_price, stop_loss_price, take_profit_price,
+                                status, opend_status, message, time_in_force, trading_mode, source, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            client_order_id,
+                            order_id,
+                            "RECONCILIATION",
+                            raw_code,
+                            "BUY",
+                            qty,
+                            cost_price,
+                            round(cost_price * 0.95, 2),
+                            round(cost_price * 1.15, 2),
+                            "FILLED",
+                            "CONNECTED",
+                            f"Auto-reconciled position baseline audit for {raw_code}",
+                            "DAY",
+                            mode,
+                            "POSITION_RECONCILED",
+                            now_str
+                        ))
+                        reconciled_count += 1
+                conn.commit()
+
+            return {"synced": True, "reconciled_count": reconciled_count}
+        except Exception as e:
+            logger.error("Error during reconcile_positions_with_orders: %s", e)
+            return {"synced": False, "error": str(e), "reconciled_count": 0}
 
     def get_recent_activity(self, limit: int = 10) -> Dict[str, Any]:
         """Returns recent cycles, latest deliberation cards, and order records with broker sync."""
         try:
             self.sync_broker_orders()
+            self.reconcile_positions_with_orders()
         except Exception as sync_err:
-            logger.warning("Broker order sync error in get_recent_activity: %s", sync_err)
+            logger.warning("Broker order/position sync error in get_recent_activity: %s", sync_err)
 
         with self._get_connection() as conn:
             cycles_cursor = conn.execute("""
@@ -1132,7 +1254,7 @@ class AgentPipeline:
             orders_cursor = conn.execute("""
                 SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
                        quantity, entry_price, stop_loss_price, take_profit_price,
-                       status, opend_status, message, created_at
+                       status, opend_status, message, time_in_force, trading_mode, source, created_at
                 FROM paper_orders
                 ORDER BY id DESC LIMIT 50
             """)
@@ -1162,14 +1284,15 @@ class AgentPipeline:
     def get_paper_orders(self, limit: int = 50) -> List[Dict[str, Any]]:
         try:
             self.sync_broker_orders()
+            self.reconcile_positions_with_orders()
         except Exception as sync_err:
-            logger.warning("Broker order sync error in get_paper_orders: %s", sync_err)
+            logger.warning("Broker order/position sync error in get_paper_orders: %s", sync_err)
 
         with self._get_connection() as conn:
             cursor = conn.execute("""
                 SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
                        quantity, entry_price, stop_loss_price, take_profit_price,
-                       status, opend_status, message, created_at
+                       status, opend_status, message, time_in_force, trading_mode, source, created_at
                 FROM paper_orders
                 ORDER BY id DESC LIMIT ?
             """, (limit,))

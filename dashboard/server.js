@@ -1261,6 +1261,27 @@ app.get('/api/agents/activity', authenticateDashboard, async (req, res) => {
     }
 });
 
+app.get(['/api/agents/orders', '/api/v1/agents/orders'], authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const limit = req.query.limit || 50;
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/agents/orders`, {
+            params: { limit },
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching agent orders from bridge:', err.message);
+        return res.status(err.response?.status || 502).json({
+            error: 'Gagal menghubungi pelayan Bridge untuk senarai pesanan ejen: ' + (err.response?.data?.detail || err.message)
+        });
+    }
+});
+
 app.post('/api/agents/simulate-run', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
@@ -1431,6 +1452,10 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
                 market_value: marketValue,
                 unrealized_pl: plVal,
                 unrealized_pl_pct: plPct,
+                source: p.source || 'POSITION_RECONCILED',
+                order_id: p.order_id || null,
+                cycle_id: p.cycle_id || null,
+                attribution_date: p.attribution_date || null
             };
         });
 

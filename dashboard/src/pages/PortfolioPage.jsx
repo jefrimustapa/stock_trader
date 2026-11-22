@@ -405,6 +405,15 @@ export function PortfolioPage({ onNavigate }) {
                     Simbol &amp; Kaunter
                   </TableSortLabel>
                 </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
+                  <TableSortLabel
+                    active={orderBy === 'source'}
+                    direction={orderBy === 'source' ? orderDir : 'asc'}
+                    onClick={() => handleRequestSort('source')}
+                  >
+                    Atribusi
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
                   <TableSortLabel
                     active={orderBy === 'qty'}
@@ -473,7 +482,7 @@ export function PortfolioPage({ onNavigate }) {
             <TableBody>
               {loading && !data ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                     <CircularProgress size={32} />
                     <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5 }}>
                       Memuatkan rekod portfolio Moomoo OpenD...
@@ -482,7 +491,7 @@ export function PortfolioPage({ onNavigate }) {
                 </TableRow>
               ) : filteredPositions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                     <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                       Tiada posisi aktif dijumpai
                     </Typography>
@@ -520,6 +529,48 @@ export function PortfolioPage({ onNavigate }) {
                             {pos.stock_name}
                           </Typography>
                         </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip
+                          title={
+                            pos.source === 'AGENT_PIPELINE'
+                              ? `Punca: Ejen Pipeline | Kitaran: ${pos.cycle_id || '-'} | Pesanan: ${pos.order_id || '-'}`
+                              : pos.source === 'BROKER_IMPORT'
+                              ? `Punca: Import Pesanan Broker OpenD | Pesanan: ${pos.order_id || '-'}`
+                              : pos.source === 'POSITION_RECONCILED'
+                              ? `Punca: Rekonsiliasi Automatik Posisi OpenD | Audit ID: ${pos.order_id || '-'}`
+                              : `Punca: Rekonsiliasi Posisi OpenD | Audit ID: ${pos.order_id || '-'}`
+                          }
+                          arrow
+                        >
+                          <Chip
+                            size="small"
+                            label={
+                              pos.source === 'AGENT_PIPELINE'
+                                ? 'Ejen'
+                                : pos.source === 'BROKER_IMPORT'
+                                ? 'Broker / Manual'
+                                : 'Rekonsiliasi'
+                            }
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              borderRadius: 1.5,
+                              backgroundColor:
+                                pos.source === 'AGENT_PIPELINE'
+                                  ? sneatTokens.primary.soft
+                                  : pos.source === 'BROKER_IMPORT'
+                                  ? sneatTokens.warning.soft
+                                  : sneatTokens.secondary.soft,
+                              color:
+                                pos.source === 'AGENT_PIPELINE'
+                                  ? sneatTokens.primary.main
+                                  : pos.source === 'BROKER_IMPORT'
+                                  ? sneatTokens.warning.main
+                                  : sneatTokens.secondary.main,
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
