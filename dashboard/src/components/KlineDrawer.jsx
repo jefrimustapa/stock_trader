@@ -1093,9 +1093,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                   variant="outlined"
                   sx={{
                     height: isSmallHeight || isMobilePortrait ? 22 : 26,
-                    borderColor: sneatTokens.primary.main,
+                    borderColor: `${sneatTokens.primary.main} !important`,
                     '& .MuiButtonGroup-grouped': {
-                      borderColor: sneatTokens.primary.main,
+                      borderColor: `${sneatTokens.primary.main} !important`,
                     },
                   }}
                 >
@@ -1111,11 +1111,11 @@ export function KlineDrawer({ open, onClose, stock }) {
                       width: isMobilePortrait ? 50 : 58,
                       boxSizing: 'border-box',
                       backgroundColor: zoomMode === '40' ? sneatTokens.primary.main : 'transparent',
-                      color: '#ffffff',
-                      borderColor: sneatTokens.primary.main,
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
                       '&:hover': {
                         backgroundColor: zoomMode === '40' ? sneatTokens.primary.dark : sneatTokens.primary.soft,
-                        borderColor: sneatTokens.primary.main,
+                        borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
                     title="Fokus 40 lilin terkini"
@@ -1134,11 +1134,11 @@ export function KlineDrawer({ open, onClose, stock }) {
                       width: isMobilePortrait ? 46 : 54,
                       boxSizing: 'border-box',
                       backgroundColor: zoomMode === 'all' ? sneatTokens.primary.main : 'transparent',
-                      color: '#ffffff',
-                      borderColor: sneatTokens.primary.main,
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
                       '&:hover': {
                         backgroundColor: zoomMode === 'all' ? sneatTokens.primary.dark : sneatTokens.primary.soft,
-                        borderColor: sneatTokens.primary.main,
+                        borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
                     title="Papar semua lilin (Fit All)"
@@ -1147,6 +1147,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                   </Button>
                   <Button
                     onClick={handleZoomIn}
+                    variant="outlined"
                     sx={{
                       px: 0.75,
                       minWidth: 26,
@@ -1154,12 +1155,12 @@ export function KlineDrawer({ open, onClose, stock }) {
                       boxSizing: 'border-box',
                       fontSize: '0.75rem',
                       fontWeight: 700,
-                      color: '#ffffff',
-                      borderColor: sneatTokens.primary.main,
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
                       backgroundColor: 'transparent',
                       '&:hover': {
                         backgroundColor: sneatTokens.primary.soft,
-                        borderColor: sneatTokens.primary.main,
+                        borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
                     title="Zum Masuk (+)"
@@ -1168,6 +1169,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                   </Button>
                   <Button
                     onClick={handleZoomOut}
+                    variant="outlined"
                     sx={{
                       px: 0.75,
                       minWidth: 26,
@@ -1175,12 +1177,12 @@ export function KlineDrawer({ open, onClose, stock }) {
                       boxSizing: 'border-box',
                       fontSize: '0.75rem',
                       fontWeight: 700,
-                      color: '#ffffff',
-                      borderColor: sneatTokens.primary.main,
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
                       backgroundColor: 'transparent',
                       '&:hover': {
                         backgroundColor: sneatTokens.primary.soft,
-                        borderColor: sneatTokens.primary.main,
+                        borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
                     title="Zum Keluar (-)"
