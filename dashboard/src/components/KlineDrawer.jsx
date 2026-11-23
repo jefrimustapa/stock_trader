@@ -1093,9 +1093,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                   variant="outlined"
                   sx={{
                     height: isSmallHeight || isMobilePortrait ? 22 : 26,
-                    borderColor: (t) => t.palette.divider,
+                    borderColor: sneatTokens.primary.main,
                     '& .MuiButtonGroup-grouped': {
-                      borderColor: (t) => t.palette.divider,
+                      borderColor: sneatTokens.primary.main,
                     },
                   }}
                 >
@@ -1110,25 +1110,13 @@ export function KlineDrawer({ open, onClose, stock }) {
                       minWidth: isMobilePortrait ? 50 : 58,
                       width: isMobilePortrait ? 50 : 58,
                       boxSizing: 'border-box',
-                      ...(zoomMode === '40'
-                        ? {
-                            backgroundColor: sneatTokens.primary.main,
-                            color: '#ffffff',
-                            borderColor: `${sneatTokens.primary.main} !important`,
-                            '&:hover': {
-                              backgroundColor: sneatTokens.primary.dark,
-                              borderColor: `${sneatTokens.primary.dark} !important`,
-                            },
-                          }
-                        : {
-                            backgroundColor: 'transparent',
-                            color: isDark ? '#A1A5B7' : 'text.secondary',
-                            borderColor: (t) => `${t.palette.divider} !important`,
-                            '&:hover': {
-                              backgroundColor: (t) => t.palette.action.hover,
-                              borderColor: (t) => `${t.palette.divider} !important`,
-                            },
-                          }),
+                      backgroundColor: zoomMode === '40' ? sneatTokens.primary.main : 'transparent',
+                      color: '#ffffff',
+                      borderColor: sneatTokens.primary.main,
+                      '&:hover': {
+                        backgroundColor: zoomMode === '40' ? sneatTokens.primary.dark : sneatTokens.primary.soft,
+                        borderColor: sneatTokens.primary.main,
+                      },
                     }}
                     title="Fokus 40 lilin terkini"
                   >
@@ -1145,25 +1133,13 @@ export function KlineDrawer({ open, onClose, stock }) {
                       minWidth: isMobilePortrait ? 46 : 54,
                       width: isMobilePortrait ? 46 : 54,
                       boxSizing: 'border-box',
-                      ...(zoomMode === 'all'
-                        ? {
-                            backgroundColor: sneatTokens.primary.main,
-                            color: '#ffffff',
-                            borderColor: `${sneatTokens.primary.main} !important`,
-                            '&:hover': {
-                              backgroundColor: sneatTokens.primary.dark,
-                              borderColor: `${sneatTokens.primary.dark} !important`,
-                            },
-                          }
-                        : {
-                            backgroundColor: 'transparent',
-                            color: isDark ? '#A1A5B7' : 'text.secondary',
-                            borderColor: (t) => `${t.palette.divider} !important`,
-                            '&:hover': {
-                              backgroundColor: (t) => t.palette.action.hover,
-                              borderColor: (t) => `${t.palette.divider} !important`,
-                            },
-                          }),
+                      backgroundColor: zoomMode === 'all' ? sneatTokens.primary.main : 'transparent',
+                      color: '#ffffff',
+                      borderColor: sneatTokens.primary.main,
+                      '&:hover': {
+                        backgroundColor: zoomMode === 'all' ? sneatTokens.primary.dark : sneatTokens.primary.soft,
+                        borderColor: sneatTokens.primary.main,
+                      },
                     }}
                     title="Papar semua lilin (Fit All)"
                   >
@@ -1178,11 +1154,12 @@ export function KlineDrawer({ open, onClose, stock }) {
                       boxSizing: 'border-box',
                       fontSize: '0.75rem',
                       fontWeight: 700,
-                      color: isDark ? '#A1A5B7' : 'text.secondary',
-                      borderColor: (t) => `${t.palette.divider} !important`,
+                      color: '#ffffff',
+                      borderColor: sneatTokens.primary.main,
+                      backgroundColor: 'transparent',
                       '&:hover': {
-                        backgroundColor: (t) => t.palette.action.hover,
-                        borderColor: (t) => `${t.palette.divider} !important`,
+                        backgroundColor: sneatTokens.primary.soft,
+                        borderColor: sneatTokens.primary.main,
                       },
                     }}
                     title="Zum Masuk (+)"
@@ -1198,11 +1175,12 @@ export function KlineDrawer({ open, onClose, stock }) {
                       boxSizing: 'border-box',
                       fontSize: '0.75rem',
                       fontWeight: 700,
-                      color: isDark ? '#A1A5B7' : 'text.secondary',
-                      borderColor: (t) => `${t.palette.divider} !important`,
+                      color: '#ffffff',
+                      borderColor: sneatTokens.primary.main,
+                      backgroundColor: 'transparent',
                       '&:hover': {
-                        backgroundColor: (t) => t.palette.action.hover,
-                        borderColor: (t) => `${t.palette.divider} !important`,
+                        backgroundColor: sneatTokens.primary.soft,
+                        borderColor: sneatTokens.primary.main,
                       },
                     }}
                     title="Zum Keluar (-)"
