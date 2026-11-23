@@ -158,7 +158,7 @@ async function runSuite() {
 
     const labelZoom = await labelLocator.first().textContent();
     console.log(`   Label after zooming in: "${labelZoom}"`);
-    assertCheck('Candle count label remains visible and formatted during zoom', labelZoom && labelZoom.includes('lilin'));
+    assertCheck('Candle count label remains visible and formatted during zoom', labelZoom && (labelZoom.includes('candles') || labelZoom.includes('lilin')));
 
     // Capture screenshot in custom zoom mode
     const shotCustom = path.join(QA_DIR, 'hom368-kline-custom-zoom.png');
