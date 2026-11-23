@@ -56,13 +56,34 @@ export function KlineDrawer({ open, onClose, stock }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [hoverOhlc, setHoverOhlc] = useState(null);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [zoomMode, setZoomMode] = useState('40');
+  const [visibleCandleCount, setVisibleCandleCount] = useState(40);
 
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const activeSubRef = useRef({ symbol: null, interval: null });
+  const programmaticModeRef = useRef('40');
+
+  const getCandleCountLabel = () => {
+    const total = klineData?.candles?.length || 0;
+    if (total === 0) return '0 lilin';
+    if (zoomMode === 'all') {
+      return `${total} lilin`;
+    }
+    if (zoomMode === '40') {
+      if (total <= 40) return `${total} lilin`;
+      return `40 / ${total} lilin`;
+    }
+    // zoomMode === 'custom'
+    const count = Math.min(total, Math.max(0, visibleCandleCount));
+    if (count >= total) return `${total} lilin`;
+    return `${count} / ${total} lilin`;
+  };
 
   const handleShowRecent = () => {
     if (!chartInstanceRef.current || !klineData?.candles?.length) return;
+    programmaticModeRef.current = '40';
+    setZoomMode('40');
     const total = klineData.candles.length;
     if (total < 10) {
       chartInstanceRef.current.timeScale().setVisibleLogicalRange({
@@ -75,15 +96,23 @@ export function KlineDrawer({ open, onClose, stock }) {
         to: total + 2,
       });
     }
+    setVisibleCandleCount(Math.min(total, 40));
   };
 
   const handleFitAll = () => {
     if (!chartInstanceRef.current) return;
+    programmaticModeRef.current = 'all';
+    setZoomMode('all');
     chartInstanceRef.current.timeScale().fitContent();
+    if (klineData?.candles?.length) {
+      setVisibleCandleCount(klineData.candles.length);
+    }
   };
 
   const handleZoomIn = () => {
     if (!chartInstanceRef.current) return;
+    programmaticModeRef.current = null;
+    setZoomMode('custom');
     const ts = chartInstanceRef.current.timeScale();
     const current = ts.options().barSpacing || 14;
     ts.applyOptions({ barSpacing: Math.min(50, current * 1.35) });
@@ -91,6 +120,8 @@ export function KlineDrawer({ open, onClose, stock }) {
 
   const handleZoomOut = () => {
     if (!chartInstanceRef.current) return;
+    programmaticModeRef.current = null;
+    setZoomMode('custom');
     const ts = chartInstanceRef.current.timeScale();
     const current = ts.options().barSpacing || 14;
     ts.applyOptions({ barSpacing: Math.max(3, current * 0.72) });
@@ -221,6 +252,9 @@ export function KlineDrawer({ open, onClose, stock }) {
     setKlineData(null);
     setErrorMsg(null);
     setInterval('day');
+    setZoomMode('40');
+    setVisibleCandleCount(40);
+    programmaticModeRef.current = '40';
     onClose();
   };
 
@@ -383,6 +417,10 @@ export function KlineDrawer({ open, onClose, stock }) {
 
     // Initial comfortable zoom showing the latest 40 candles (or natural spacing if < 10 candles)
     const totalBars = formattedCandles.length;
+    programmaticModeRef.current = '40';
+    setZoomMode('40');
+    setVisibleCandleCount(Math.min(totalBars, 40));
+
     if (totalBars > 0) {
       if (totalBars < 10) {
         chart.timeScale().setVisibleLogicalRange({
@@ -397,6 +435,28 @@ export function KlineDrawer({ open, onClose, stock }) {
         });
       }
     }
+
+    // Subscribe to visible logical range changes to track visible candle count & zoom mode
+    const handleRangeChange = (newRange) => {
+      if (!newRange) return;
+      const from = Math.max(0, Math.ceil(newRange.from));
+      const to = Math.min(totalBars - 1, Math.floor(newRange.to));
+      const count = from <= to ? to - from + 1 : 0;
+      setVisibleCandleCount(count);
+
+      if (programmaticModeRef.current) {
+        const activeProgMode = programmaticModeRef.current;
+        setTimeout(() => {
+          if (programmaticModeRef.current === activeProgMode) {
+            programmaticModeRef.current = null;
+          }
+        }, 150);
+      } else {
+        setZoomMode('custom');
+      }
+    };
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleRangeChange);
 
     // Subscribe to crosshair move for interactive OHLC HUD
     chart.subscribeCrosshairMove((param) => {
@@ -417,7 +477,7 @@ export function KlineDrawer({ open, onClose, stock }) {
           color: isUp ? '#28C76F' : '#EA5455',
           timeStr: typeof param.time === 'number'
             ? new Date(param.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : String(param.time),
+            : String(param.time).replace(/\s*00:00:00$/, ''),
         });
       } else {
         setHoverOhlc(null);
@@ -441,6 +501,7 @@ export function KlineDrawer({ open, onClose, stock }) {
     return () => {
       resizeObserver.disconnect();
       if (chartInstanceRef.current) {
+        chartInstanceRef.current.timeScale().unsubscribeVisibleLogicalRangeChange(handleRangeChange);
         chartInstanceRef.current.remove();
         chartInstanceRef.current = null;
       }
@@ -472,7 +533,7 @@ export function KlineDrawer({ open, onClose, stock }) {
     low: Number(latestCandle.low),
     close: Number(latestCandle.close),
     volume: Number(latestCandle.volume || 0),
-    timeStr: latestCandle.time_str || (latestCandle.time ? String(latestCandle.time) : ''),
+    timeStr: (latestCandle.time_str || (latestCandle.time ? String(latestCandle.time) : '')).replace(/\s*00:00:00$/, ''),
     color: Number(latestCandle.close) >= Number(latestCandle.open) ? '#28C76F' : '#EA5455',
   } : null);
 
@@ -969,13 +1030,13 @@ export function KlineDrawer({ open, onClose, stock }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                flexWrap: 'wrap',
+                flexWrap: isMobilePortrait ? 'wrap' : 'nowrap',
                 gap: isSmallHeight || isMobilePortrait ? 0.75 : 1.5,
                 flexShrink: 0,
               }}
             >
               {displayOhlc ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: isSmallHeight || isMobilePortrait ? 1 : 1.75, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: isSmallHeight || isMobilePortrait ? 1 : 1.75, flexWrap: isMobilePortrait ? 'wrap' : 'nowrap', minWidth: 0, overflow: 'hidden' }}>
                   <Chip
                     size="small"
                     label={displayOhlc.timeStr || interval.toUpperCase()}
@@ -1026,16 +1087,37 @@ export function KlineDrawer({ open, onClose, stock }) {
               )}
 
               {/* Zoom and Scale Controls */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ButtonGroup size="small" variant="outlined" sx={{ height: isSmallHeight || isMobilePortrait ? 22 : 26 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                <ButtonGroup
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    height: isSmallHeight ? 24 : 26,
+                    borderColor: `${sneatTokens.primary.main} !important`,
+                    '& .MuiButtonGroup-grouped': {
+                      borderColor: `${sneatTokens.primary.main} !important`,
+                    },
+                  }}
+                >
                   <Button
                     onClick={handleShowRecent}
+                    variant={zoomMode === '40' ? 'contained' : 'outlined'}
                     sx={{
                       fontSize: '0.68rem',
                       fontWeight: 700,
                       textTransform: 'none',
-                      px: isMobilePortrait ? 0.75 : 1,
-                      borderColor: (t) => t.palette.divider,
+                      whiteSpace: 'nowrap',
+                      px: 0.75,
+                      minWidth: 58,
+                      width: 58,
+                      boxSizing: 'border-box',
+                      backgroundColor: zoomMode === '40' ? sneatTokens.primary.main : 'transparent',
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
+                      '&:hover': {
+                        backgroundColor: zoomMode === '40' ? sneatTokens.primary.dark : sneatTokens.primary.soft,
+                        borderColor: `${sneatTokens.primary.main} !important`,
+                      },
                     }}
                     title="Fokus 40 lilin terkini"
                   >
@@ -1043,12 +1125,23 @@ export function KlineDrawer({ open, onClose, stock }) {
                   </Button>
                   <Button
                     onClick={handleFitAll}
+                    variant={zoomMode === 'all' ? 'contained' : 'outlined'}
                     sx={{
                       fontSize: '0.68rem',
                       fontWeight: 700,
                       textTransform: 'none',
-                      px: isMobilePortrait ? 0.75 : 1,
-                      borderColor: (t) => t.palette.divider,
+                      whiteSpace: 'nowrap',
+                      px: 0.75,
+                      minWidth: 54,
+                      width: 54,
+                      boxSizing: 'border-box',
+                      backgroundColor: zoomMode === 'all' ? sneatTokens.primary.main : 'transparent',
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
+                      '&:hover': {
+                        backgroundColor: zoomMode === 'all' ? sneatTokens.primary.dark : sneatTokens.primary.soft,
+                        borderColor: `${sneatTokens.primary.main} !important`,
+                      },
                     }}
                     title="Papar semua lilin (Fit All)"
                   >
@@ -1056,14 +1149,46 @@ export function KlineDrawer({ open, onClose, stock }) {
                   </Button>
                   <Button
                     onClick={handleZoomIn}
-                    sx={{ px: 0.75, minWidth: 24, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    variant="outlined"
+                    sx={{
+                      px: 0.75,
+                      minWidth: 26,
+                      width: 26,
+                      boxSizing: 'border-box',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
+                      backgroundColor: 'transparent',
+                      '&:hover': {
+                        backgroundColor: sneatTokens.primary.soft,
+                        borderColor: `${sneatTokens.primary.main} !important`,
+                      },
+                    }}
                     title="Zum Masuk (+)"
                   >
                     +
                   </Button>
                   <Button
                     onClick={handleZoomOut}
-                    sx={{ px: 0.75, minWidth: 24, fontWeight: 800, borderColor: (t) => t.palette.divider }}
+                    variant="outlined"
+                    sx={{
+                      px: 0.75,
+                      minWidth: 26,
+                      width: 26,
+                      boxSizing: 'border-box',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      color: '#ffffff !important',
+                      borderColor: `${sneatTokens.primary.main} !important`,
+                      backgroundColor: 'transparent',
+                      '&:hover': {
+                        backgroundColor: sneatTokens.primary.soft,
+                        borderColor: `${sneatTokens.primary.main} !important`,
+                      },
+                    }}
                     title="Zum Keluar (-)"
                   >
                     -
@@ -1082,8 +1207,21 @@ export function KlineDrawer({ open, onClose, stock }) {
                     }}
                   />
                 )}
-                <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem', fontWeight: 500 }}>
-                  {klineData?.candles?.length || 0} lilin
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    width: 85,
+                    minWidth: 85,
+                    textAlign: 'left',
+                    display: 'inline-block',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {getCandleCountLabel()}
                 </Typography>
               </Box>
             </Box>
