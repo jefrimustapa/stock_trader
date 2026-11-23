@@ -75,8 +75,8 @@ async function runSuite() {
     assertCheck('"-" zoom button exists', (await btnMinus.count()) > 0);
 
     // Locate candle count label element
-    // The label text contains 'lilin'
-    const labelLocator = drawer.locator('text=/\\d+.*lilin/');
+    // The label text contains 'candles' or 'lilin'
+    const labelLocator = drawer.locator('text=/\\d+.*(candles|lilin)/');
     assertCheck('Candle count label is rendered', (await labelLocator.count()) > 0);
     const initialLabel = await labelLocator.first().textContent();
     console.log(`   Initial candle count label: "${initialLabel}"`);

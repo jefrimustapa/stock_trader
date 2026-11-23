@@ -239,7 +239,7 @@ export function AgentsPage({ screenerConfig }) {
             disabled={loading}
             sx={{ borderRadius: 2, textTransform: 'none' }}
           >
-            Segarkan
+            Refresh
           </Button>
         </Box>
       </Box>
