@@ -120,7 +120,7 @@ export function WatchlistTable({ dataPayload }) {
             }}
           >
             <Tab
-              label={`Semua (${rawItems.length})`}
+              label={`All (${rawItems.length})`}
               value="ALL"
               icon={<ViewListIcon sx={{ fontSize: 18 }} />}
               iconPosition="start"
@@ -144,7 +144,7 @@ export function WatchlistTable({ dataPayload }) {
             <Chip
               size="small"
               icon={<ShowChartIcon sx={{ fontSize: '13px !important' }} />}
-              label="Klik baris untuk K-line"
+              label="Click row for K-line"
               sx={{
                 fontWeight: 600,
                 fontSize: '0.72rem',
@@ -159,7 +159,7 @@ export function WatchlistTable({ dataPayload }) {
             <TextField
               id="input-search-watchlist"
               size="small"
-              placeholder="Cari simbol / syarikat..."
+              placeholder="Search symbol / company..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               InputProps={{
@@ -189,7 +189,7 @@ export function WatchlistTable({ dataPayload }) {
 
             <Chip
               size="small"
-              label={`${filteredItems.length} kaunter`}
+              label={`${filteredItems.length} symbols`}
               sx={{
                 fontWeight: 600,
                 fontSize: '0.72rem',
@@ -219,11 +219,11 @@ export function WatchlistTable({ dataPayload }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
             <SwapHorizIcon sx={{ color: sneatTokens.primary.main, fontSize: 18 }} />
             <Typography variant="caption" sx={{ color: sneatTokens.primary.main, fontWeight: 700, fontSize: '0.75rem' }}>
-              Leret mendatar jadual untuk metrik penuh (ADV20, RS, RVOL, 52W)
+              Swipe horizontally for full metrics (ADV20, RS, RVOL, 52W)
             </Typography>
           </Box>
           <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600 }}>
-            {filteredItems.length} kaunter
+            {filteredItems.length} symbols
           </Typography>
         </Box>
 
@@ -367,7 +367,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    <Tooltip title="Relative Strength berbanding SPY (> 1.0 = Mengatasi Pasaran)" arrow placement="top">
+                    <Tooltip title="Relative Strength vs SPY (> 1.0 = Outperforming Market)" arrow placement="top">
                       <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
                         RS vs SPY
                         <InfoOutlinedIcon sx={{ fontSize: 13, opacity: 0.6 }} />
@@ -406,7 +406,7 @@ export function WatchlistTable({ dataPayload }) {
                       pr: 2.5,
                     }}
                   >
-                    <Tooltip title="Jarak Peratusan dari Paras Tertinggi 52-Minggu" arrow placement="top">
+                    <Tooltip title="Percentage distance from 52-Week High" arrow placement="top">
                       <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
                         Jarak 52W High
                         <InfoOutlinedIcon sx={{ fontSize: 13, opacity: 0.6 }} />
@@ -473,7 +473,7 @@ export function WatchlistTable({ dataPayload }) {
                               {row.symbol}
                             </Typography>
                             {Boolean(row.symbol && row.symbol.replace(/^US\./, '').length === 5 && (row.symbol.endsWith('Y') || row.symbol.endsWith('F'))) && (
-                              <Tooltip title="Kaunter pasaran Over-The-Counter (OTC) US (Tiada suapan K-line Moomoo)">
+                              <Tooltip title="US Over-The-Counter (OTC) symbol (No Moomoo K-line feed)">
                                 <Chip
                                   size="small"
                                   label="OTC"
@@ -637,12 +637,12 @@ export function WatchlistTable({ dataPayload }) {
                           <TuneIcon sx={{ fontSize: 28, opacity: 0.5 }} />
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                          Tiada Kaunter Saham Dijumpai
+                          No Stocks Found
                         </Typography>
                         <Typography variant="body2" sx={{ fontSize: '0.8rem', maxWidth: 400 }}>
                           {searchQuery
-                            ? `Tiada kaunter sepadan dengan carian "${searchQuery}". Cuba cari simbol atau nama lain.`
-                            : 'Tiada kaunter dalam senarai watchlist bagi kategori ini pada masa ini.'}
+                            ? `No symbols match "${searchQuery}". Try another symbol or name.`
+                            : 'No symbols in the watchlist for this category currently.'}
                         </Typography>
                       </Box>
                     </TableCell>
@@ -668,10 +668,10 @@ export function WatchlistTable({ dataPayload }) {
             }}
           >
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-              Menunjukkan {filteredItems.length} daripada {rawItems.length} kaunter saham aktif
+              Showing {filteredItems.length} of {rawItems.length} active stocks
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-              Susunan corong mengutamakan skor gabungan momentum teknikal & setup sokongan
+              Funnel ranking prioritizes composite scores of technical momentum &amp; support setups
             </Typography>
           </Box>
         </CardContent>

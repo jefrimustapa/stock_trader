@@ -231,7 +231,7 @@ export function App() {
             >
               <CircularProgress size={40} color="primary" />
               <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-                Memuatkan metrik papan pemuka...
+                Loading dashboard metrics...
               </Typography>
             </Box>
           ) : (

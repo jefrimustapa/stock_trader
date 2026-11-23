@@ -131,7 +131,7 @@ async function runSuite() {
     assertCheck('Settings header cleaned: No "SQLite WAL: Aktif" badge', !tab1BodyText.includes('SQLite WAL: Aktif'));
 
     // 2. Field 6: Had Siling Modal Maksimum (Limit Buying Power)
-    assertCheck('Limit Buying Power title rendered', tab1BodyText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
+    assertCheck('Limit Buying Power title rendered', tab1BodyText.includes('Maximum Capital Ceiling (Limit Buying Power)') || tab1BodyText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
     const bpInput = page.locator('#inputMaxBuyingPower');
     assertCheck('Input #inputMaxBuyingPower is visible', await bpInput.isVisible());
 

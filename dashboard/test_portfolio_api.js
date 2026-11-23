@@ -31,7 +31,7 @@ function check(desc, fn) {
 // 1. Verify PortfolioPage.jsx has Atribusi column and chips
 check('PortfolioPage.jsx includes "Atribusi" column header and table sort label', () => {
   const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
-  assert(code.includes('Atribusi'), 'Should contain "Atribusi" column label');
+  assert(code.includes('Attribution') || code.includes('Atribusi'), 'Should contain Attribution column label');
   assert(code.includes("orderBy === 'source'"), 'Should support sorting by source');
 });
 

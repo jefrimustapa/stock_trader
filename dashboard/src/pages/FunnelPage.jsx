@@ -96,21 +96,21 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
       icon: <CloudQueueIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.secondary.main,
       bg: sneatTokens.secondary.soft,
-      desc: 'Saringan peringkat awan mentah Moomoo mengambil beribu-ribu simbol aktif untuk penapisan permulaan.',
+      desc: 'Raw cloud screening fetches thousands of active US symbols for initial filtering.',
       badge: 'NYSE & NASDAQ',
     },
     {
       stage: 'STAGE 2',
-      title: 'Kualiti Stage 0',
+      title: 'Stage 0 Quality',
       icon: <VerifiedUserIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.info.main,
       bg: sneatTokens.info.soft,
       desc: getStage0Detail(activeConfig, status),
-      badge: 'Penapis Asas',
+      badge: 'Baseline Filters',
     },
     {
       stage: 'STAGE 3',
-      title: 'Dwi-Lorong',
+      title: 'Dual-Lane',
       icon: <AltRouteIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.warning.main,
       bg: sneatTokens.warning.soft,
@@ -123,17 +123,17 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
       icon: <ShowChartIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.primary.main,
       bg: sneatTokens.primary.soft,
-      desc: 'Pengambilan data lilin K-line berketepatan tinggi bagi 3-5 calon teratas setiap lorong bagi mengoptimumkan kuota API.',
-      badge: 'Optimum Kuota',
+      desc: 'High-precision K-line candlestick retrieval for top 3-5 candidates per lane to optimize API quota.',
+      badge: 'Quota Optimized',
     },
     {
       stage: 'STAGE 5',
-      title: 'Watchlist Akhir',
+      title: 'Final Watchlist',
       icon: <StarsIcon sx={{ fontSize: 18 }} />,
       color: sneatTokens.success.main,
       bg: sneatTokens.success.soft,
-      desc: 'Senarai kaunter bersedia untuk diproses oleh agen Tariq (analisis teknikal) dan Nawwar (analisis asas).',
-      badge: 'Sedia Dagangan',
+      desc: 'Selected stocks ready for Tariq (technical) and Nawwar (fundamental) agent processing.',
+      badge: 'Trade Ready',
     },
   ];
 
@@ -167,10 +167,10 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
                 lineHeight: 1.25,
               }}
             >
-              Corong Saringan Saham 5-Peringkat
+              5-Stage Stock Screening Funnel
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25, fontSize: { xs: '0.78rem', sm: '0.85rem' } }}>
-              Seni bina saringan hybrid (HOM-178 Approach C): penapisan progresif daripada ribuan saham US sehingga senarai calon berkualiti tinggi.
+              Hybrid screening architecture (HOM-178 Approach C): progressive filtering from thousands of US stocks to high-quality candidates.
             </Typography>
           </Box>
         </Box>
@@ -178,7 +178,7 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Chip
             size="small"
-            label={`Kadar Pilihan: ${conversionPct}%`}
+            label={`Selectivity: ${conversionPct}%`}
             sx={{
               fontWeight: 700,
               backgroundColor: sneatTokens.primary.soft,
@@ -188,7 +188,7 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
           />
           <Chip
             size="small"
-            label={`${finalCount} Calon Akhir`}
+            label={`${finalCount} Final Candidates`}
             sx={{
               fontWeight: 700,
               backgroundColor: sneatTokens.success.soft,
@@ -249,10 +249,10 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
             </Box>
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
-                Penerangan Kriteria Mengikut Peringkat
+                Stage Criteria Description
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                Spesifikasi teknikal dan kriteria penapisan bagi setiap tahap corong saringan
+                Technical specifications and filtering criteria for each screening funnel stage
               </Typography>
             </Box>
           </Box>
@@ -370,10 +370,10 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
               </Box>
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                  Lihat Hasil Kaunter Saham Terpilih
+                  View Selected Stock Results
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {finalCount} kaunter telah melepasi semua 5 tahap corong saringan dan sedia dipantau di Watchlist Dwi-Lorong.
+                  {finalCount} symbols passed all 5 funnel stages and are ready for monitoring in the Dual-Lane Watchlist.
                 </Typography>
               </Box>
             </Box>
@@ -392,7 +392,7 @@ export function FunnelPage({ dataPayload, screenerConfig, configLoading, configE
                 px: 2,
               }}
             >
-              Buka Jadual Watchlist
+              Open Watchlist Table
             </Button>
           </Box>
         </CardContent>

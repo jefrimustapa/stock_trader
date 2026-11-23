@@ -36,12 +36,12 @@ import { sneatTokens } from '../theme';
 const SIDEBAR_WIDTH = 260;
 
 export const navItems = [
-  { id: 'overview', label: 'Ringkasan & Metrik', shortLabel: 'Ringkasan', subtitle: 'KPI & Status Sistem', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
-  { id: 'portfolio', label: 'Portfolio Pegangan', shortLabel: 'Portfolio', subtitle: 'Harga Beli & Semasa', icon: <AccountBalanceWalletIcon sx={{ fontSize: 20 }} /> },
-  { id: 'l0', label: 'L0: Saringan & Watchlist', shortLabel: 'L0 Saringan', subtitle: 'Corong & Watchlist', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
-  { id: 'agents', label: 'L1 -> L4: Aktiviti Pasukan Ejen', shortLabel: 'L1-L4 Ejen', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
-  { id: 'quota', label: 'Kuota K-Line', shortLabel: 'Kuota', subtitle: 'Rekod 30-Hari & Luput', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
-  { id: 'settings', label: 'Tetapan & Gerbang', shortLabel: 'Tetapan', subtitle: 'L0, Modal & OpenD', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
+  { id: 'overview', label: 'Overview & Metrics', shortLabel: 'Overview', subtitle: 'KPI & System Status', icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
+  { id: 'portfolio', label: 'Portfolio Holdings', shortLabel: 'Portfolio', subtitle: 'Buy Price & Current', icon: <AccountBalanceWalletIcon sx={{ fontSize: 20 }} /> },
+  { id: 'l0', label: 'L0: Screening & Watchlist', shortLabel: 'L0 Screener', subtitle: 'Funnel & Watchlist', icon: <FilterAltIcon sx={{ fontSize: 20 }} /> },
+  { id: 'agents', label: 'L1 -> L4: Agent Team Activity', shortLabel: 'L1-L4 Agents', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
+  { id: 'quota', label: 'K-Line Quota', shortLabel: 'Quota', subtitle: '30-Day History & Expiry', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
+  { id: 'settings', label: 'Settings & Gateway', shortLabel: 'Settings', subtitle: 'L0, Capital & OpenD', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export function Layout({
@@ -201,7 +201,7 @@ export function Layout({
       <Box
         component="nav"
         sx={{ width: { md: SIDEBAR_WIDTH }, flexShrink: { md: 0 } }}
-        aria-label="papan navigasi utama"
+        aria-label="main navigation"
       >
         {/* Mobile temporary drawer */}
         <Drawer
@@ -267,7 +267,7 @@ export function Layout({
               size="small"
               id="btn-mobile-menu"
               sx={{ display: { md: 'none' }, mr: { xs: 0.5, sm: 1 } }}
-              aria-label="buka menu"
+              aria-label="open menu"
             >
               <MenuIcon />
             </IconButton>
@@ -276,7 +276,7 @@ export function Layout({
               noWrap
               sx={{ fontWeight: 600, display: { xs: 'none', sm: 'block' } }}
             >
-              Dashboard Kawalan &amp; Dagangan Saham US &bull; {activeItem.label}
+              US Stock Control &amp; Trading Dashboard &bull; {activeItem.label}
             </Typography>
             <Typography
               variant="subtitle2"
@@ -304,13 +304,13 @@ export function Layout({
                 <>
                   <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
                     {String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
-                      ? 'MOD: SWING (MULTI-DAY)'
-                      : 'MOD: DAY (INTRADAY)'}
+                      ? 'MODE: SWING (MULTI-DAY)'
+                      : 'MODE: DAY (INTRADAY)'}
                   </Box>
                   <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
                     {String(statusData?.trading_mode || statusData?.bridge?.trading_mode || 'DAY').toUpperCase() === 'SWING'
-                      ? 'MOD: SWING'
-                      : 'MOD: DAY'}
+                      ? 'MODE: SWING'
+                      : 'MODE: DAY'}
                   </Box>
                 </>
               }
@@ -350,7 +350,7 @@ export function Layout({
               <Chip
                 size="small"
                 id="chip-user-info"
-                label={typeof user === 'string' ? user : (user.username || user.email || 'Pengguna')}
+                label={typeof user === 'string' ? user : (user.username || user.email || 'User')}
                 sx={{
                   backgroundColor: sneatTokens.primary.soft,
                   color: sneatTokens.primary.main,
@@ -362,7 +362,7 @@ export function Layout({
             )}
 
             {/* Dark/Light Mode Switch */}
-            <Tooltip title={currentMode === 'dark' ? 'Tukar ke Mod Cerah' : 'Tukar ke Mod Gelap'}>
+            <Tooltip title={currentMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
               <IconButton onClick={onToggleMode} size="small" color="inherit" id="btn-theme-toggle" sx={{ p: { xs: 0.5, sm: 1 } }}>
                 {currentMode === 'dark' ? (
                   <LightModeOutlinedIcon sx={{ fontSize: { xs: 18, sm: 20 }, color: '#FFAB00' }} />
@@ -379,7 +379,7 @@ export function Layout({
               size="small"
               color="secondary"
               href="/logout"
-              aria-label="Log Keluar"
+              aria-label="Sign Out"
               sx={{
                 borderRadius: '8px',
                 borderColor: theme.palette.divider,
@@ -391,7 +391,7 @@ export function Layout({
             >
               <LogoutIcon sx={{ fontSize: 16 }} />
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, ml: 0.5, fontWeight: 600 }}>
-                Log Keluar
+                Sign Out
               </Box>
             </Button>
           </Box>

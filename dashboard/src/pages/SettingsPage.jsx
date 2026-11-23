@@ -140,7 +140,7 @@ export function SettingsPage({
         }
       } else {
         const errData = await cfgRes.json().catch(() => ({}));
-        setErrorMsg(errData.error || 'Gagal memuatkan konfigurasi screener.');
+        setErrorMsg(errData.error || 'Failed to load screener configuration.');
       }
 
       if (auditRes.ok) {
@@ -149,7 +149,7 @@ export function SettingsPage({
       }
     } catch (err) {
       console.error('[SettingsPage] Error fetching config:', err);
-      setErrorMsg('Ralat rangkaian semasa memuatkan tetapan screener.');
+      setErrorMsg('Network error while loading screener settings.');
     } finally {
       setLoading(false);
     }
@@ -165,21 +165,21 @@ export function SettingsPage({
     }
     const num = Number(value);
     if (!Number.isFinite(num)) {
-      return 'Nilai mestilah nombor yang sah';
+      return 'Value must be a valid number';
     }
 
     if (field === 'min_price') {
       if (num < 1.0) {
-        return 'Harga minimum tidak boleh kurang daripada $1.00 (Had Keselamatan).';
+        return 'Minimum price cannot be less than $1.00 (Safety Limit).';
       }
       if (num > 10000.0) {
-        return 'Harga minimum tidak boleh melebihi $10,000.00.';
+        return 'Minimum price cannot exceed $10,000.00.';
       }
     }
 
     if (field === 'min_market_cap') {
       if (num < 10000000.0) {
-        return 'Market Cap minimum tidak boleh kurang daripada $10,000,000 ($10M).';
+        return 'Minimum market cap cannot be less than $10,000,000 ($10M).';
       }
       if (num > 10000000000000.0) {
         return 'Market Cap minimum tidak boleh melebihi $10,000,000,000,000 ($10T).';
@@ -188,40 +188,40 @@ export function SettingsPage({
 
     if (field === 'min_volume') {
       if (num < 50000.0) {
-        return 'Volum ADV20 minimum tidak boleh kurang daripada 50,000 saham.';
+        return 'Minimum ADV20 volume cannot be less than 50,000 shares.';
       }
       if (num > 1000000000.0) {
-        return 'Volum ADV20 minimum tidak boleh melebihi 1,000,000,000 saham.';
+        return 'Minimum ADV20 volume cannot exceed 1,000,000,000 shares.';
       }
     }
 
     if (field === 'min_rvol') {
       if (num < 0.0 || num > 50.0) {
-        return 'RVOL minimum mestilah antara 0.0 dan 50.0.';
+        return 'Minimum RVOL must be between 0.0 and 50.0.';
       }
     }
 
     if (field === 'max_rvol') {
       if (num < 0.1 || num > 100.0) {
-        return 'RVOL maksimum mestilah antara 0.1 dan 100.0.';
+        return 'Maximum RVOL must be between 0.1 and 100.0.';
       }
     }
 
     if (field === 'max_candidates_per_lane') {
       if (!Number.isInteger(num)) {
-        return 'Had calon per lorong mestilah nombor bulat (integer).';
+        return 'Candidates per lane must be an integer.';
       }
       if (num < 1 || num > 20) {
-        return 'Had calon per lorong mestilah antara 1 dan 20 kaunter (Had Kuota Moomoo OpenAPI).';
+        return 'Candidates per lane must be between 1 and 20 stocks (Moomoo OpenAPI Quota Limit).';
       }
     }
 
     if (field === 'max_buying_power') {
       if (num < 500.0) {
-        return 'Had buying power maksimum tidak boleh kurang daripada $500.00.';
+        return 'Maximum buying power cannot be less than $500.00.';
       }
       if (num > 100000000.0) {
-        return 'Had buying power maksimum tidak boleh melebihi $100,000,000.00 ($100M).';
+        return 'Maximum buying power cannot exceed $100,000,000.00 ($100M).';
       }
     }
 
@@ -275,7 +275,7 @@ export function SettingsPage({
       max_rvol: DEFAULT_CONFIG.max_rvol,
       max_candidates_per_lane: DEFAULT_CONFIG.max_candidates_per_lane,
     }));
-    setSuccessMsg('Parameter screener telah diset semula kepada nilai cadangan lalai. Tekan Simpan untuk menguatkuasakan.');
+    setSuccessMsg('Screener parameters reset to default recommended values. Click Save to apply.');
     setErrorMsg('');
   };
 
@@ -284,7 +284,7 @@ export function SettingsPage({
       ...prev,
       max_buying_power: DEFAULT_CONFIG.max_buying_power,
     }));
-    setSuccessMsg('Had siling modal telah diset semula kepada $100,000 (Lalai). Tekan Simpan untuk menguatkuasakan.');
+    setSuccessMsg('Capital ceiling reset to $100,000 (Default). Click Save to apply.');
     setErrorMsg('');
   };
 
@@ -306,7 +306,7 @@ export function SettingsPage({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors((prev) => ({ ...prev, ...newErrors }));
-      setErrorMsg(newErrors.min_price || newErrors.max_candidates_per_lane || newErrors.rvol_cross || 'Sila betulkan nilai yang tidak sah sebelum menyimpan.');
+      setErrorMsg(newErrors.min_price || newErrors.max_candidates_per_lane || newErrors.rvol_cross || 'Please fix invalid values before saving.');
       return;
     }
 
@@ -333,7 +333,7 @@ export function SettingsPage({
         setOriginalConfig((prev) => ({ ...prev, ...data.config }));
         setUpdatedAt(data.updated_at);
         setUpdatedBy(data.updated_by);
-        setSuccessMsg('Tetapan screener berjaya dikemas kini! Kitaran seterusnya akan menggunakan parameter ini secara dinamik.');
+        setSuccessMsg('Screener settings updated successfully! Next cycle will use these parameters dynamically.');
         setErrors({});
 
         if (typeof window !== 'undefined') {
@@ -346,11 +346,11 @@ export function SettingsPage({
           setAuditLogs(aData.audit || []);
         }
       } else {
-        setErrorMsg(data.error || 'Gagal mengemas kini konfigurasi screener.');
+        setErrorMsg(data.error || 'Failed to update screener configuration.');
       }
     } catch (err) {
       console.error('[SettingsPage] Error saving screener config:', err);
-      setErrorMsg('Ralat komunikasi pelayan semasa menyimpan tetapan.');
+      setErrorMsg('Server communication error while saving settings.');
     } finally {
       setSaving(false);
     }
@@ -363,7 +363,7 @@ export function SettingsPage({
     const nextMode = currentTradingMode === 'SWING' ? 'DAY' : 'SWING';
     if (onToggleTradingMode) {
       await onToggleTradingMode(nextMode);
-      setSuccessMsg(`Mod dagangan berjaya ditukar kepada ${nextMode}.`);
+      setSuccessMsg(`Trading mode successfully switched to ${nextMode}.`);
     } else {
       try {
         setSaving(true);
@@ -374,14 +374,14 @@ export function SettingsPage({
         });
         const data = await res.json();
         if (res.ok) {
-          setSuccessMsg(data.message || `Mod dagangan berjaya ditukar kepada ${nextMode}.`);
+          setSuccessMsg(data.message || `Trading mode successfully switched to ${nextMode}.`);
           if (onRefresh) onRefresh();
           fetchConfig();
         } else {
-          setErrorMsg(data.error || 'Gagal menukar mod dagangan.');
+          setErrorMsg(data.error || 'Failed to switch trading mode.');
         }
       } catch (err) {
-        setErrorMsg('Ralat rangkaian semasa menukar mod dagangan.');
+        setErrorMsg('Network error while switching trading mode.');
       } finally {
         setSaving(false);
       }
@@ -418,7 +418,7 @@ export function SettingsPage({
         setOriginalConfig((prev) => ({ ...prev, ...data.config }));
         setUpdatedAt(data.updated_at);
         setUpdatedBy(data.updated_by);
-        setSuccessMsg('Had siling modal berjaya dikemas kini! Asas saiz posisi Haziq (L2) & had risiko Danial (L3) dikuatkuasakan serta-merta tanpa restart.');
+        setSuccessMsg('Capital ceiling updated successfully! Position sizing and risk audit enforced immediately.');
         setErrors({});
 
         if (typeof window !== 'undefined') {
@@ -431,11 +431,11 @@ export function SettingsPage({
           setAuditLogs(aData.audit || []);
         }
       } else {
-        setErrorMsg(data.error || 'Gagal mengemas kini had siling modal.');
+        setErrorMsg(data.error || 'Failed to update capital ceiling.');
       }
     } catch (err) {
       console.error('[SettingsPage] Error saving capital config:', err);
-      setErrorMsg('Ralat komunikasi pelayan semasa menyimpan tetapan modal.');
+      setErrorMsg('Server communication error while saving capital settings.');
     } finally {
       setSaving(false);
     }
@@ -492,10 +492,10 @@ export function SettingsPage({
             >
               <TuneIcon sx={{ fontSize: 22 }} />
             </Box>
-            Tetapan Sistem &amp; Pengurusan Gerbang
+            System Settings &amp; Gateway Management
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-            Konfigurasi parameter saringan saham L0, had siling modal &amp; risiko, dan kawalan sesi gerbang OpenD.
+            Configure L0 stock screening parameters, capital &amp; risk ceiling, and OpenD gateway session.
           </Typography>
         </Box>
 
@@ -503,7 +503,7 @@ export function SettingsPage({
           <Chip
             size="small"
             icon={<SecurityIcon sx={{ fontSize: '14px !important' }} />}
-            label="Had Sempadan: >= $1.00"
+            label="Boundary Limit: >= $1.00"
             sx={{
               fontWeight: 700,
               backgroundColor: sneatTokens.primary.soft,
@@ -515,7 +515,7 @@ export function SettingsPage({
             id="badgeModalCeilingHeader"
             size="small"
             icon={<AccountBalanceWalletIcon sx={{ fontSize: '14px !important' }} />}
-            label={`Had Siling Modal: ${formatCurrency(originalConfig.max_buying_power ?? 100000)}`}
+            label={`Capital Ceiling: ${formatCurrency(originalConfig.max_buying_power ?? 100000)}`}
             clickable
             onClick={() => handleTabChange(null, 1)}
             sx={{
@@ -621,7 +621,7 @@ export function SettingsPage({
                         Konfigurasi Paginasi Jadual Aktiviti Ejen
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Tetapkan bilangan entri lalai bagi jadual pesanan transaksi di halaman Aktiviti Pasukan Ejen.
+                        Set default row count for the order transaction table in Agent Team Activity page.
                       </Typography>
                     </Box>
                   </Box>
@@ -663,7 +663,7 @@ export function SettingsPage({
 
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 4 }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Nilai semasa: <strong id="displayAgentOrdersPerPage">{config.agent_orders_per_page || 10}</strong> entri per halaman
+                      Current value: <strong id="displayAgentOrdersPerPage">{config.agent_orders_per_page || 10}</strong> rows per page
                     </Typography>
 
                     <Button
@@ -688,13 +688,13 @@ export function SettingsPage({
                           if (!res.ok) {
                             throw new Error(data.error || `HTTP ${res.status}`);
                           }
-                          setSuccessMsg('Konfigurasi paginasi berjaya disimpan.');
+                          setSuccessMsg('Pagination configuration saved successfully.');
                           if (data.config) {
                             setConfig(data.config);
                             setOriginalConfig(data.config);
                           }
                         } catch (err) {
-                          setErrorMsg('Ralat menyimpan konfigurasi paginasi: ' + err.message);
+                          setErrorMsg('Error saving pagination configuration: ' + err.message);
                         } finally {
                           setSaving(false);
                         }
@@ -706,7 +706,7 @@ export function SettingsPage({
                         textTransform: 'none',
                       }}
                     >
-                      Simpan Tetapan Paginasi
+                      Save Pagination Settings
                     </Button>
                   </Box>
                 </CardContent>
@@ -720,7 +720,7 @@ export function SettingsPage({
                     Panduan Paginasi Ejen
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
-                    Konfigurasi ini disegerakkan ke pangkalan data SQLite <code>screener_config.sqlite</code>. Nilai ini menjadi bilangan entri lalai pada komponen jadual <strong>L1 -&gt; L4: Aktiviti Pasukan Ejen</strong>.
+                    This configuration syncs to SQLite database <code>screener_config.sqlite</code>. It serves as default rows in the table for <strong>L1 -&gt; L4: Agent Team Activity</strong>.
                   </Typography>
                 </CardContent>
               </Card>
@@ -777,7 +777,7 @@ export function SettingsPage({
             {/* Main Form Column (Left - 7.5 col) */}
             <Grid item xs={12} md={7} lg={7.5}>
               <Box component="form" onSubmit={handleSaveCapital} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                {/* Card 0: Mod Dagangan Aktif (TRADING_MODE: DAY vs SWING) - HOM-351 */}
+                {/* Card 0: Active Trading Mode (TRADING_MODE: DAY vs SWING) - HOM-351 */}
                 <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
                   <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
@@ -799,16 +799,16 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                            Mod Dagangan Aktif (TRADING_MODE)
+                            Active Trading Mode (TRADING_MODE)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                            Peralihan serta-merta antara Intraday (DAY) dan Multi-Day (SWING)
+                            Instant switch between Intraday (DAY) and Multi-Day (SWING)
                           </Typography>
                         </Box>
                       </Box>
                       <Chip
                         id="chip-settings-trading-mode"
-                        label={currentTradingMode === 'SWING' ? 'MOD: SWING (MULTI-DAY)' : 'MOD: DAY (INTRADAY)'}
+                        label={currentTradingMode === 'SWING' ? 'MODE: SWING (MULTI-DAY)' : 'MODE: DAY (INTRADAY)'}
                         sx={{
                           backgroundColor: currentTradingMode === 'SWING' ? 'rgba(105, 108, 255, 0.16)' : 'rgba(3, 195, 236, 0.16)',
                           color: currentTradingMode === 'SWING' ? '#696cff' : '#03c3ec',
@@ -834,16 +834,16 @@ export function SettingsPage({
                           }}
                         >
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#03c3ec', mb: 0.5 }}>
-                            Mod DAY (Intraday)
+                            DAY Mode (Intraday)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
-                            &bull; <strong>Had Risiko:</strong> 2.0% ekuiti per dagangan (Maks $2,000)
+                            &bull; <strong>Risk Limit:</strong> 2.0% equity per trade (Max $2,000)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
-                            &bull; <strong>Interval Pemantauan:</strong> Setiap 5 minit (300s) semasa pasaran aktif
+                            &bull; <strong>Monitoring Interval:</strong> Every 5 minutes (300s) during active market
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
-                            &bull; <strong>Saringan:</strong> Momentum &amp; VCP Intraday (5-min/15-min)
+                            &bull; <strong>Screening:</strong> Momentum &amp; VCP Intraday (5-min/15-min)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
                             &bull; <strong>Penutupan:</strong> Wajib square-off 15:45 NY (Tiada pegangan malam)
@@ -861,16 +861,16 @@ export function SettingsPage({
                           }}
                         >
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#696cff', mb: 0.5 }}>
-                            Mod SWING (Multi-Day)
+                            SWING Mode (Multi-Day)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
-                            &bull; <strong>Had Risiko:</strong> 1.0% ekuiti per dagangan (Maks $1,000)
+                            &bull; <strong>Risk Limit:</strong> 1.0% equity per trade (Max $1,000)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
                             &bull; <strong>Interval Pemantauan:</strong> Kitaran 4H / Harian (09:00, 13:00, 16:30 NY) + semakan adaptif 1H
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
-                            &bull; <strong>Saringan:</strong> Penjejakan Trend EMA20 / 50-day SMA harian
+                            &bull; <strong>Screening:</strong> Daily EMA20 / 50-day SMA trend tracking
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
                             &bull; <strong>Pegangan:</strong> Pegangan rentas hari dibenarkan dengan trailing stop
@@ -898,14 +898,14 @@ export function SettingsPage({
                         }}
                       >
                         {isTogglingTradingMode || saving
-                          ? 'Menukar Mod...'
-                          : (currentTradingMode === 'SWING' ? 'Tukar ke Mod DAY' : 'Tukar ke Mod SWING')}
+                          ? 'Switching Mode...'
+                          : (currentTradingMode === 'SWING' ? 'Switch to DAY Mode' : 'Switch to SWING Mode')}
                       </Button>
                     </Box>
                   </CardContent>
                 </Card>
 
-                {/* Card 1: Had Siling Modal Maksimum (Limit Buying Power) */}
+                {/* Card 1: Maximum Capital Ceiling (Limit Buying Power) */}
                 <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5 }}>
                   <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
@@ -927,16 +927,16 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1.05rem', color: 'text.primary' }}>
-                            Had Siling Modal Maksimum (Limit Buying Power)
+                            Maximum Capital Ceiling (Limit Buying Power)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Had siling modal efektif bagi pengiraan saiz posisi Haziq (L2) dan pengauditan had risiko Danial (L3)
+                            Effective capital ceiling for Haziq (L2) position sizing and Danial (L3) risk audit
                           </Typography>
                         </Box>
                       </Box>
                       <Chip
                         size="small"
-                        label={`Semasa: ${formatCurrency(config.max_buying_power ?? 100000)}`}
+                        label={`Current: ${formatCurrency(config.max_buying_power ?? 100000)}`}
                         sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
                       />
                     </Box>
@@ -950,7 +950,7 @@ export function SettingsPage({
                       value={config.max_buying_power ?? 100000}
                       onChange={(e) => handleFieldChange('max_buying_power', e.target.value)}
                       error={Boolean(errors.max_buying_power)}
-                      helperText={errors.max_buying_power || 'Had keselamatan minima $500.00. Walaupun baki akaun broker bernilai jutaan dolar, sistem ejen hanya akan menggunakan had siling ini sebagai asas modal efektif.'}
+                      helperText={errors.max_buying_power || 'Safety limit: minimum $500.00. Even if broker account balance is millions of dollars, agent system only uses this ceiling as effective capital.'}
                       InputProps={{
                         startAdornment: <InputAdornment position="start" sx={{ color: 'text.secondary', fontWeight: 600 }}>$</InputAdornment>,
                         endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>USD</InputAdornment>,
@@ -1007,7 +1007,7 @@ export function SettingsPage({
                           },
                         }}
                       >
-                        {saving ? 'Menyimpan...' : 'Simpan Had Modal'}
+                        {saving ? 'Saving...' : 'Save Capital Limit'}
                       </Button>
                       <Button
                         id="btnResetCapitalDefaults"
@@ -1056,7 +1056,7 @@ export function SettingsPage({
                       </Box>
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                          Status Had Modal Semasa
+                          Current Capital Ceiling Status
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                           Siling peruntukan aktif dalam runtime pasaran
@@ -1076,7 +1076,7 @@ export function SettingsPage({
                         }}
                       >
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          Had Siling Modal:
+                          Capital Ceiling:
                         </Typography>
                         <Typography id="displayMaxBuyingPower" variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
                           {formatCurrency(originalConfig.max_buying_power ?? 100000)}
@@ -1142,14 +1142,14 @@ export function SettingsPage({
                       <Divider sx={{ my: 0.5 }} />
 
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Kemas Kini Terakhir:</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Last Updated:</Typography>
                         <Typography variant="caption" sx={{ fontWeight: 600 }}>
                           {formatTimestamp(updatedAt)}
                         </Typography>
                       </Box>
 
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Dikemas kini Oleh:</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Updated By:</Typography>
                         <Chip
                           size="small"
                           label={updatedBy || 'system'}
@@ -1177,7 +1177,7 @@ export function SettingsPage({
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
-                      Had siling modal ini bertindak sebagai pemisah keselamatan perisian (air gap) terhadap jumlah baki tunai atau kemudahan margin akaun sebenar Moomoo OpenAPI, membendung pendedahan risiko bot secara menyeluruh.
+                      This capital ceiling acts as a software safety air gap against real cash or margin balances on Moomoo OpenAPI, bounding overall bot risk exposure.
                     </Typography>
                   </CardContent>
                 </Card>
@@ -1243,8 +1243,8 @@ export function SettingsPage({
                               </Box>
                               <Typography variant="caption" sx={{ color: 'text.primary', display: 'block', lineHeight: 1.4 }}>
                                 {parsedNew.max_buying_power !== undefined
-                                  ? `Had Modal: ${formatCurrency(parsedNew.max_buying_power)}`
-                                  : `Harga: $${parsedNew.min_price} | Vol: ${Number(parsedNew.min_volume || 0).toLocaleString()} | Lorong: ${parsedNew.max_candidates_per_lane || 5}`}
+                                  ? `Capital Limit: ${formatCurrency(parsedNew.max_buying_power)}`
+                                  : `Price: $${parsedNew.min_price} | Vol: ${Number(parsedNew.min_volume || 0).toLocaleString()} | Lane: ${parsedNew.max_candidates_per_lane || 5}`}
                               </Typography>
                             </Box>
                           );
@@ -1322,16 +1322,16 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
-                            1. Harga Minimum Saham (MIN_PRICE)
+                            1. Minimum Stock Price (MIN_PRICE)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Penapisan kaunter saham sen &amp; penny stock berisiko manipulasi tinggi
+                            Filter out sub-dollar &amp; high-risk penny stocks
                           </Typography>
                         </Box>
                       </Box>
                       <Chip
                         size="small"
-                        label={`Semasa: $${Number(config.min_price).toFixed(2)}`}
+                        label={`Current: $${Number(config.min_price).toFixed(2)}`}
                         sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
                       />
                     </Box>
@@ -1345,7 +1345,7 @@ export function SettingsPage({
                       value={config.min_price}
                       onChange={(e) => handleFieldChange('min_price', e.target.value)}
                       error={Boolean(errors.min_price)}
-                      helperText={errors.min_price || 'Had keselamatan: Harga minima disekat daripada sebarang nilai di bawah $1.00. Julat sah: $1.00 - $10,000.00.'}
+                      helperText={errors.min_price || 'Safety limit: Minimum price locked above $1.00. Valid range: $1.00 - $10,000.00.'}
                       InputProps={{
                         startAdornment: <InputAdornment position="start" sx={{ color: 'text.secondary', fontWeight: 600 }}>$</InputAdornment>,
                         endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>USD</InputAdornment>,
@@ -1403,13 +1403,13 @@ export function SettingsPage({
                             2. Permodalan Pasaran Minimum (MIN_MARKET_CAP)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Menapis syarikat mikro &amp; shell companies yang tidak mempunyai kecairan kukuh
+                            Filter out micro-cap &amp; shell companies lacking liquidity
                           </Typography>
                         </Box>
                       </Box>
                       <Chip
                         size="small"
-                        label={`Semasa: ${formatCurrency(config.min_market_cap)}`}
+                        label={`Current: ${formatCurrency(config.min_market_cap)}`}
                         sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
                       />
                     </Box>
@@ -1481,13 +1481,13 @@ export function SettingsPage({
                             3. Volum Harian Purata 20-Hari Minimum (MIN_VOLUME ADV20)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Kecairan pasaran harian mencukupi untuk elak slippage pesanan
+                            Sufficient daily liquidity to prevent execution slippage
                           </Typography>
                         </Box>
                       </Box>
                       <Chip
                         size="small"
-                        label={`Semasa: ${Number(config.min_volume).toLocaleString()} unit`}
+                        label={`Current: ${Number(config.min_volume).toLocaleString()} units`}
                         sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
                       />
                     </Box>
@@ -1501,9 +1501,9 @@ export function SettingsPage({
                       value={config.min_volume}
                       onChange={(e) => handleFieldChange('min_volume', e.target.value)}
                       error={Boolean(errors.min_volume)}
-                      helperText={errors.min_volume || 'Purata bilangan saham didagangkan setiap hari (ADV20). Julat sah: 50,000 hingga 1,000,000,000 saham.'}
+                      helperText={errors.min_volume || 'Average daily trading volume (ADV20). Valid range: 50,000 to 1,000,000,000 shares.'}
                       InputProps={{
-                        endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>saham / hari</InputAdornment>,
+                        endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>shares / day</InputAdornment>,
                         inputProps: { min: 50000.0, max: 1000000000.0, step: 50000.0 },
                       }}
                     />
@@ -1564,7 +1564,7 @@ export function SettingsPage({
                       </Box>
                       <Chip
                         size="small"
-                        label={`Semasa: ${config.min_rvol} - ${config.max_rvol}`}
+                        label={`Current: ${config.min_rvol} - ${config.max_rvol}`}
                         sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
                       />
                     </Box>
@@ -1581,7 +1581,7 @@ export function SettingsPage({
                           value={config.min_rvol}
                           onChange={(e) => handleFieldChange('min_rvol', e.target.value)}
                           error={Boolean(errors.min_rvol || errors.rvol_cross)}
-                          helperText={errors.min_rvol || 'Had bawah (cth: 0.50). Julat sah: 0.0 - 50.0.'}
+                          helperText={errors.min_rvol || 'Lower limit (e.g. 0.50). Valid range: 0.0 - 50.0.'}
                           InputProps={{
                             inputProps: { min: 0.0, max: 50.0, step: 0.1 },
                           }}
@@ -1598,7 +1598,7 @@ export function SettingsPage({
                           value={config.max_rvol}
                           onChange={(e) => handleFieldChange('max_rvol', e.target.value)}
                           error={Boolean(errors.max_rvol || errors.rvol_cross)}
-                          helperText={errors.max_rvol || errors.rvol_cross || 'Had atas (cth: 20.0). Julat sah: 0.1 - 100.0.'}
+                          helperText={errors.max_rvol || errors.rvol_cross || 'Upper limit (e.g. 20.0). Valid range: 0.1 - 100.0.'}
                           InputProps={{
                             inputProps: { min: 0.1, max: 100.0, step: 0.5 },
                           }}
@@ -1652,16 +1652,16 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
-                            5. Had Calon Per Lorong L0 (MAX_CANDIDATES_PER_LANE)
+                            5. Candidate Limit Per L0 Lane (MAX_CANDIDATES_PER_LANE)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Had siling calon Stage 3 K-line enrichment bagi lorong MOMENTUM &amp; SETUP
+                            Ceiling for Stage 3 K-line enrichment candidates across MOMENTUM &amp; SETUP lanes
                           </Typography>
                         </Box>
                       </Box>
                       <Chip
                         size="small"
-                        label={`Semasa: ${config.max_candidates_per_lane ?? 5} kaunter/lorong`}
+                        label={`Current: ${config.max_candidates_per_lane ?? 5} stocks/lane`}
                         sx={{ fontWeight: 600, backgroundColor: 'action.hover', borderRadius: 1.5, flexShrink: 0, display: { xs: 'none', sm: 'inline-flex' } }}
                       />
                     </Box>
@@ -1675,9 +1675,9 @@ export function SettingsPage({
                       value={config.max_candidates_per_lane ?? 5}
                       onChange={(e) => handleFieldChange('max_candidates_per_lane', e.target.value)}
                       error={Boolean(errors.max_candidates_per_lane)}
-                      helperText={errors.max_candidates_per_lane || 'Perlindungan kuota Moomoo OpenAPI (100 simbol / 30 hari rolling). Dual-lane: 2 x had = maks calon per imbasan. Julat sah: 1 hingga 20 kaunter.'}
+                      helperText={errors.max_candidates_per_lane || 'Moomoo OpenAPI quota protection (100 symbols / 30-day rolling). Dual-lane: 2 x limit = max candidates per scan. Valid range: 1 to 20 stocks.'}
                       InputProps={{
-                        endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>kaunter / lorong</InputAdornment>,
+                        endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>stocks / lane</InputAdornment>,
                         inputProps: { min: 1, max: 20, step: 1 },
                       }}
                     />
@@ -1687,9 +1687,9 @@ export function SettingsPage({
                         Preset Lorong:
                       </Typography>
                       {[
-                        { label: 'Konservatif (3 kaunter / 6 maks)', val: 3 },
-                        { label: 'Lalai (5 kaunter / 10 maks)', val: 5 },
-                        { label: 'Agresif (10 kaunter / 20 maks)', val: 10 },
+                        { label: 'Conservative (3 stocks / 6 max)', val: 3 },
+                        { label: 'Default (5 stocks / 10 max)', val: 5 },
+                        { label: 'Aggressive (10 stocks / 20 max)', val: 10 },
                       ].map((p) => (
                         <Chip
                           key={p.label}
@@ -1729,7 +1729,7 @@ export function SettingsPage({
                           },
                         }}
                       >
-                        {saving ? 'Menyimpan...' : 'Simpan Tetapan Screener'}
+                        {saving ? 'Saving...' : 'Save Screener Settings'}
                       </Button>
                       <Button
                         id="btnResetDefaults"
@@ -1778,10 +1778,10 @@ export function SettingsPage({
                       </Box>
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                          Status Konfigurasi Semasa
+                          Current Configuration Status
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                          Parameter penapisan saham fizikal di L0
+                          Physical stock filtering parameters in L0
                         </Typography>
                       </Box>
                     </Box>
@@ -1798,7 +1798,7 @@ export function SettingsPage({
                         }}
                       >
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          Harga Min:
+                          Min Price:
                         </Typography>
                         <Typography id="displayMinPrice" variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
                           ${Number(originalConfig.min_price).toFixed(2)}
@@ -1873,21 +1873,21 @@ export function SettingsPage({
                           Calon Per Lorong:
                         </Typography>
                         <Typography id="displayMaxCandidatesPerLane" variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                          {originalConfig.max_candidates_per_lane ?? 5} kaunter
+                          {originalConfig.max_candidates_per_lane ?? 5} stocks
                         </Typography>
                       </Box>
 
                       <Divider sx={{ my: 0.5 }} />
 
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Kemas Kini Terakhir:</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Last Updated:</Typography>
                         <Typography variant="caption" sx={{ fontWeight: 600 }}>
                           {formatTimestamp(updatedAt)}
                         </Typography>
                       </Box>
 
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Dikemas kini Oleh:</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Updated By:</Typography>
                         <Chip
                           size="small"
                           label={updatedBy || 'system'}
@@ -1915,7 +1915,7 @@ export function SettingsPage({
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
-                      Broker Moomoo mengehadkan K-line sejarah kepada <strong>100 simbol unik / 30 hari rolling</strong>. Had siling maksimum 20 kaunter per lorong (40 calon dwilorong) memastikan bajet kuota harian (~4-5 simbol baharu) terlindung daripada keletihan mendadak.
+                      Moomoo broker limits historical K-lines to <strong>100 unique symbols / 30 rolling days</strong>. The maximum ceiling of 20 stocks per lane (40 dual-lane candidates) protects daily quota budget (~4-5 new symbols) against exhaustion.
                     </Typography>
                   </CardContent>
                 </Card>
@@ -1933,11 +1933,11 @@ export function SettingsPage({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
                       <SecurityIcon sx={{ color: sneatTokens.warning.main, fontSize: 22 }} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.warning.main }}>
-                        Had Keselamatan Mandatori ($1.00)
+                        Mandatory Safety Limit ($1.00)
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
-                      Berdasarkan piawaian perlindungan modal institutional, harga minimum saringan disekat daripada sebarang nilai di bawah <strong>$1.00</strong>. Sebarang cubaan menetapkan harga &lt; $1.00 akan disekat serta-merta oleh backend validation.
+                      Based on institutional capital protection standards, the minimum screening price is locked above <strong>$1.00</strong>. Sebarang cubaan menetapkan harga &lt; $1.00 akan disekat serta-merta oleh backend validation.
                     </Typography>
                   </CardContent>
                 </Card>
@@ -2002,7 +2002,7 @@ export function SettingsPage({
                                 </Typography>
                               </Box>
                               <Typography variant="caption" sx={{ color: 'text.primary', display: 'block', lineHeight: 1.4 }}>
-                                Harga: ${parsedNew.min_price} | Cap: {formatCurrency(parsedNew.min_market_cap)} | Vol: {Number(parsedNew.min_volume || 0).toLocaleString()} | RVOL: {parsedNew.min_rvol}-{parsedNew.max_rvol} | Lorong: {parsedNew.max_candidates_per_lane || 5}
+                                Price: ${parsedNew.min_price} | Cap: {formatCurrency(parsedNew.min_market_cap)} | Vol: {Number(parsedNew.min_volume || 0).toLocaleString()} | RVOL: {parsedNew.min_rvol}-{parsedNew.max_rvol} | Lane: {parsedNew.max_candidates_per_lane || 5}
                               </Typography>
                             </Box>
                           );

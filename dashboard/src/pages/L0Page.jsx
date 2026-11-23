@@ -191,7 +191,7 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 letterSpacing: -0.4,
               }}
             >
-              L0: Saringan &amp; Watchlist Dwi-Lorong
+              L0: Stock Screening &amp; Dual-Lane Watchlist
             </Typography>
             <Typography
               variant="body2"
@@ -202,7 +202,7 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 lineHeight: 1.4,
               }}
             >
-              Seni bina saringan hybrid (L0 Screener): penapisan progresif corong 5-peringkat dan pemantauan aktif kaunter MOMENTUM &amp; SETUP.
+              Hybrid screening architecture (L0 Screener): progressive 5-stage funnel filtering and active MOMENTUM &amp; SETUP stock monitoring.
             </Typography>
           </Box>
         </Box>
@@ -252,8 +252,8 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
           <Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               {isSwingMode
-                ? 'Radar Pemantauan Berjadual & Adaptif Top-Down L0 (Swing Trading)'
-                : 'Countdown Imbasan L0 Screener (Kitaran 5 Minit / 300s)'}
+                ? 'Scheduled & Adaptive Top-Down L0 Radar (Swing Trading)'
+                : 'L0 Screener Scan Countdown (5-Minute / 300s Cycle)'}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mt: 0.2 }}>
               <Typography
@@ -271,11 +271,11 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 {isSwingMode ? '09:00, 13:00, 16:30 NY' : countdownFormatted}
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                {isSwingMode ? 'jadual struktur 4H/Daily + pemicu 1H zon minat' : 'sehingga kemas kini senarai pantau seterusnya'}
+                {isSwingMode ? '4H/Daily structure schedule + 1H zone trigger' : 'until next watchlist refresh'}
               </Typography>
             </Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.4, display: 'block' }}>
-              Cap masa semasa: <strong>{dataAsOf}</strong> • Status pasaran: <strong>{marketStatus}</strong> ({isMarketOpen ? 'Dibuka' : 'Ditutup'}) • Mod: <strong>{tradingMode}</strong>
+              Current timestamp: <strong>{dataAsOf}</strong> • Market status: <strong>{marketStatus}</strong> ({isMarketOpen ? 'Open' : 'Closed'}) • Mode: <strong>{tradingMode}</strong>
             </Typography>
           </Box>
         </Box>
@@ -283,10 +283,10 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
         <Box sx={{ width: { xs: '100%', md: 260 }, display: 'flex', flexDirection: 'column', gap: 0.8 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-              {isSwingMode ? 'Status Radar Top-Down' : 'Kemajuan kitaran imbasan'}
+              {isSwingMode ? 'Top-Down Radar Status' : 'Scan cycle progress'}
             </Typography>
             <Typography variant="caption" sx={{ color: isSwingMode ? '#696cff' : sneatTokens.warning.main, fontWeight: 700 }}>
-              {isSwingMode ? 'AKTIF (4H / 1H)' : `${countdownProgressPct}%`}
+              {isSwingMode ? 'ACTIVE (4H / 1H)' : `${countdownProgressPct}%`}
             </Typography>
           </Box>
           <LinearProgress
@@ -350,10 +350,10 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    JUMLAH KAUNTER
+                    TOTAL STOCKS
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.2 }}>
-                    Melepasi corong 5-peringkat
+                    Passed 5-stage funnel
                   </Typography>
                 </Box>
               </Box>
@@ -377,7 +377,7 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                   {totalCount}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                  Daripada ribuan saham US
+                  From thousands of US stocks
                 </Typography>
               </Box>
               <LinearProgress
@@ -438,10 +438,10 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    LORONG MOMENTUM
+                    MOMENTUM LANE
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.2 }}>
-                    Kekuatan relatif &amp; volum tinggi
+                    Relative strength &amp; high volume
                   </Typography>
                 </Box>
               </Box>
@@ -465,7 +465,7 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                   {momentumCount}
                 </Typography>
                 <Typography variant="caption" sx={{ color: sneatTokens.primary.main, fontWeight: 700 }}>
-                  {momentumPercent}% daripada senarai
+                  {momentumPercent}% of watchlist
                 </Typography>
               </Box>
               <LinearProgress
@@ -526,10 +526,10 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    LORONG SETUP
+                    SETUP LANE
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.2 }}>
-                    Pullback teknikal &amp; asas sokongan
+                    Technical pullback &amp; base support
                   </Typography>
                 </Box>
               </Box>
@@ -553,7 +553,7 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
                   {setupCount}
                 </Typography>
                 <Typography variant="caption" sx={{ color: sneatTokens.warning.main, fontWeight: 700 }}>
-                  {setupPercent}% daripada senarai
+                  {setupPercent}% of watchlist
                 </Typography>
               </Box>
               <LinearProgress
