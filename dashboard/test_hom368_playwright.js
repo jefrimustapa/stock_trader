@@ -38,6 +38,7 @@ async function runSuite() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
+    ignoreHTTPSErrors: true,
   });
 
   const page = await context.newPage();
