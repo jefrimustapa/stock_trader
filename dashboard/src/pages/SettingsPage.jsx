@@ -549,30 +549,30 @@ export function SettingsPage({
             id="tab-screener-config"
             icon={<TuneIcon sx={{ fontSize: 18 }} />}
             iconPosition="start"
-            label="Parameter Screener L0"
+            label="L0 Screener Parameters"
           />
           <Tab
             id="tab-capital-risk"
             icon={<AccountBalanceWalletIcon sx={{ fontSize: 18 }} />}
             iconPosition="start"
-            label="Pengurusan Modal &amp; Risiko"
+            label="Capital &amp; Risk Management"
           />
           <Tab
             id="tab-opend-gateway"
             icon={<SettingsIcon sx={{ fontSize: 18 }} />}
             iconPosition="start"
-            label="Pengurusan Gerbang OpenD"
+            label="OpenD Gateway Management"
           />
           <Tab
             id="tab-agent-display"
             icon={<ViewListIcon sx={{ fontSize: 18 }} />}
             iconPosition="start"
-            label="Paparan Aktiviti Ejen"
+            label="Agent Activity Display"
           />
         </Tabs>
       </Box>
 
-      {/* Tab 3: Paparan Aktiviti Ejen (Paginasi) */}
+      {/* Tab 3: Agent Activity Display (Pagination) */}
       {activeTab === 3 && (
         <Box id="tab-panel-display" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 0.5 }}>
           {successMsg && (
@@ -618,7 +618,7 @@ export function SettingsPage({
                     </Box>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        Konfigurasi Paginasi Jadual Aktiviti Ejen
+                        Agent Activity Table Pagination Configuration
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Set default row count for the order transaction table in Agent Team Activity page.
@@ -629,7 +629,7 @@ export function SettingsPage({
                   <Divider sx={{ my: 2 }} />
 
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                    Bilangan Entri Per Halaman (Pilihan: 5, 10, 25, 50):
+                    Entries Per Page (Options: 5, 10, 25, 50):
                   </Typography>
 
                   <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}>
@@ -639,7 +639,7 @@ export function SettingsPage({
                         <Chip
                           key={pageSize}
                           id={`chip-orders-page-${pageSize}`}
-                          label={`${pageSize} entri / halaman`}
+                          label={`${pageSize} entries / page`}
                           clickable
                           onClick={() => setConfig({ ...config, agent_orders_per_page: pageSize })}
                           sx={{
@@ -736,7 +736,7 @@ export function SettingsPage({
         </Box>
       )}
 
-      {/* Tab 1: Pengurusan Modal & Risiko */}
+      {/* Tab 1: Capital & Risk Management */}
       {activeTab === 1 && (
         <Box id="tab-panel-capital" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 0.5 }}>
           {/* Alert Notifications */}
@@ -960,14 +960,14 @@ export function SettingsPage({
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                        Preset Siling Modal:
+                        Capital Ceiling Presets:
                       </Typography>
                       {[
-                        { label: '$10,000 (Ujian Kecil)', val: 10000 },
-                        { label: '$25,000 (PDT Minima)', val: 25000 },
-                        { label: '$50,000 (Konservatif)', val: 50000 },
-                        { label: '$100,000 (Lalai)', val: 100000 },
-                        { label: '$500,000 (Institusi)', val: 500000 },
+                        { label: '$10,000 (Small Test)', val: 10000 },
+                        { label: '$25,000 (PDT Minimum)', val: 25000 },
+                        { label: '$50,000 (Conservative)', val: 50000 },
+                        { label: '$100,000 (Default)', val: 100000 },
+                        { label: '$500,000 (Institutional)', val: 500000 },
                       ].map((p) => (
                         <Chip
                           key={p.label}
@@ -1025,7 +1025,7 @@ export function SettingsPage({
                           borderRadius: 2,
                         }}
                       >
-                        Set Semula Modal Lalai
+                        Reset Default Capital
                       </Button>
                     </Box>
                   </CardContent>
@@ -1059,7 +1059,7 @@ export function SettingsPage({
                           Current Capital Ceiling Status
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                          Siling peruntukan aktif dalam runtime pasaran
+                          Active allocation ceiling in market runtime
                         </Typography>
                       </Box>
                     </Box>
@@ -1114,7 +1114,7 @@ export function SettingsPage({
                         }}
                       >
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          Siling Minima (BVA):
+                          Minimum Ceiling (BVA):
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           $500.00
@@ -1132,7 +1132,7 @@ export function SettingsPage({
                         }}
                       >
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          Siling Maksima (BVA):
+                          Maximum Ceiling (BVA):
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           $100,000,000.00 ($100M)
@@ -1355,13 +1355,13 @@ export function SettingsPage({
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                        Preset Pantas:
+                        Quick Presets:
                       </Typography>
                       {[
-                        { label: '$1.00 (Sempadan)', val: 1.0 },
+                        { label: '$1.00 (Boundary)', val: 1.0 },
                         { label: '$2.00 (Small Cap)', val: 2.0 },
                         { label: '$5.00 (Standard)', val: 5.0 },
-                        { label: '$10.00 (Lalai)', val: 10.0 },
+                        { label: '$10.00 (Default)', val: 10.0 },
                         { label: '$15.00 (Mid/Large)', val: 15.0 },
                       ].map((p) => (
                         <Chip
@@ -1400,7 +1400,7 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
-                            2. Permodalan Pasaran Minimum (MIN_MARKET_CAP)
+                            2. Minimum Market Capitalization (MIN_MARKET_CAP)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                             Filter out micro-cap &amp; shell companies lacking liquidity
@@ -1423,7 +1423,7 @@ export function SettingsPage({
                       value={config.min_market_cap}
                       onChange={(e) => handleFieldChange('min_market_cap', e.target.value)}
                       error={Boolean(errors.min_market_cap)}
-                      helperText={errors.min_market_cap || 'Nilai dalam USD penuh (cth: $1,000,000,000 = 1B). Julat sah: $10,000,000 ($10M) hingga $10,000,000,000,000 ($10T).'}
+                      helperText={errors.min_market_cap || 'Full USD value (e.g. $1,000,000,000 = 1B). Valid range: $10,000,000 ($10M) to $10,000,000,000,000 ($10T).'}
                       InputProps={{
                         startAdornment: <InputAdornment position="start" sx={{ color: 'text.secondary', fontWeight: 600 }}>$</InputAdornment>,
                         endAdornment: <InputAdornment position="end" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>USD</InputAdornment>,
@@ -1433,12 +1433,12 @@ export function SettingsPage({
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                        Preset Cap:
+                        Cap Presets:
                       </Typography>
                       {[
                         { label: '$100M (Micro)', val: 100000000.0 },
                         { label: '$300M (Small)', val: 300000000.0 },
-                        { label: '$1B (Lalai - Mid)', val: 1000000000.0 },
+                        { label: '$1B (Default - Mid)', val: 1000000000.0 },
                         { label: '$2B (Mid Cap)', val: 2000000000.0 },
                         { label: '$10B (Large Cap)', val: 10000000000.0 },
                       ].map((p) => (
@@ -1478,7 +1478,7 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
-                            3. Volum Harian Purata 20-Hari Minimum (MIN_VOLUME ADV20)
+                            3. Minimum 20-Day Average Daily Volume (MIN_VOLUME ADV20)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                             Sufficient daily liquidity to prevent execution slippage
@@ -1510,12 +1510,12 @@ export function SettingsPage({
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                        Preset Volum:
+                        Volume Presets:
                       </Typography>
                       {[
                         { label: '100k', val: 100000.0 },
                         { label: '500k', val: 500000.0 },
-                        { label: '1M (Lalai)', val: 1000000.0 },
+                        { label: '1M (Default)', val: 1000000.0 },
                         { label: '2M', val: 2000000.0 },
                         { label: '5M (Ultra Liquid)', val: 5000000.0 },
                       ].map((p) => (
@@ -1555,10 +1555,10 @@ export function SettingsPage({
                         </Box>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
-                            4. Julat Nisbah Volum Relatif (MIN_RVOL &amp; MAX_RVOL)
+                            4. Relative Volume Ratio Range (MIN_RVOL &amp; MAX_RVOL)
                           </Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Mengukur lonjakan aktiviti institusi (RVOL &gt; 1.0) berbanding purata biasa
+                            Measures institutional activity surge (RVOL &gt; 1.0) versus standard average
                           </Typography>
                         </Box>
                       </Box>
@@ -1747,7 +1747,7 @@ export function SettingsPage({
                           borderRadius: 2,
                         }}
                       >
-                        Set Semula Lalai
+                        Reset Default
                       </Button>
                     </Box>
                   </CardContent>
@@ -1852,7 +1852,7 @@ export function SettingsPage({
                         }}
                       >
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          Julat RVOL:
+                          RVOL Range:
                         </Typography>
                         <Typography id="displayRvolRange" variant="body2" sx={{ fontWeight: 700 }}>
                           {originalConfig.min_rvol} - {originalConfig.max_rvol}

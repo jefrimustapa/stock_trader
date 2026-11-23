@@ -203,7 +203,7 @@ async function main() {
     });
 
     check('OpendPage elements and Seksyen 3.5.B Blueprint controls are present in bundle', () => {
-      assert.ok(bundleText.includes('Pengurusan Gerbang OpenD'));
+      assert.ok(bundleText.includes('OpenD Gateway Management') || bundleText.includes('Pengurusan Gerbang OpenD'));
       assert.ok(bundleText.includes('Seksyen 3.5.B Blueprint'));
       assert.ok(bundleText.includes('Sign-Out OpenD Session') || bundleText.includes('Sign-Out Sesi OpenD'));
       assert.ok(bundleText.includes('accSelect'));
