@@ -1145,7 +1145,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                     }}
                     title="View all candles (Fit All)"
                   >
-                    Semua
+                    All
                   </Button>
                   <Button
                     onClick={handleZoomIn}
@@ -1166,7 +1166,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Zum Masuk (+)"
+                    title="Zoom In (+)"
                   >
                     +
                   </Button>
@@ -1189,7 +1189,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Zum Keluar (-)"
+                    title="Zoom Out (-)"
                   >
                     -
                   </Button>

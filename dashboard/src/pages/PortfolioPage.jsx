@@ -587,12 +587,12 @@ export function PortfolioPage({ onNavigate }) {
                         <Tooltip
                           title={
                             pos.source === 'AGENT_PIPELINE'
-                              ? `Source: Pipeline Agent | Cycle: ${pos.cycle_id || '-'} | Order: ${pos.order_id || '-'}`
+                              ? `Source: Agent Pipeline | Cycle: ${pos.cycle_id || '-'} | Order: ${pos.order_id || '-'}`
                               : pos.source === 'BROKER_IMPORT'
-                              ? `Punca: Import Pesanan Broker OpenD | Order: ${pos.order_id || '-'}`
+                              ? `Source: OpenD Broker Order Import | Order: ${pos.order_id || '-'}`
                               : pos.source === 'POSITION_RECONCILED'
-                              ? `Punca: Rekonsiliasi Automatik Posisi OpenD | Audit ID: ${pos.order_id || '-'}`
-                              : `Punca: Rekonsiliasi Posisi OpenD | Audit ID: ${pos.order_id || '-'}`
+                              ? `Source: Automatic OpenD Position Reconciliation | Audit ID: ${pos.order_id || '-'}`
+                              : `Source: OpenD Position Reconciliation | Audit ID: ${pos.order_id || '-'}`
                           }
                           arrow
                         >
@@ -600,10 +600,10 @@ export function PortfolioPage({ onNavigate }) {
                             size="small"
                             label={
                               pos.source === 'AGENT_PIPELINE'
-                                ? 'Ejen'
+                                ? 'Agent'
                                 : pos.source === 'BROKER_IMPORT'
                                 ? 'Broker / Manual'
-                                : 'Rekonsiliasi'
+                                : 'Reconciliation'
                             }
                             sx={{
                               fontWeight: 700,

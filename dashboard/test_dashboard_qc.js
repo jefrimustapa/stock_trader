@@ -222,13 +222,13 @@ async function main() {
     });
 
     check('WatchlistPage dual-lane table and headers are present in bundle', () => {
-      assert.ok(bundleText.includes('Watchlist Saham Aktif Dwi-Lorong'));
-      assert.ok(bundleText.includes('LORONG MOMENTUM'));
-      assert.ok(bundleText.includes('LORONG SETUP'));
+      assert.ok(bundleText.includes('Watchlist Saham Aktif Dwi-Lorong') || bundleText.includes('Dual-Lane Watchlist') || bundleText.includes('Active Dual-Lane'));
+      assert.ok(bundleText.includes('MOMENTUM LANE') || bundleText.includes('LORONG MOMENTUM'));
+      assert.ok(bundleText.includes('SETUP LANE') || bundleText.includes('LORONG SETUP'));
       assert.ok(bundleText.includes('ADV 20 (M)') || bundleText.includes('ADV20'));
       assert.ok(bundleText.includes('RS vs SPY'));
       assert.ok(bundleText.includes('RVOL 15m') || bundleText.includes('RVOL'));
-      assert.ok(bundleText.includes('Jarak 52W High'));
+      assert.ok(bundleText.includes('52W High Dist') || bundleText.includes('Jarak 52W High'));
     });
 
     check('Layout sidebar elements and standard MUI practice are verified in bundle', () => {
@@ -445,16 +445,16 @@ async function main() {
     assert.ok(html.includes('All (4)') || html.includes('Semua (4)'), 'Must render All tabs with count');
     assert.ok(html.includes('Momentum (2)'), 'Must render Momentum tab with count');
     assert.ok(html.includes('Setup (2)'), 'Must render Setup tab with count');
-    assert.ok(html.includes('Simbol'), 'Must have Simbol column');
-    assert.ok(html.includes('Nama Syarikat'), 'Must have Nama Syarikat column');
-    assert.ok(html.includes('Lorong'), 'Must have Lorong column');
-    assert.ok(html.includes('Skor'), 'Must have Skor column');
-    assert.ok(html.includes('Harga'), 'Must have Harga column');
-    assert.ok(html.includes('Perubahan %') || html.includes('Perubahan'), 'Must have Perubahan column');
+    assert.ok(html.includes('Symbol') || html.includes('Simbol'), 'Must have Symbol column');
+    assert.ok(html.includes('Company Name') || html.includes('Nama Syarikat'), 'Must have Company Name column');
+    assert.ok(html.includes('Lane') || html.includes('Lorong'), 'Must have Lane column');
+    assert.ok(html.includes('Score') || html.includes('Skor'), 'Must have Score column');
+    assert.ok(html.includes('Price') || html.includes('Harga'), 'Must have Price column');
+    assert.ok(html.includes('Change %') || html.includes('Perubahan %') || html.includes('Perubahan'), 'Must have Change column');
     assert.ok(html.includes('ADV 20 (M)') || html.includes('ADV20'), 'Must have ADV20 column');
     assert.ok(html.includes('RS vs SPY'), 'Must have RS vs SPY column');
     assert.ok(html.includes('RVOL 15m') || html.includes('RVOL'), 'Must have RVOL column');
-    assert.ok(html.includes('Jarak 52W High'), 'Must have Jarak 52W High column');
+    assert.ok(html.includes('52W High Dist') || html.includes('Jarak 52W High'), 'Must have 52W High Dist column');
     assert.ok(html.includes('NVDA'), 'Must render NVDA row');
     assert.ok(html.includes('TSLA'), 'Must render TSLA row');
     assert.ok(html.includes('AMD'), 'Must render AMD row');

@@ -161,7 +161,7 @@ export function SettingsPage({
 
   const validateField = (field, value) => {
     if (value === '' || value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
-      return 'Nilai tidak boleh kosong.';
+      return 'Value cannot be empty.';
     }
     const num = Number(value);
     if (!Number.isFinite(num)) {
@@ -182,7 +182,7 @@ export function SettingsPage({
         return 'Minimum market cap cannot be less than $10,000,000 ($10M).';
       }
       if (num > 10000000000000.0) {
-        return 'Market Cap minimum tidak boleh melebihi $10,000,000,000,000 ($10T).';
+        return 'Minimum market cap cannot exceed $10,000,000,000,000 ($10T).';
       }
     }
 
@@ -253,7 +253,7 @@ export function SettingsPage({
       ...prev,
       min_rvol: validateField('min_rvol', minR),
       max_rvol: validateField('max_rvol', maxR),
-      rvol_cross: minR > maxR ? 'RVOL minimum tidak boleh melebihi RVOL maksimum' : null,
+      rvol_cross: minR > maxR ? 'Minimum RVOL cannot exceed maximum RVOL' : null,
     }));
   };
 
@@ -301,7 +301,7 @@ export function SettingsPage({
     });
 
     if (Number(config.min_rvol) > Number(config.max_rvol)) {
-      newErrors.rvol_cross = 'RVOL minimum tidak boleh melebihi RVOL maksimum.';
+      newErrors.rvol_cross = 'Minimum RVOL cannot exceed maximum RVOL.';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -717,7 +717,7 @@ export function SettingsPage({
               <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 2.5 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                    Panduan Paginasi Ejen
+                    Agent Pagination Guidance
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
                     This configuration syncs to SQLite database <code>screener_config.sqlite</code>. It serves as default rows in the table for <strong>L1 -&gt; L4: Agent Team Activity</strong>.
@@ -846,7 +846,7 @@ export function SettingsPage({
                             &bull; <strong>Screening:</strong> Momentum &amp; VCP Intraday (5-min/15-min)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                            &bull; <strong>Penutupan:</strong> Wajib square-off 15:45 NY (Tiada pegangan malam)
+                            &bull; <strong>Close:</strong> Mandatory square-off at 15:45 NY (No overnight holding)
                           </Typography>
                         </Paper>
                       </Grid>
@@ -867,13 +867,13 @@ export function SettingsPage({
                             &bull; <strong>Risk Limit:</strong> 1.0% equity per trade (Max $1,000)
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
-                            &bull; <strong>Interval Pemantauan:</strong> Kitaran 4H / Harian (09:00, 13:00, 16:30 NY) + semakan adaptif 1H
+                            &bull; <strong>Monitoring Interval:</strong> 4H / Daily Cycle (09:00, 13:00, 16:30 NY) + 1H adaptive check
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 0.5 }}>
                             &bull; <strong>Screening:</strong> Daily EMA20 / 50-day SMA trend tracking
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                            &bull; <strong>Pegangan:</strong> Pegangan rentas hari dibenarkan dengan trailing stop
+                            &bull; <strong>Holding:</strong> Multi-day holding allowed with trailing stop
                           </Typography>
                         </Paper>
                       </Grid>
@@ -1173,7 +1173,7 @@ export function SettingsPage({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
                       <SecurityIcon sx={{ color: sneatTokens.info.main, fontSize: 22 }} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.info.main }}>
-                        Perlindungan Air Gap Akaun Broker
+                        Broker Account Air Gap Protection
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
@@ -1202,17 +1202,17 @@ export function SettingsPage({
                       </Box>
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                          Log Audit Perubahan
+                          Change Audit Log
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                          Sejarah modifikasi konfigurasi SQLite WAL
+                          SQLite WAL Configuration Modification History
                         </Typography>
                       </Box>
                     </Box>
 
                     {auditLogs.length === 0 ? (
                       <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
-                        Tiada sejarah perubahan direkodkan setakat ini.
+                        No configuration changes recorded yet.
                       </Typography>
                     ) : (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, maxHeight: 240, overflowY: 'auto' }}>
@@ -1937,7 +1937,7 @@ export function SettingsPage({
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontSize: '0.825rem', color: 'text.primary', lineHeight: 1.6 }}>
-                      Based on institutional capital protection standards, the minimum screening price is locked above <strong>$1.00</strong>. Sebarang cubaan menetapkan harga &lt; $1.00 akan disekat serta-merta oleh backend validation.
+                      Based on institutional capital protection standards, the minimum screening price is locked above <strong>$1.00</strong>. Any attempt to set a price &lt; $1.00 will be blocked immediately by backend validation.
                     </Typography>
                   </CardContent>
                 </Card>
@@ -1962,17 +1962,17 @@ export function SettingsPage({
                       </Box>
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                          Log Audit Perubahan
+                          Change Audit Log
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                          Sejarah modifikasi konfigurasi SQLite WAL
+                          SQLite WAL Configuration Modification History
                         </Typography>
                       </Box>
                     </Box>
 
                     {auditLogs.length === 0 ? (
                       <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
-                        Tiada sejarah perubahan direkodkan setakat ini.
+                        No configuration changes recorded yet.
                       </Typography>
                     ) : (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, maxHeight: 280, overflowY: 'auto' }}>

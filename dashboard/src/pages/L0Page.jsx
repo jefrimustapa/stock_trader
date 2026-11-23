@@ -208,7 +208,7 @@ export function L0Page({ dataPayload, screenerConfig, configLoading, configError
         </Box>
       </Box>
 
-      {/* Visual Corong Saringan 5-Peringkat (Funnel Stepper) */}
+      {/* 5-Stage Stock Screening Funnel (Funnel Stepper) */}
       <FunnelStepper
         dataPayload={dataPayload}
         screenerConfig={activeConfig}

@@ -265,7 +265,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    Simbol
+                    Symbol
                   </TableCell>
                   <TableCell
                     sx={{
@@ -320,7 +320,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    Harga
+                    Price
                   </TableCell>
                   <TableCell
                     align="right"
@@ -334,7 +334,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    Perubahan %
+                    Change %
                   </TableCell>
                   <TableCell
                     align="right"
@@ -348,7 +348,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    <Tooltip title="Purata Volum Dagangan Harian 20-Hari" arrow placement="top">
+                    <Tooltip title="20-Day Average Daily Volume" arrow placement="top">
                       <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
                         ADV 20 (M)
                         <InfoOutlinedIcon sx={{ fontSize: 13, opacity: 0.6 }} />
@@ -386,7 +386,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    <Tooltip title="Relative Volume 15 Minit Terkini (> 1.0x = Volum Luar Biasa)" arrow placement="top">
+                    <Tooltip title="15-Minute Relative Volume (> 1.0x = Unusual Volume)" arrow placement="top">
                       <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
                         RVOL 15m
                         <InfoOutlinedIcon sx={{ fontSize: 13, opacity: 0.6 }} />
@@ -408,7 +408,7 @@ export function WatchlistTable({ dataPayload }) {
                   >
                     <Tooltip title="Percentage distance from 52-Week High" arrow placement="top">
                       <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
-                        Jarak 52W High
+                        52W High Dist
                         <InfoOutlinedIcon sx={{ fontSize: 13, opacity: 0.6 }} />
                       </Box>
                     </Tooltip>

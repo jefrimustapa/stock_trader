@@ -187,7 +187,7 @@ export function AgentsPage({ screenerConfig }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <PsychologyIcon sx={{ color: sneatTokens.primary.main, fontSize: 32 }} />
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              L1 -&gt; L4: Aktiviti Pasukan Ejen
+              L1 -&gt; L4: Agent Team Activity
             </Typography>
             <Chip
               label="Moomoo OpenD Paper Trading (SIMULATE)"
@@ -201,7 +201,7 @@ export function AgentsPage({ screenerConfig }) {
             />
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, wordBreak: 'break-word' }}>
-            Saluran Paip Keputusan Ejen L0 Screener → L1 Tariq &amp; Nawwar → L2 Haziq → L3 Danial → L4 Moomoo OpenD
+            Agent Decision Pipeline: L0 Screener → L1 Tariq &amp; Nawwar → L2 Haziq → L3 Danial → L4 Moomoo OpenD
           </Typography>
         </Box>
 
@@ -349,7 +349,7 @@ export function AgentsPage({ screenerConfig }) {
               {latestCycle?.cycle_id && (
                 <Chip
                   variant="outlined"
-                  label={`Kitaran: ${latestCycle.cycle_id.substring(0, 16)}...`}
+                  label={`Cycle: ${latestCycle.cycle_id.substring(0, 16)}...`}
                   size="small"
                   sx={{ color: 'text.secondary', borderColor: 'divider', fontSize: '0.75rem' }}
                 />
@@ -364,7 +364,7 @@ export function AgentsPage({ screenerConfig }) {
         <CardContent sx={{ p: 2.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Aliran Saluran Paip Keputusan Pasukan Ejen (Trading Pipeline Flow)
+              Agent Team Decision Pipeline Flow
             </Typography>
           </Box>
 
@@ -849,7 +849,7 @@ export function AgentsPage({ screenerConfig }) {
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Sasaran TP1 (1:1.5 R:R)</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>TP1 Target (1:1.5 R:R)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word', color: 'success.main' }}>
                         ${selectedDelib.haziq?.take_profit_price?.toFixed(2)}
                       </Typography>
@@ -857,11 +857,11 @@ export function AgentsPage({ screenerConfig }) {
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>Position Size (1.5% Capital)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word' }}>
-                        {selectedDelib.haziq?.allocated_shares} unit (${selectedDelib.haziq?.position_value?.toFixed(2)})
+                        {selectedDelib.haziq?.allocated_shares} shares (${selectedDelib.haziq?.position_value?.toFixed(2)})
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Asas Modal Efektif</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Effective Capital Base</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word', color: 'success.main' }}>
                         {formatCurrency(selectedDelib.haziq?.account_equity_used || 100000)}
                       </Typography>
@@ -902,7 +902,7 @@ export function AgentsPage({ screenerConfig }) {
                   </Box>
 
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, display: 'block' }}>
-                    Semakan 8 Hard Rules (Matriks Audit Risiko):
+                    8 Hard Rules Check (Risk Audit Matrix):
                   </Typography>
 
                   <TableContainer component={Paper} elevation={0} sx={{ bgcolor: 'action.hover', borderRadius: 1.5 }}>
@@ -940,7 +940,7 @@ export function AgentsPage({ screenerConfig }) {
       ) : (
         <Card sx={{ p: 4, textAlign: 'center', mb: 3, borderRadius: 2 }}>
           <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            Tiada data deliberasi kitaran simulasi. Sistem saluran paip ejen beroperasi secara automatik di latar belakang mengikut jadual pasaran US (09:45 – 15:45 NY).
+            No simulated cycle deliberation data. The agent pipeline runs automatically in the background during US market hours (09:45 – 15:45 NY).
           </Typography>
         </Card>
       )}
@@ -951,7 +951,7 @@ export function AgentsPage({ screenerConfig }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
             <ShoppingCartIcon sx={{ color: sneatTokens.success.main }} />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Moomoo OpenD Simulated Order Transactions Table (Paper Trading Orders)
+              Moomoo OpenD Paper Trading Orders Table
             </Typography>
           </Box>
 
@@ -962,15 +962,15 @@ export function AgentsPage({ screenerConfig }) {
                   <TableHead sx={{ bgcolor: 'action.hover' }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700 }}>ORDER ID</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>SIMBOL</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>ARAH</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>KUANTITI</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>SYMBOL</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>SIDE</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>QUANTITY</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>ENTRY PRICE</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>STOP LOSS</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>TAKE PROFIT</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>OPEND STATUS</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>CAP MASA</TableCell>
-                      <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>TINDAKAN</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>TIMESTAMP</TableCell>
+                      <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>ACTION</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
