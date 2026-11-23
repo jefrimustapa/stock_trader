@@ -281,7 +281,7 @@ export function AgentsPage({ screenerConfig }) {
         </Alert>
       )}
 
-      {/* Summary Header: Calon Kitaran Terkini (HOM-302 Clean Layout) */}
+      {/* Summary Header: Candidates in Latest Cycle (HOM-302 Clean Layout) */}
       <Card sx={{ mb: 3, borderRadius: 2.5, border: '1px solid', borderColor: 'divider' }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
@@ -395,10 +395,10 @@ export function AgentsPage({ screenerConfig }) {
                 L0 SCREENER
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
-                Watchlist Dwi-Lorong
+                Dual-Lane Watchlist
               </Typography>
               <Chip
-                label={`${latestCycle?.total_candidates || deliberations.length || 0} Calon`}
+                label={`${latestCycle?.total_candidates || deliberations.length || 0} Candidates`}
                 size="small"
                 sx={{ mt: 1, fontWeight: 700 }}
               />
@@ -425,13 +425,13 @@ export function AgentsPage({ screenerConfig }) {
               }}
             >
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.info.main, display: 'block' }}>
-                L1 KECERDASAN
+                L1 INTELLIGENCE
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Tariq &amp; Nawwar
               </Typography>
               <Chip
-                label={`${latestCycle?.passed_l1 ?? 0} Lulus L1`}
+                label={`${latestCycle?.passed_l1 ?? 0} Passed L1`}
                 size="small"
                 sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.info.main, color: '#fff' }}
               />
@@ -458,13 +458,13 @@ export function AgentsPage({ screenerConfig }) {
               }}
             >
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.primary.main, display: 'block' }}>
-                L2 STRATEGI &amp; PORTFOLIO
+                L2 STRATEGY &amp; PORTFOLIO
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Haziq (Lead)
               </Typography>
               <Chip
-                label={`${latestCycle?.passed_l2 ?? 0} Lulus L2`}
+                label={`${latestCycle?.passed_l2 ?? 0} Passed L2`}
                 size="small"
                 sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.primary.main, color: '#fff' }}
               />
@@ -491,13 +491,13 @@ export function AgentsPage({ screenerConfig }) {
               }}
             >
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.warning.main, display: 'block' }}>
-                L3 AUDIT RISIKO
+                L3 RISK AUDIT
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Danial &amp; 8 Hard Rules
               </Typography>
               <Chip
-                label={`${latestCycle?.passed_l3 ?? 0} Lulus L3`}
+                label={`${latestCycle?.passed_l3 ?? 0} Passed L3`}
                 size="small"
                 sx={{ mt: 1, fontWeight: 700, bgcolor: sneatTokens.warning.main, color: '#fff' }}
               />
@@ -524,7 +524,7 @@ export function AgentsPage({ screenerConfig }) {
               }}
             >
               <Typography variant="caption" sx={{ fontWeight: 700, color: sneatTokens.success.main, display: 'block' }}>
-                L4 PELAKSANAAN
+                L4 EXECUTION
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
                 Moomoo OpenD Paper
@@ -641,7 +641,7 @@ export function AgentsPage({ screenerConfig }) {
                       </Typography>
                     </Box>
                     <Chip
-                      label={selectedDelib.tariq?.passed ? 'LULUS (>=60)' : 'DITOLAK'}
+                      label={selectedDelib.tariq?.passed ? 'PASS (>=60)' : 'REJECTED'}
                       size="small"
                       color={selectedDelib.tariq?.passed ? 'info' : 'error'}
                       sx={{ fontWeight: 700 }}
@@ -650,7 +650,7 @@ export function AgentsPage({ screenerConfig }) {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                      SKOR TEKNIKAL ($S_{'{tech}'}$)
+                      TECHNICAL SCORE ($S_{'{tech}'}$)
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                       Threshold: ≥ 60.0 | Margin: {selectedDelib.tariq?.s_tech ? (selectedDelib.tariq.s_tech - 60).toFixed(1) : '-'}
@@ -670,7 +670,7 @@ export function AgentsPage({ screenerConfig }) {
 
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, my: 1.5 }}>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Fasa Wyckoff</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Wyckoff Phase</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{selectedDelib.tariq?.wyckoff_phase || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
@@ -678,11 +678,11 @@ export function AgentsPage({ screenerConfig }) {
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{selectedDelib.tariq?.smc_fvg_confluence || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Zon Sokongan</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Support Zone</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>${selectedDelib.tariq?.support_level || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Zon Rintangan</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Resistance Zone</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>${selectedDelib.tariq?.resistance_level || '-'}</Typography>
                     </Box>
                   </Box>
@@ -713,7 +713,7 @@ export function AgentsPage({ screenerConfig }) {
                       </Typography>
                     </Box>
                     <Chip
-                      label={selectedDelib.nawwar?.passed ? 'LULUS (>=80)' : 'DITOLAK'}
+                      label={selectedDelib.nawwar?.passed ? 'PASS (>=80)' : 'REJECTED'}
                       size="small"
                       color={selectedDelib.nawwar?.passed ? 'primary' : 'error'}
                       sx={{ fontWeight: 700 }}
@@ -722,7 +722,7 @@ export function AgentsPage({ screenerConfig }) {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                      SKOR SENTIMEN TERNORMAL ($S_{'{sent_norm}'}$)
+                      NORMALIZED SENTIMENT SCORE ($S_{'{sent_norm}'}$)
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                       Threshold: ≥ 80.0 | Margin: {selectedDelib.nawwar?.s_sent_norm ? (selectedDelib.nawwar.s_sent_norm - 80).toFixed(1) : '-'}
@@ -742,25 +742,25 @@ export function AgentsPage({ screenerConfig }) {
 
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, my: 1.5 }}>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Skor Mentah</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Raw Score</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
                         {selectedDelib.nawwar?.s_sent_raw != null ? (selectedDelib.nawwar.s_sent_raw > 0 ? `+${selectedDelib.nawwar.s_sent_raw}` : selectedDelib.nawwar.s_sent_raw) : '-'} / ±100
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Label Sentimen</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Sentiment Label</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{selectedDelib.nawwar?.sentiment_label || '-'}</Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Risiko Earnings (5 Hari)</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Earnings Risk (5 Days)</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word', color: selectedDelib.nawwar?.earnings_within_5d ? 'error.main' : 'success.main' }}>
-                        {selectedDelib.nawwar?.earnings_within_5d ? 'ADA RISIKO' : 'BERSIH'}
+                        {selectedDelib.nawwar?.earnings_within_5d ? 'RISK DETECTED' : 'CLEAN'}
                       </Typography>
                     </Box>
                     <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>Risiko Makro FOMC</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>FOMC Macro Risk</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word', color: selectedDelib.nawwar?.fomc_macro_risk ? 'error.main' : 'success.main' }}>
-                        {selectedDelib.nawwar?.fomc_macro_risk ? 'BERISIKO' : 'BERSIH'}
+                        {selectedDelib.nawwar?.fomc_macro_risk ? 'RISK DETECTED' : 'CLEAN'}
                       </Typography>
                     </Box>
                   </Box>
@@ -771,7 +771,7 @@ export function AgentsPage({ screenerConfig }) {
 
                   <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                      Liputan Berita &amp; Sentimen Terkini:
+                      Latest News &amp; Sentiment Coverage:
                     </Typography>
                     <Button
                       component="a"
@@ -810,7 +810,7 @@ export function AgentsPage({ screenerConfig }) {
                       </Typography>
                     </Box>
                     <Chip
-                      label={selectedDelib.haziq?.passed ? 'PINTU TERBUKA (>=65)' : 'DITOLAK'}
+                      label={selectedDelib.haziq?.passed ? 'GATE OPEN (>=65)' : 'REJECTED'}
                       size="small"
                       color={selectedDelib.haziq?.passed ? 'success' : 'error'}
                       sx={{ fontWeight: 700 }}
@@ -819,7 +819,7 @@ export function AgentsPage({ screenerConfig }) {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                      SKOR KOMPOSIT ($S_{'{total}'} = 0.65 \times S_{'{tech}'} + 0.35 \times S_{'{sent_norm}'}$)
+                      COMPOSITE SCORE ($S_{'{total}'} = 0.65 \times S_{'{tech}'} + 0.35 \times S_{'{sent_norm}'}$)
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                       Threshold: ≥ 65.0 | Margin: {selectedDelib.haziq?.s_total ? (selectedDelib.haziq.s_total - 65).toFixed(1) : '-'}
@@ -894,7 +894,7 @@ export function AgentsPage({ screenerConfig }) {
                       </Typography>
                     </Box>
                     <Chip
-                      label={selectedDelib.danial?.passed ? '8/8 LULUS' : 'DITOLAK'}
+                      label={selectedDelib.danial?.passed ? '8/8 PASSED' : 'REJECTED'}
                       size="small"
                       color={selectedDelib.danial?.passed ? 'success' : 'error'}
                       sx={{ fontWeight: 700 }}
@@ -997,7 +997,7 @@ export function AgentsPage({ screenerConfig }) {
                               }}
                             />
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} unit</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} shares</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>${Number(ord.entry_price || 0).toFixed(2)}</TableCell>
                           <TableCell sx={{ color: 'error.main', fontWeight: 600 }}>
                             ${Number(ord.stop_loss_price || 0).toFixed(2)}
@@ -1051,7 +1051,7 @@ export function AgentsPage({ screenerConfig }) {
                               </Button>
                             ) : (
                               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {ord.status === 'CANCELLED' ? 'Dibatalkan' : (ord.status === 'FILLED' ? 'Selesai' : '-')}
+                                {ord.status === 'CANCELLED' ? 'Cancelled' : (ord.status === 'FILLED' ? 'Filled' : '-')}
                               </Typography>
                             )}
                           </TableCell>
@@ -1072,7 +1072,7 @@ export function AgentsPage({ screenerConfig }) {
                   setRowsPerPage(parseInt(event.target.value, 10));
                   setPage(0);
                 }}
-                labelRowsPerPage="Baris per halaman:"
+                labelRowsPerPage="Rows per page:"
                 labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
                 sx={{ borderTop: '1px solid', borderColor: 'divider' }}
               />

@@ -41,7 +41,7 @@ check('PortfolioPage.jsx renders attribution Chips and audit Tooltip', () => {
   assert(code.includes('BROKER_IMPORT'), 'Should handle BROKER_IMPORT attribution');
   assert(code.includes('POSITION_RECONCILED'), 'Should handle POSITION_RECONCILED attribution');
   assert(code.includes('Broker / Manual'), 'Should render Broker / Manual badge label');
-  assert(code.includes('Rekonsiliasi'), 'Should render Rekonsiliasi badge label');
+  assert(code.includes('Reconciliation') || code.includes('Rekonsiliasi'), 'Should render Reconciliation badge label');
   assert(code.includes('Tooltip'), 'Should wrap attribution in a Tooltip for audit trail');
 });
 

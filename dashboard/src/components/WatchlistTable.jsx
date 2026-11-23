@@ -278,7 +278,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    Nama Syarikat
+                    Company Name
                   </TableCell>
                   <TableCell
                     align="center"
@@ -292,7 +292,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    Lorong
+                    Lane
                   </TableCell>
                   <TableCell
                     align="right"
@@ -306,7 +306,7 @@ export function WatchlistTable({ dataPayload }) {
                       py: 1.5,
                     }}
                   >
-                    Skor
+                    Score
                   </TableCell>
                   <TableCell
                     align="right"

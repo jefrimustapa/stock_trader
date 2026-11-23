@@ -63,14 +63,14 @@ async function runSuite() {
     const drawer = page.locator('.MuiDrawer-paperAnchorRight');
     assertCheck('MUI KlineDrawer is visible', await drawer.isVisible());
 
-    // Locate 40 Lilin and Semua buttons
-    const btn40 = drawer.locator('button:has-text("40 Lilin")');
-    const btnAll = drawer.locator('button:has-text("Semua")');
+    // Locate 40 Lilin / 40 Candles and Semua / All buttons
+    const btn40 = drawer.locator('button:has-text("40 Candles"), button:has-text("40 Lilin")');
+    const btnAll = drawer.locator('button:has-text("All"), button:has-text("Semua")');
     const btnPlus = drawer.locator('button:has-text("+")');
     const btnMinus = drawer.locator('button:has-text("-")');
 
-    assertCheck('"40 Lilin" button exists', (await btn40.count()) > 0);
-    assertCheck('"Semua" button exists', (await btnAll.count()) > 0);
+    assertCheck('"40 Candles / 40 Lilin" button exists', (await btn40.count()) > 0);
+    assertCheck('"All / Semua" button exists', (await btnAll.count()) > 0);
     assertCheck('"+" zoom button exists', (await btnPlus.count()) > 0);
     assertCheck('"-" zoom button exists', (await btnMinus.count()) > 0);
 

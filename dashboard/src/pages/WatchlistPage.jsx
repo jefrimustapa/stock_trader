@@ -26,7 +26,7 @@ export function WatchlistPage({ dataPayload }) {
   const marketStatus = watchlist.market_status || 'CLOSED';
   const isMarketOpen = String(marketStatus).toUpperCase() === 'OPEN';
   const isLive = watchlist.is_live || false;
-  const rawDataAsOf = watchlist.data_as_of || dataPayload?.timestamp || 'Terkini';
+  const rawDataAsOf = watchlist.data_as_of || dataPayload?.timestamp || 'Latest';
   const dataAsOf = typeof rawDataAsOf === 'string' && rawDataAsOf.includes('T')
     ? rawDataAsOf.split('.')[0].replace('T', ' ')
     : rawDataAsOf;

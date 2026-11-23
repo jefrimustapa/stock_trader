@@ -1684,7 +1684,7 @@ export function SettingsPage({
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5, flexWrap: 'wrap' }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                        Preset Lorong:
+                        Lane Presets:
                       </Typography>
                       {[
                         { label: 'Conservative (3 stocks / 6 max)', val: 3 },
@@ -1837,7 +1837,7 @@ export function SettingsPage({
                           ADV20 Min:
                         </Typography>
                         <Typography id="displayMinVolume" variant="body2" sx={{ fontWeight: 700 }}>
-                          {Number(originalConfig.min_volume).toLocaleString()} unit
+                          {Number(originalConfig.min_volume).toLocaleString()} shares
                         </Typography>
                       </Box>
 
@@ -1870,7 +1870,7 @@ export function SettingsPage({
                         }}
                       >
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          Calon Per Lorong:
+                          Candidates Per Lane:
                         </Typography>
                         <Typography id="displayMaxCandidatesPerLane" variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
                           {originalConfig.max_candidates_per_lane ?? 5} stocks

@@ -66,18 +66,18 @@ export function KlineDrawer({ open, onClose, stock }) {
 
   const getCandleCountLabel = () => {
     const total = klineData?.candles?.length || 0;
-    if (total === 0) return '0 lilin';
+    if (total === 0) return '0 candles';
     if (zoomMode === 'all') {
-      return `${total} lilin`;
+      return `${total} candles`;
     }
     if (zoomMode === '40') {
-      if (total <= 40) return `${total} lilin`;
-      return `40 / ${total} lilin`;
+      if (total <= 40) return `${total} candles`;
+      return `40 / ${total} candles`;
     }
     // zoomMode === 'custom'
     const count = Math.min(total, Math.max(0, visibleCandleCount));
-    if (count >= total) return `${total} lilin`;
-    return `${count} / ${total} lilin`;
+    if (count >= total) return `${total} candles`;
+    return `${count} / ${total} candles`;
   };
 
   const handleShowRecent = () => {
@@ -1119,9 +1119,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Fokus 40 lilin terkini"
+                    title="Focus latest 40 candles"
                   >
-                    40 Lilin
+                    40 Candles
                   </Button>
                   <Button
                     onClick={handleFitAll}

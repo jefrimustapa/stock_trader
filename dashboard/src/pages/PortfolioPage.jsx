@@ -631,7 +631,7 @@ export function PortfolioPage({ onNavigate }) {
                         </Typography>
                         {pos.can_sell_qty !== pos.qty && (
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Boleh jual: {pos.can_sell_qty}
+                            Available to sell: {pos.can_sell_qty}
                           </Typography>
                         )}
                       </TableCell>
