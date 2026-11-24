@@ -117,10 +117,19 @@ export function PortfolioPage({ onNavigate }) {
     total_cost_basis: 0,
     total_market_value: 0,
     total_unrealized_pl: 0,
+    total_gross_pl: 0,
+    total_estimated_fees: 0,
+    total_net_pl: 0,
     total_pl_pct: 0,
+    total_net_pl_pct: 0,
     position_count: 0,
   };
 
+  const totalGrossPl = summary.total_gross_pl !== undefined ? summary.total_gross_pl : summary.total_unrealized_pl;
+  const totalFees = summary.total_estimated_fees || 0;
+  const totalNetPl = summary.total_net_pl !== undefined ? summary.total_net_pl : (totalGrossPl - totalFees);
+  const totalNetPlPct = summary.total_net_pl_pct !== undefined ? summary.total_net_pl_pct : summary.total_pl_pct;
+  const isPositiveNet = totalNetPl >= 0;
   const isPositiveTotal = summary.total_unrealized_pl >= 0;
 
   return (
@@ -279,27 +288,27 @@ export function PortfolioPage({ onNavigate }) {
           </Card>
         </Grid>
 
-        {/* Card 3: Unrealized P&L */}
+        {/* Card 3: Net Unrealized P&L */}
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, backgroundColor: 'background.paper', height: '100%' }}>
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                  Untung / Rugi Belum Direalisasi
+                  Untung / Rugi Bersih (Net P&amp;L)
                 </Typography>
                 <Box
                   sx={{
                     width: 36,
                     height: 36,
                     borderRadius: '8px',
-                    backgroundColor: isPositiveTotal ? sneatTokens.success.soft : sneatTokens.error.soft,
+                    backgroundColor: isPositiveNet ? sneatTokens.success.soft : sneatTokens.error.soft,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
+                    color: isPositiveNet ? sneatTokens.success.main : sneatTokens.error.main,
                   }}
                 >
-                  {isPositiveTotal ? <TrendingUpIcon sx={{ fontSize: 20 }} /> : <TrendingDownIcon sx={{ fontSize: 20 }} />}
+                  {isPositiveNet ? <TrendingUpIcon sx={{ fontSize: 20 }} /> : <TrendingDownIcon sx={{ fontSize: 20 }} />}
                 </Box>
               </Box>
               {loading && !data ? (
@@ -310,25 +319,25 @@ export function PortfolioPage({ onNavigate }) {
                     variant="h5"
                     sx={{
                       fontWeight: 700,
-                      color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
+                      color: isPositiveNet ? sneatTokens.success.main : sneatTokens.error.main,
                     }}
                   >
-                    {isPositiveTotal ? '+' : ''}${summary.total_unrealized_pl.toFixed(2)}
+                    {isPositiveNet ? '+' : ''}${totalNetPl.toFixed(2)}
                   </Typography>
                   <Chip
                     size="small"
-                    label={`${isPositiveTotal ? '+' : ''}${summary.total_pl_pct.toFixed(2)}%`}
+                    label={`${isPositiveNet ? '+' : ''}${totalNetPlPct.toFixed(2)}%`}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.72rem',
-                      backgroundColor: isPositiveTotal ? sneatTokens.success.soft : sneatTokens.error.soft,
-                      color: isPositiveTotal ? sneatTokens.success.main : sneatTokens.error.main,
+                      backgroundColor: isPositiveNet ? sneatTokens.success.soft : sneatTokens.error.soft,
+                      color: isPositiveNet ? sneatTokens.success.main : sneatTokens.error.main,
                     }}
                   />
                 </Box>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Perbezaan nilai pasaran semasa berbanding kos
+                Kasar: {totalGrossPl >= 0 ? '+' : ''}${totalGrossPl.toFixed(2)} | Yuran: -${totalFees.toFixed(2)}
               </Typography>
             </CardContent>
           </Card>
@@ -504,16 +513,25 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'unrealized_pl' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('unrealized_pl')}
                   >
-                    Untung / Rugi ($)
+                    Untung Kasar ($)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
                   <TableSortLabel
-                    active={orderBy === 'unrealized_pl_pct'}
-                    direction={orderBy === 'unrealized_pl_pct' ? orderDir : 'asc'}
-                    onClick={() => handleRequestSort('unrealized_pl_pct')}
+                    active={orderBy === 'estimated_fees'}
+                    direction={orderBy === 'estimated_fees' ? orderDir : 'asc'}
+                    onClick={() => handleRequestSort('estimated_fees')}
                   >
-                    Untung / Rugi (%)
+                    Anggaran Yuran ($)
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
+                  <TableSortLabel
+                    active={orderBy === 'net_unrealized_pl'}
+                    direction={orderBy === 'net_unrealized_pl' ? orderDir : 'asc'}
+                    onClick={() => handleRequestSort('net_unrealized_pl')}
+                  >
+                    Untung Bersih ($ / %)
                   </TableSortLabel>
                 </TableCell>
               </TableRow>
@@ -537,6 +555,7 @@ export function PortfolioPage({ onNavigate }) {
                     <TableCell align="right"><Skeleton variant="text" width={70} sx={{ ml: 'auto' }} /></TableCell>
                     <TableCell align="right"><Skeleton variant="text" width={70} sx={{ ml: 'auto' }} /></TableCell>
                     <TableCell align="right"><Skeleton variant="text" width={60} sx={{ ml: 'auto' }} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="text" width={50} sx={{ ml: 'auto' }} /></TableCell>
                     <TableCell align="right">
                       <Skeleton variant="rounded" width={60} height={24} sx={{ ml: 'auto', borderRadius: 1.5 }} />
                     </TableCell>
@@ -544,7 +563,7 @@ export function PortfolioPage({ onNavigate }) {
                 ))
               ) : filteredPositions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                     <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                       Tiada posisi aktif dijumpai
                     </Typography>
@@ -556,6 +575,9 @@ export function PortfolioPage({ onNavigate }) {
               ) : (
                 filteredPositions.map((pos) => {
                   const isPos = pos.unrealized_pl >= 0;
+                  const netPl = pos.net_unrealized_pl !== undefined ? pos.net_unrealized_pl : Number((pos.unrealized_pl - (pos.estimated_fees || 0)).toFixed(2));
+                  const netPlPct = pos.net_pl_pct !== undefined ? pos.net_pl_pct : (pos.total_cost > 0 ? Number(((netPl / pos.total_cost) * 100).toFixed(2)) : 0);
+                  const isNetPos = netPl >= 0;
                   return (
                     <TableRow
                       key={pos.position_id || pos.symbol}
@@ -611,7 +633,7 @@ export function PortfolioPage({ onNavigate }) {
                               borderRadius: 1.5,
                               backgroundColor:
                                 pos.source === 'AGENT_PIPELINE'
-                                  ? sneatTokens.primary.soft
+                                    ? sneatTokens.primary.soft
                                   : pos.source === 'BROKER_IMPORT'
                                   ? sneatTokens.warning.soft
                                   : sneatTokens.secondary.soft,
@@ -660,7 +682,7 @@ export function PortfolioPage({ onNavigate }) {
                           variant="body2"
                           sx={{
                             fontFamily: 'monospace',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             color: isPos ? sneatTokens.success.main : sneatTokens.error.main,
                           }}
                         >
@@ -668,17 +690,40 @@ export function PortfolioPage({ onNavigate }) {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Chip
-                          size="small"
-                          label={`${isPos ? '+' : ''}${pos.unrealized_pl_pct.toFixed(2)}%`}
-                          sx={{
-                            fontWeight: 700,
-                            fontFamily: 'monospace',
-                            fontSize: '0.72rem',
-                            backgroundColor: isPos ? sneatTokens.success.soft : sneatTokens.error.soft,
-                            color: isPos ? sneatTokens.success.main : sneatTokens.error.main,
-                          }}
-                        />
+                        <Tooltip
+                          title={`Buy: $${(pos.buy_fee !== undefined ? pos.buy_fee : 0).toFixed(2)} | Est. Sell: $${(pos.sell_fee !== undefined ? pos.sell_fee : 0).toFixed(2)}`}
+                          arrow
+                        >
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                            ${(pos.estimated_fees !== undefined ? pos.estimated_fees : 0).toFixed(2)}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontFamily: 'monospace',
+                              fontWeight: 700,
+                              color: isNetPos ? sneatTokens.success.main : sneatTokens.error.main,
+                            }}
+                          >
+                            {isNetPos ? '+' : ''}${netPl.toFixed(2)}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={`${isNetPos ? '+' : ''}${netPlPct.toFixed(2)}%`}
+                            sx={{
+                              fontWeight: 700,
+                              fontFamily: 'monospace',
+                              fontSize: '0.70rem',
+                              height: 20,
+                              backgroundColor: isNetPos ? sneatTokens.success.soft : sneatTokens.error.soft,
+                              color: isNetPos ? sneatTokens.success.main : sneatTokens.error.main,
+                            }}
+                          />
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );

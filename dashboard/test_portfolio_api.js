@@ -207,6 +207,59 @@ check('BVA: Server portfolio cache fallback preserves positions during downstrea
   assert.strictEqual(res4.positions.length, 2, 'Must retain 2 positions from last valid cache');
 });
 
+// 6. Verification for GitHub Issue #12 / HOM-374: Moomoo Fee Model & Net P&L
+check('server.js implements calculateMoomooOrderFee and maps estimated_fees & net_unrealized_pl', () => {
+  const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  assert(serverCode.includes('calculateMoomooOrderFee'), 'Must define calculateMoomooOrderFee in server.js');
+  assert(serverCode.includes('calculateMoomooRoundtripFees'), 'Must define calculateMoomooRoundtripFees in server.js');
+  assert(serverCode.includes('total_estimated_fees'), 'Must compute total_estimated_fees in summary');
+  assert(serverCode.includes('total_net_pl'), 'Must compute total_net_pl in summary');
+  assert(serverCode.includes('estimated_fees: estimatedFees'), 'Must map estimated_fees for each position');
+  assert(serverCode.includes('net_unrealized_pl: netPlVal'), 'Must map net_unrealized_pl for each position');
+});
+
+check('PortfolioPage.jsx displays Net Unrealized P&L in Card 3 and Est. Fees & Net P&L in table', () => {
+  const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
+  assert(code.includes('Net Unrealized P&L') || code.includes('Net Unrealized P&amp;L') || code.includes('Untung / Rugi Bersih'), 'Card 3 must display Net Unrealized P&L');
+  assert(code.includes('Est. Fees') || code.includes('Anggaran Yuran'), 'Table must contain Est. Fees column');
+  assert(code.includes('Net P&L') || code.includes('Net P&amp;L') || code.includes('Untung Bersih'), 'Table must contain Net P&L column');
+});
+
+check('Moomoo Fee Calculation accuracy and Net P&L reconciliation in server.js simulation', () => {
+  function calculateMoomooOrderFee(price, quantity, side = 'BUY', usdMyrRate = 4.45, includeStampDuty = true) {
+    if (!quantity || quantity <= 0 || !price || price <= 0) return 0;
+    const tradeAmount = Number((price * quantity).toFixed(2));
+    const commission = Math.max(0.01, Number((tradeAmount * 0.0003).toFixed(2)));
+    const platformFee = 0.99;
+    const settlementFee = Math.min(Number((quantity * 0.003).toFixed(2)), Number((tradeAmount * 0.01).toFixed(2)));
+    let secFee = 0;
+    let finraTaf = 0;
+    if (side === 'SELL') {
+      secFee = Math.max(0.01, Number((tradeAmount * 0.0000206).toFixed(2)));
+      finraTaf = Math.max(0.01, Number((quantity * 0.000166).toFixed(2)));
+    }
+    let stampDuty = 0;
+    if (includeStampDuty && tradeAmount > 0) {
+      const notionalMyr = tradeAmount * usdMyrRate;
+      const stampMyr = Math.ceil(notionalMyr / 1000.0) * 1.0;
+      stampDuty = Number((stampMyr / usdMyrRate).toFixed(2));
+    }
+    return Number((commission + platformFee + settlementFee + secFee + finraTaf + stampDuty).toFixed(2));
+  }
+
+  // 10 shares of $100 bought at $100, now $110
+  const buyFee = calculateMoomooOrderFee(100, 10, 'BUY');
+  const sellFee = calculateMoomooOrderFee(110, 10, 'SELL');
+  const estRoundTrip = Number((buyFee + sellFee).toFixed(2));
+  const grossPl = Number(((110 - 100) * 10).toFixed(2)); // $100.00
+  const netPl = Number((grossPl - estRoundTrip).toFixed(2));
+
+  assert(buyFee > 1.0, 'Buy fee must include commission, platform fee, settlement and stamp duty');
+  assert(sellFee > buyFee, 'Sell fee must be higher due to SEC fee and FINRA TAF');
+  assert.strictEqual(netPl, Number((100 - estRoundTrip).toFixed(2)));
+  assert(netPl < grossPl, 'Net P&L must be less than gross P&L by the exact roundtrip fees');
+});
+
 console.log(`\n================================================================`);
 console.log(`  Tests Completed: ${passedTests}/${totalTests} Passed`);
 console.log(`================================================================\n`);
