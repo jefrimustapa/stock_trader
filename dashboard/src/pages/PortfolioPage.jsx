@@ -53,15 +53,15 @@ export function PortfolioPage({ onNavigate }) {
     try {
       const res = await fetch('/api/portfolio');
       if (!res.ok) {
-        throw new Error(`Ralat pelayan: HTTP ${res.status}`);
+        throw new Error(`Server error: HTTP ${res.status}`);
       }
       const json = await res.json();
       setData(json);
       setError(null);
       setLastRefreshed(new Date());
     } catch (err) {
-      console.error('[Portfolio] Gagal memuatkan portfolio:', err);
-      setError(err.message || 'Gagal memuatkan data portfolio.');
+      console.error('[Portfolio] Failed to load portfolio:', err);
+      setError(err.message || 'Failed to load portfolio data.');
     } finally {
       setLoading(false);
       setIsFetching(false);
@@ -144,11 +144,11 @@ export function PortfolioPage({ onNavigate }) {
               <AccountBalanceWalletIcon sx={{ fontSize: 22 }} />
             </Box>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              Portfolio Pegangan
+              Portfolio Holdings
             </Typography>
             <Chip
               size="small"
-              label={data?.env ? `Akaun ${data.env}` : 'SIMULATE'}
+              label={data?.env ? `Account ${data.env}` : 'SIMULATE'}
               sx={{
                 fontWeight: 700,
                 fontSize: '0.72rem',
@@ -158,14 +158,14 @@ export function PortfolioPage({ onNavigate }) {
             />
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Senarai saham aktif dipegang, harga beli (kos purata), harga semasa pasaran dan untung/rugi belum direalisasi.
+            Active holdings, average cost basis, current market price, and unrealized profit/loss.
           </Typography>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, alignSelf: { xs: 'flex-end', md: 'center' } }}>
           {lastRefreshed && (
             <Typography variant="caption" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'inline-block' } }}>
-              Kemas kini: {lastRefreshed.toLocaleTimeString()}
+              Updated: {lastRefreshed.toLocaleTimeString()}
             </Typography>
           )}
           <Button
@@ -186,14 +186,14 @@ export function PortfolioPage({ onNavigate }) {
             disabled={isFetching && !data}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            {isFetching ? 'Mengemas kini...' : 'Segar Semula'}
+            {isFetching ? 'Refreshing...' : 'Refresh'}
           </Button>
         </Box>
       </Box>
 
       {data?.is_stale && (
         <Alert severity="warning" sx={{ mb: 3 }}>
-          Perhatian: Sambungan ke OpenD/Bridge terputus sementara. Memaparkan data portfolio terakhir yang diketahui ({data.stale_reason || 'OpenD disconnected'}).
+          Warning: OpenD/Bridge connection temporarily lost. Showing last known portfolio data ({data.stale_reason || 'OpenD disconnected'}).
         </Alert>
       )}
 
@@ -211,7 +211,7 @@ export function PortfolioPage({ onNavigate }) {
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                  Nilai Pasaran Portfolio
+                  Portfolio Market Value
                 </Typography>
                 <Box
                   sx={{
@@ -236,7 +236,7 @@ export function PortfolioPage({ onNavigate }) {
                 </Typography>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Jumlah nilai semasa bagi semua unit pegangan
+                Total current value of all holdings
               </Typography>
             </CardContent>
           </Card>
@@ -248,7 +248,7 @@ export function PortfolioPage({ onNavigate }) {
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                  Jumlah Kos Belian
+                  Total Cost Basis
                 </Typography>
                 <Box
                   sx={{
@@ -273,7 +273,7 @@ export function PortfolioPage({ onNavigate }) {
                 </Typography>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Modal pokok dibelanjakan (harga beli x unit)
+                Total capital expended (purchase price x units)
               </Typography>
             </CardContent>
           </Card>
@@ -285,7 +285,7 @@ export function PortfolioPage({ onNavigate }) {
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                  Untung / Rugi Belum Direalisasi
+                  Unrealized Profit / Loss
                 </Typography>
                 <Box
                   sx={{
@@ -328,7 +328,7 @@ export function PortfolioPage({ onNavigate }) {
                 </Box>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Perbezaan nilai pasaran semasa berbanding kos
+                Difference between current market value and cost basis
               </Typography>
             </CardContent>
           </Card>
@@ -340,7 +340,7 @@ export function PortfolioPage({ onNavigate }) {
             <CardContent sx={{ p: 2.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                  Bilangan Kaunter Aktif
+                  Active Positions Count
                 </Typography>
                 <Box
                   sx={{
@@ -361,11 +361,11 @@ export function PortfolioPage({ onNavigate }) {
                 <Skeleton variant="rounded" width={110} height={32} sx={{ my: 0.5 }} />
               ) : (
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                  {summary.position_count} Kaunter
+                  {summary.position_count} Positions
                 </Typography>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Akaun ID: {data?.account_id || '3123530'}
+                Account ID: {data?.account_id || '3123530'}
               </Typography>
             </CardContent>
           </Card>
@@ -389,7 +389,7 @@ export function PortfolioPage({ onNavigate }) {
       >
         <TextField
           size="small"
-          placeholder="Cari simbol atau syarikat (cth: TXNM)..."
+          placeholder="Search symbol or company (e.g. TXNM)..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           sx={{ minWidth: { xs: '100%', sm: 320 } }}
@@ -408,7 +408,7 @@ export function PortfolioPage({ onNavigate }) {
             onClick={() => setFilterType('ALL')}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            Semua ({loading && !data ? '...' : (data?.positions?.length || 0)})
+            All ({loading && !data ? '...' : (data?.positions?.length || 0)})
           </Button>
           <Button
             variant={filterType === 'GAINERS' ? 'contained' : 'outlined'}
@@ -416,7 +416,7 @@ export function PortfolioPage({ onNavigate }) {
             onClick={() => setFilterType('GAINERS')}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            Untung
+            Gainers
           </Button>
           <Button
             variant={filterType === 'LOSERS' ? 'contained' : 'outlined'}
@@ -424,7 +424,7 @@ export function PortfolioPage({ onNavigate }) {
             onClick={() => setFilterType('LOSERS')}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            Rugi
+            Losers
           </Button>
         </ButtonGroup>
       </Paper>
@@ -441,7 +441,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'symbol' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('symbol')}
                   >
-                    Simbol &amp; Kaunter
+                    Symbol &amp; Company
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -450,7 +450,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'source' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('source')}
                   >
-                    Atribusi
+                    Attribution
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -459,7 +459,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'qty' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('qty')}
                   >
-                    Unit (Qty)
+                    Units (Qty)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -468,7 +468,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'bought_price' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('bought_price')}
                   >
-                    Harga Beli ($)
+                    Buy Price ($)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -477,7 +477,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'current_price' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('current_price')}
                   >
-                    Harga Semasa ($)
+                    Current Price ($)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -486,7 +486,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'total_cost' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('total_cost')}
                   >
-                    Jumlah Kos ($)
+                    Total Cost ($)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -495,7 +495,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'market_value' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('market_value')}
                   >
-                    Nilai Pasaran ($)
+                    Market Value ($)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -504,7 +504,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'unrealized_pl' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('unrealized_pl')}
                   >
-                    Untung / Rugi ($)
+                    Unrealized P&amp;L ($)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
@@ -513,7 +513,7 @@ export function PortfolioPage({ onNavigate }) {
                     direction={orderBy === 'unrealized_pl_pct' ? orderDir : 'asc'}
                     onClick={() => handleRequestSort('unrealized_pl_pct')}
                   >
-                    Untung / Rugi (%)
+                    Unrealized P&amp;L (%)
                   </TableSortLabel>
                 </TableCell>
               </TableRow>
@@ -546,10 +546,10 @@ export function PortfolioPage({ onNavigate }) {
                 <TableRow>
                   <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                     <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                      Tiada posisi aktif dijumpai
+                      No active positions found
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-                      {searchTerm ? 'Tiada kaunter sepadan dengan carian.' : 'Akaun Paper Trading belum mempunyai sebarang unit pegangan.'}
+                      {searchTerm ? 'No symbols match search.' : 'Paper Trading account currently has no holdings.'}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -587,12 +587,12 @@ export function PortfolioPage({ onNavigate }) {
                         <Tooltip
                           title={
                             pos.source === 'AGENT_PIPELINE'
-                              ? `Punca: Ejen Pipeline | Kitaran: ${pos.cycle_id || '-'} | Pesanan: ${pos.order_id || '-'}`
+                              ? `Source: Agent Pipeline | Cycle: ${pos.cycle_id || '-'} | Order: ${pos.order_id || '-'}`
                               : pos.source === 'BROKER_IMPORT'
-                              ? `Punca: Import Pesanan Broker OpenD | Pesanan: ${pos.order_id || '-'}`
+                              ? `Source: OpenD Broker Order Import | Order: ${pos.order_id || '-'}`
                               : pos.source === 'POSITION_RECONCILED'
-                              ? `Punca: Rekonsiliasi Automatik Posisi OpenD | Audit ID: ${pos.order_id || '-'}`
-                              : `Punca: Rekonsiliasi Posisi OpenD | Audit ID: ${pos.order_id || '-'}`
+                              ? `Source: Automatic OpenD Position Reconciliation | Audit ID: ${pos.order_id || '-'}`
+                              : `Source: OpenD Position Reconciliation | Audit ID: ${pos.order_id || '-'}`
                           }
                           arrow
                         >
@@ -600,10 +600,10 @@ export function PortfolioPage({ onNavigate }) {
                             size="small"
                             label={
                               pos.source === 'AGENT_PIPELINE'
-                                ? 'Ejen'
+                                ? 'Agent'
                                 : pos.source === 'BROKER_IMPORT'
                                 ? 'Broker / Manual'
-                                : 'Rekonsiliasi'
+                                : 'Reconciliation'
                             }
                             sx={{
                               fontWeight: 700,
@@ -631,7 +631,7 @@ export function PortfolioPage({ onNavigate }) {
                         </Typography>
                         {pos.can_sell_qty !== pos.qty && (
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Boleh jual: {pos.can_sell_qty}
+                            Available to sell: {pos.can_sell_qty}
                           </Typography>
                         )}
                       </TableCell>

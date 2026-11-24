@@ -444,7 +444,7 @@ async function runDashboardTests() {
                 'x-service-token': `Bearer ${testServiceToken}`
             }, '/');
             assert.strictEqual(uiRes.statusCode, 200);
-            assert.ok(uiRes.body.includes('Sign-Out Sesi OpenD'), 'Dashboard UI must include Sign-Out Sesi OpenD button');
+            assert.ok(uiRes.body.includes('Sign-Out OpenD Session') || uiRes.body.includes('Sign-Out Sesi OpenD'), 'Dashboard UI must include Sign-Out OpenD button');
             assert.ok(uiRes.body.includes('accSelect'), 'Dashboard UI must include acc_id dropdown');
             assert.ok(uiRes.body.includes('handleSwitchAccount'), 'Dashboard UI must include handleSwitchAccount script');
             assert.ok(uiRes.body.includes('handleOpenDSignOut'), 'Dashboard UI must include handleOpenDSignOut script');

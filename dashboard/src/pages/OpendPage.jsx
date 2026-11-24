@@ -36,10 +36,10 @@ export function OpendPage({ statusData, onRefresh }) {
             }}
           >
             <TuneIcon sx={{ color: sneatTokens.warning.main }} />
-            Pengurusan Gerbang OpenD &amp; Sesi Dagangan
+            OpenD Gateway Management &amp; Trading Session
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-            Kawalan sesi broker Moomoo, pertukaran akaun pantas, log masuk kredensial selamat, dan 2FA OTP (Seksyen 3.5.B Blueprint).
+            Moomoo broker session controls, rapid account switching, secure credential sign-in, and 2FA OTP.
           </Typography>
         </Box>
 
@@ -47,7 +47,7 @@ export function OpendPage({ statusData, onRefresh }) {
           <Chip
             size="small"
             icon={isConnected ? <CheckCircleIcon sx={{ fontSize: '14px !important' }} /> : <WarningAmberIcon sx={{ fontSize: '14px !important' }} />}
-            label={`Sesi: ${opendStatus}`}
+            label={`Session: ${opendStatus}`}
             sx={{
               fontWeight: 700,
               backgroundColor: isConnected ? sneatTokens.success.soft : sneatTokens.warning.soft,
@@ -56,7 +56,7 @@ export function OpendPage({ statusData, onRefresh }) {
           />
           <Chip
             size="small"
-            label={`Akaun Aktif: ${activeAcc}`}
+            label={`Active Account: ${activeAcc}`}
             sx={{
               fontWeight: 600,
               backgroundColor: sneatTokens.secondary.soft,

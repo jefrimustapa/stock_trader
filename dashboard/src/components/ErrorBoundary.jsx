@@ -22,10 +22,10 @@ export class ErrorBoundary extends React.Component {
         <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
           <Paper sx={{ p: 4, maxWidth: 600, textAlign: 'center', border: '1px solid #FF3E1D' }}>
             <Typography variant="h5" color="error" gutterBottom sx={{ fontWeight: 600 }}>
-              Ralat Pemaparan Komponen
+              Component Render Error
             </Typography>
             <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-              {this.state.error?.message || 'Ralat tidak dijangka berlaku semasa rendering UI.'}
+              {this.state.error?.message || 'An unexpected error occurred while rendering the UI.'}
             </Typography>
             <Button
               variant="contained"
@@ -35,7 +35,7 @@ export class ErrorBoundary extends React.Component {
                 window.location.reload();
               }}
             >
-              Muat Semula Halaman
+              Reload Page
             </Button>
           </Paper>
         </Box>
