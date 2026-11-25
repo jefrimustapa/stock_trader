@@ -43,11 +43,15 @@ class PositionReconciler:
     def reconcile_positions(
         self,
         broker_positions: List[Dict[str, Any]],
-        broker_orders: List[Dict[str, Any]]
+        broker_orders: List[Dict[str, Any]],
+        atrs: Optional[Dict[str, float]] = None,
+        swing_lows: Optional[Dict[str, float]] = None
     ) -> List[Dict[str, Any]]:
         """
         Detects positions without protective Hard Stop Loss orders.
         Returns list of injected SL corrections with DAY or GTC time-in-force.
+        Anti-Stop-Hunt Protection: Eliminates fixed 5% fallback, using structural swing lows
+        and 1.5x ATR volatility buffer to prevent smart money liquidity sweep traps.
         """
         corrections = []
         sl_symbols = set()
@@ -68,13 +72,27 @@ class PositionReconciler:
                     "GTC" if self.trading_mode == "SWING" else "DAY"
                 )
                 entry_price = float(pos.get("entry_price", 100.0))
-                default_sl_price = round(entry_price * 0.95, 2)  # 5% fallback stop
+                
+                # Volatility buffer calculation (1.5x ATR_14)
+                atr = atrs.get(symbol) if atrs and symbol in atrs else None
+                if not atr or atr <= 0:
+                    atr = max(0.10, round(entry_price * 0.03, 2))
+                sl_buffer = round(1.5 * atr, 2)
+
+                # Structural swing low placement if available
+                structural_low = swing_lows.get(symbol) if swing_lows and symbol in swing_lows else None
+                if structural_low is not None and structural_low > 0:
+                    default_sl_price = round(max(0.01, structural_low - sl_buffer), 2)
+                else:
+                    default_sl_price = round(max(0.01, entry_price - sl_buffer), 2)
+
                 time_in_force = "GTC" if self.trading_mode == "SWING" else "DAY"
                 correction = {
                     "action": "INJECT_STOP_LOSS",
                     "symbol": symbol,
                     "quantity": qty,
                     "stop_price": default_sl_price,
+                    "atr": atr,
                     "time_in_force": time_in_force,
                     "trading_mode": self.trading_mode,
                     "reason": "MISSING_PROTECTIVE_STOP_LOSS"
@@ -122,14 +140,15 @@ class PositionReconciler:
             await asyncio.sleep(self.heartbeat_interval)
 
     async def run_reconciliation_loop(self) -> None:
-        """Background task executing reconciliation every 60 seconds."""
+        """Background task executing reconciliation and L4 Exit Sentinel every 60 seconds."""
         while self._running:
             try:
-                logger.info("Executing periodic 60s position and order reconciliation check...")
+                logger.info("Executing periodic 60s position reconciliation and L4 Exit Sentinel check...")
                 from .agent_pipeline import get_agent_pipeline
                 pipeline = get_agent_pipeline()
                 pipeline.sync_broker_orders()
                 pipeline.reconcile_positions_with_orders()
+                pipeline.evaluate_exit_sentinel()
             except Exception as e:
                 logger.error("Reconciliation cycle error: %s", e)
             await asyncio.sleep(self.check_interval)

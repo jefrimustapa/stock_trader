@@ -25,6 +25,23 @@ class SwitchAccountRequest(BaseModel):
     account_id: str = Field(..., min_length=1, description="Target trading account ID")
 
 
+class ExitTradeRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, description="Stock symbol to exit (e.g. US.NVDA)")
+    quantity: Optional[int] = Field(None, gt=0, description="Quantity to sell. If omitted, full position is closed.")
+    reason: str = Field(default="AGENT_EARLY_EXIT", description="Exit reason: AGENT_EARLY_EXIT, MANUAL_LIQUIDATION, STOP_LOSS, TAKE_PROFIT")
+    limit_price: Optional[float] = Field(None, gt=0, description="Optional limit price. If omitted, market exit.")
+
+
+class ExitTradeResponse(BaseModel):
+    status: str
+    symbol: str
+    quantity: int
+    exit_price: float
+    order_id: str
+    client_order_id: str
+    message: str
+
+
 class TradeSubmitResponse(BaseModel):
     status: str
     client_order_id: str
@@ -129,6 +146,43 @@ def submit_trade(
         stop_loss_price=order.stop_loss_price,
         opend_status=opend_status,
         message=f"Order verified against 8 Hard Rules and recorded. OpenD Status: {opend_status}."
+    )
+
+
+@router.post("/exit-request", response_model=ExitTradeResponse)
+def request_position_exit(
+    payload: ExitTradeRequest,
+    caller: str = Depends(authenticate_request)
+):
+    """
+    Submits an exit request for an open position to OpenD gateway (Seksyen 3.3 D Blueprint).
+    Cancels pending open orders, places SELL order, and records day trade round-trip if intraday.
+    """
+    from ..agent_pipeline import get_agent_pipeline
+    pipeline = get_agent_pipeline()
+    result = pipeline.execute_position_exit(
+        symbol=payload.symbol,
+        quantity=payload.quantity,
+        reason=payload.reason,
+        exit_price=payload.limit_price
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": result.get("message", f"Failed to exit position for {payload.symbol}"),
+                "symbol": payload.symbol
+            }
+        )
+
+    return ExitTradeResponse(
+        status="ACCEPTED",
+        symbol=result["symbol"],
+        quantity=result["quantity"],
+        exit_price=result["exit_price"],
+        order_id=result["order_id"],
+        client_order_id=result["client_order_id"],
+        message=result["message"]
     )
 
 

@@ -1402,6 +1402,25 @@ app.get('/api/trade/orders', authenticateDashboard, async (req, res) => {
     }
 });
 
+app.post('/api/trade/exit-request', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.post(`${targetUrl}/api/v1/trade/exit-request`, req.body, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 8000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error proxying exit request to bridge:', err.message);
+        return res.status(err.response?.status || 502).json({
+            error: 'Gagal melaksanakan pesanan keluar: ' + (err.response?.data?.detail?.error || err.response?.data?.detail || err.message)
+        });
+    }
+});
+
 let lastKnownPortfolio = null;
 
 app.get('/api/portfolio', authenticateDashboard, async (req, res) => {

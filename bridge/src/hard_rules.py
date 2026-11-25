@@ -302,9 +302,10 @@ class HardRulesEngine:
 
     def validate_rule4_penny_stock(self, order: OrderRequest) -> None:
         """
-        Rule 4: Limit entry price must be >= $5.00.
+        Rule 4: Limit entry price must be >= $5.00 for long buys.
+        Exits/sells are exempt to allow cutting losses on depreciated positions.
         """
-        if round(order.entry_price, 4) < 5.0000:
+        if order.order_side == "BUY" and round(order.entry_price, 4) < 5.0000:
             raise HardRuleViolation(
                 "RULE_4",
                 f"Penny stock excluded: Entry price (${order.entry_price:.2f}) is below minimum $5.00."
@@ -331,7 +332,11 @@ class HardRulesEngine:
         """
         Rule 5: Resolves verified ADV20 strictly from market data cache / watchlist.
         Rejects orders if market data cannot be verified. Zero unverified fallback.
+        Exempts SELL orders (position exits) from screener watchlist presence.
         """
+        if order.order_side == "SELL":
+            return 1_000_000.0
+
         if market_data_cache is None or order.symbol not in market_data_cache:
             raise HardRuleViolation(
                 "RULE_5",
@@ -369,18 +374,21 @@ class HardRulesEngine:
         Rule 6: Trading Window Validation.
         - DAY Mode: New entries allowed strictly between 09:45:00 and 15:44:59.999 America/New_York (< 15:45:00).
         - SWING Mode: Allows regular market session entries [09:30:00 - 16:00:00) NY without mandatory 15:45:00 force exit.
+        - Exit SELL orders allowed during full market session [09:30:00 - 16:00:00) to protect capital.
         """
         mode = order.trading_mode if order else trading_mode
+        is_sell = order is not None and order.order_side == "SELL"
         now_ny = check_time_ny or datetime.now(NY_TZ)
         current_time = now_ny.time()
 
-        if mode == "SWING":
+        if is_sell or mode == "SWING":
             start_time = time(9, 30, 0)
             cutoff_time = time(16, 0, 0)
             if not (start_time <= current_time < cutoff_time):
+                session_label = "market session" if is_sell else "SWING market session"
                 raise HardRuleViolation(
                     "RULE_6",
-                    f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside SWING market session [09:30:00 - 16:00:00)."
+                    f"Outside trading window: Current time {current_time.strftime('%H:%M:%S')} NY is outside {session_label} [09:30:00 - 16:00:00)."
                 )
         else:
             start_time = time(9, 45, 0)
@@ -468,13 +476,18 @@ class HardRulesEngine:
         check_time_ny: Optional[datetime] = None,
         market_data_cache: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Runs all 8 deterministic hard rule checks sequentially."""
+        """Runs deterministic hard rule checks sequentially."""
         self.validate_rule7_idempotency(order.client_order_id)
-        self.validate_rule4_penny_stock(order)
-        self.validate_rule5_verified_liquidity(order, market_data_cache)
-        self.validate_rule6_trading_window(check_time_ny, order=order)
-        self.validate_rule1_max_risk(order, account_equity)
-        self.validate_rule2_daily_drawdown(trade_date, current_equity)
-        self.validate_rule3_pdt(account_equity, trade_date, order=order)
+        if order.order_side == "BUY":
+            self.validate_rule4_penny_stock(order)
+            self.validate_rule5_verified_liquidity(order, market_data_cache)
+            self.validate_rule6_trading_window(check_time_ny, order=order)
+            self.validate_rule1_max_risk(order, account_equity)
+            self.validate_rule2_daily_drawdown(trade_date, current_equity)
+            self.validate_rule3_pdt(account_equity, trade_date, order=order)
+        else:
+            # SELL orders (position exit, Stop Loss, Take Profit, liquidation)
+            self.validate_rule6_trading_window(check_time_ny, order=order)
+            self.validate_rule3_pdt(account_equity, trade_date, order=order)
 
         return {"valid": True, "client_order_id": order.client_order_id}
