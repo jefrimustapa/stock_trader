@@ -31,7 +31,7 @@ function check(desc, fn) {
 // 1. Verify PortfolioPage.jsx has Atribusi column and chips
 check('PortfolioPage.jsx includes "Atribusi" column header and table sort label', () => {
   const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
-  assert(code.includes('Atribusi'), 'Should contain "Atribusi" column label');
+  assert(code.includes('Attribution') || code.includes('Atribusi'), 'Should contain Attribution column label');
   assert(code.includes("orderBy === 'source'"), 'Should support sorting by source');
 });
 
@@ -41,7 +41,7 @@ check('PortfolioPage.jsx renders attribution Chips and audit Tooltip', () => {
   assert(code.includes('BROKER_IMPORT'), 'Should handle BROKER_IMPORT attribution');
   assert(code.includes('POSITION_RECONCILED'), 'Should handle POSITION_RECONCILED attribution');
   assert(code.includes('Broker / Manual'), 'Should render Broker / Manual badge label');
-  assert(code.includes('Rekonsiliasi'), 'Should render Rekonsiliasi badge label');
+  assert(code.includes('Reconciliation') || code.includes('Rekonsiliasi'), 'Should render Reconciliation badge label');
   assert(code.includes('Tooltip'), 'Should wrap attribution in a Tooltip for audit trail');
 });
 

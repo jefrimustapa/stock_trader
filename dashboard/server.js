@@ -280,10 +280,10 @@ app.get('/api/status', authenticateDashboard, async (req, res) => {
 app.post('/api/telnet/otp', authenticateDashboard, async (req, res) => {
     const { otp_code } = req.body || {};
     if (!otp_code || typeof otp_code !== 'string') {
-        return res.status(400).json({ error: 'Kod OTP diperlukan' });
+        return res.status(400).json({ error: 'OTP code is required' });
     }
     if (!BRIDGE_SERVICE_TOKEN) {
-        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        return res.status(503).json({ error: 'Bridge service token is not configured' });
     }
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/otp`, {
@@ -302,7 +302,7 @@ app.post('/api/telnet/otp', authenticateDashboard, async (req, res) => {
 // Seksyen 3.5.B Blueprint: OpenD Session Sign-Out, Dynamic Account Switch, and Login Switch
 app.post('/api/opend/sign-out', authenticateDashboard, async (req, res) => {
     if (!BRIDGE_SERVICE_TOKEN) {
-        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        return res.status(503).json({ error: 'Bridge service token is not configured' });
     }
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/sign-out`, {}, {
@@ -318,7 +318,7 @@ app.post('/api/opend/sign-out', authenticateDashboard, async (req, res) => {
 
 app.get('/api/opend/accounts', authenticateDashboard, async (req, res) => {
     if (!BRIDGE_SERVICE_TOKEN) {
-        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        return res.status(503).json({ error: 'Bridge service token is not configured' });
     }
     try {
         const bridgeRes = await axios.get(`${BRIDGE_URL}/api/v1/trade/accounts`, {
@@ -335,10 +335,10 @@ app.get('/api/opend/accounts', authenticateDashboard, async (req, res) => {
 app.post('/api/opend/switch-account', authenticateDashboard, async (req, res) => {
     const { account_id } = req.body || {};
     if (!account_id || typeof account_id !== 'string' || !account_id.trim()) {
-        return res.status(400).json({ error: 'Account ID diperlukan' });
+        return res.status(400).json({ error: 'Account ID is required' });
     }
     if (!BRIDGE_SERVICE_TOKEN) {
-        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        return res.status(503).json({ error: 'Bridge service token is not configured' });
     }
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/trade/switch-account`, {
@@ -357,15 +357,15 @@ app.post('/api/opend/switch-account', authenticateDashboard, async (req, res) =>
 app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
     const { login_account, password } = req.body || {};
     if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
-        return res.status(400).json({ error: 'Login account ID diperlukan' });
+        return res.status(400).json({ error: 'Login account ID is required' });
     }
 
     if (!password || typeof password !== 'string' || !password.trim()) {
-        return res.status(400).json({ error: 'Kata laluan diperlukan untuk log masuk' });
+        return res.status(400).json({ error: 'Password is required to sign in' });
     }
 
     if (!BRIDGE_SERVICE_TOKEN) {
-        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        return res.status(503).json({ error: 'Bridge service token is not configured' });
     }
 
     try {
@@ -386,13 +386,13 @@ app.post('/api/opend/sign-in', authenticateDashboard, async (req, res) => {
 app.post('/api/opend/switch-login', authenticateDashboard, async (req, res) => {
     const { login_account, password } = req.body || {};
     if (!login_account || typeof login_account !== 'string' || !login_account.trim()) {
-        return res.status(400).json({ error: 'Login account ID diperlukan' });
+        return res.status(400).json({ error: 'Login account ID is required' });
     }
     if (!password || typeof password !== 'string' || !password.trim()) {
-        return res.status(400).json({ error: 'Kata laluan diperlukan untuk tukar akaun' });
+        return res.status(400).json({ error: 'Password is required to switch account' });
     }
     if (!BRIDGE_SERVICE_TOKEN) {
-        return res.status(503).json({ error: 'Bridge service token tidak dikonfigurasi' });
+        return res.status(503).json({ error: 'Bridge service token is not configured' });
     }
     try {
         const bridgeRes = await axios.post(`${BRIDGE_URL}/api/v1/telnet/switch-login`, {
@@ -503,7 +503,7 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
         const db = getScreenerDb();
         const row = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, trading_mode, updated_at, updated_by FROM screener_config WHERE id = 1').get();
         if (!row) {
-            return res.status(500).json({ error: 'Konfigurasi screener tidak dijumpai dalam SQLite' });
+            return res.status(500).json({ error: 'Screener configuration not found in SQLite' });
         }
         return res.json({
             config: {
@@ -524,34 +524,34 @@ app.get('/api/screener/config', authenticateDashboard, (req, res) => {
         });
     } catch (err) {
         console.error('[Dashboard] Error fetching screener config:', err);
-        return res.status(500).json({ error: 'Gagal membaca konfigurasi screener: ' + err.message });
+        return res.status(500).json({ error: 'Failed to read screener configuration: ' + err.message });
     }
 });
 
 function parseStrictNumericField(val, fieldName) {
     if (typeof val !== 'number' && typeof val !== 'string') {
-        return { error: `${fieldName} mestilah nombor atau string berangka yang sah.` };
+        return { error: `${fieldName} must be a valid number or numeric string.` };
     }
     if (typeof val === 'string' && val.trim() === '') {
-        return { error: `${fieldName} tidak boleh kosong.` };
+        return { error: `${fieldName} cannot be empty.` };
     }
     const num = Number(val);
     if (!Number.isFinite(num)) {
-        return { error: `${fieldName} mestilah nombor yang sah.` };
+        return { error: `${fieldName} must be a valid number.` };
     }
     return { value: num };
 }
 
 function parseStrictIntegerField(val, fieldName) {
     if (typeof val !== 'number' && typeof val !== 'string') {
-        return { error: `${fieldName} mestilah nombor bulat (integer) yang sah.` };
+        return { error: `${fieldName} must be a valid integer.` };
     }
     if (typeof val === 'string' && val.trim() === '') {
-        return { error: `${fieldName} tidak boleh kosong.` };
+        return { error: `${fieldName} cannot be empty.` };
     }
     const num = Number(val);
     if (!Number.isFinite(num) || !Number.isInteger(num)) {
-        return { error: `${fieldName} mestilah nombor bulat (integer) yang sah.` };
+        return { error: `${fieldName} must be a valid integer.` };
     }
     return { value: num };
 }
@@ -559,13 +559,13 @@ function parseStrictIntegerField(val, fieldName) {
 app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
     try {
         if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
-            return res.status(400).json({ error: 'Body mestilah objek JSON yang sah.' });
+            return res.status(400).json({ error: 'Body must be a valid JSON object.' });
         }
         const body = req.body;
         const db = getScreenerDb();
         const current = db.prepare('SELECT min_price, min_market_cap, min_volume, min_rvol, max_rvol, max_candidates_per_lane, max_buying_power, agent_orders_per_page, pause_buying, trading_mode FROM screener_config WHERE id = 1').get();
         if (!current) {
-            return res.status(500).json({ error: 'Konfigurasi screener asal tidak dijumpai' });
+            return res.status(500).json({ error: 'Original screener configuration not found' });
         }
 
         let newMinPrice = current.min_price;
@@ -581,7 +581,7 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
 
         if (body.trading_mode !== undefined) {
             if (typeof body.trading_mode !== 'string' || !['DAY', 'SWING'].includes(body.trading_mode.trim().toUpperCase())) {
-                return res.status(400).json({ error: 'Mod dagangan tidak sah. Nilai yang diterima: "DAY" atau "SWING".' });
+                return res.status(400).json({ error: 'Invalid trading mode. Accepted values: "DAY" or "SWING".' });
             }
             newTradingMode = body.trading_mode.trim().toUpperCase();
         }
@@ -591,100 +591,100 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
         }
 
         if (body.min_price !== undefined) {
-            const parsed = parseStrictNumericField(body.min_price, 'Harga minimum');
+            const parsed = parseStrictNumericField(body.min_price, 'Minimum price');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_price.min) {
-                return res.status(400).json({ error: 'Harga minimum tidak boleh kurang daripada $1.00 (Had Keselamatan).' });
+                return res.status(400).json({ error: 'Minimum price cannot be less than $1.00 (Safety Limit).' });
             }
             if (val > SCREENER_CONFIG_LIMITS.min_price.max) {
-                return res.status(400).json({ error: `Harga minimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.min_price.max.toLocaleString()}.` });
+                return res.status(400).json({ error: `Minimum price cannot exceed $${SCREENER_CONFIG_LIMITS.min_price.max.toLocaleString()}.` });
             }
             newMinPrice = val;
         }
 
         if (body.min_market_cap !== undefined) {
-            const parsed = parseStrictNumericField(body.min_market_cap, 'Permodalan pasaran minimum');
+            const parsed = parseStrictNumericField(body.min_market_cap, 'Minimum market cap');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_market_cap.min) {
-                return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh kurang daripada $${SCREENER_CONFIG_LIMITS.min_market_cap.min.toLocaleString()}.` });
+                return res.status(400).json({ error: `Minimum market cap cannot be less than $${SCREENER_CONFIG_LIMITS.min_market_cap.min.toLocaleString()}.` });
             }
             if (val > SCREENER_CONFIG_LIMITS.min_market_cap.max) {
-                return res.status(400).json({ error: `Permodalan pasaran minimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.min_market_cap.max.toLocaleString()}.` });
+                return res.status(400).json({ error: `Minimum market cap cannot exceed $${SCREENER_CONFIG_LIMITS.min_market_cap.max.toLocaleString()}.` });
             }
             newMinMarketCap = val;
         }
 
         if (body.min_volume !== undefined) {
-            const parsed = parseStrictNumericField(body.min_volume, 'Volum minimum');
+            const parsed = parseStrictNumericField(body.min_volume, 'Minimum volume');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_volume.min) {
-                return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh kurang daripada ${SCREENER_CONFIG_LIMITS.min_volume.min.toLocaleString()} saham.` });
+                return res.status(400).json({ error: `Minimum ADV20 volume cannot be less than ${SCREENER_CONFIG_LIMITS.min_volume.min.toLocaleString()} shares.` });
             }
             if (val > SCREENER_CONFIG_LIMITS.min_volume.max) {
-                return res.status(400).json({ error: `Volum ADV20 minimum tidak boleh melebihi ${SCREENER_CONFIG_LIMITS.min_volume.max.toLocaleString()} saham.` });
+                return res.status(400).json({ error: `Minimum ADV20 volume cannot exceed ${SCREENER_CONFIG_LIMITS.min_volume.max.toLocaleString()} shares.` });
             }
             newMinVolume = val;
         }
 
         if (body.min_rvol !== undefined) {
-            const parsed = parseStrictNumericField(body.min_rvol, 'RVOL minimum');
+            const parsed = parseStrictNumericField(body.min_rvol, 'Minimum RVOL');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.min_rvol.min || val > SCREENER_CONFIG_LIMITS.min_rvol.max) {
-                return res.status(400).json({ error: `RVOL minimum mestilah antara ${SCREENER_CONFIG_LIMITS.min_rvol.min} dan ${SCREENER_CONFIG_LIMITS.min_rvol.max}.` });
+                return res.status(400).json({ error: `Minimum RVOL must be between ${SCREENER_CONFIG_LIMITS.min_rvol.min} and ${SCREENER_CONFIG_LIMITS.min_rvol.max}.` });
             }
             newMinRvol = val;
         }
 
         if (body.max_rvol !== undefined) {
-            const parsed = parseStrictNumericField(body.max_rvol, 'RVOL maksimum');
+            const parsed = parseStrictNumericField(body.max_rvol, 'Maximum RVOL');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.max_rvol.min || val > SCREENER_CONFIG_LIMITS.max_rvol.max) {
-                return res.status(400).json({ error: `RVOL maksimum mestilah antara ${SCREENER_CONFIG_LIMITS.max_rvol.min} dan ${SCREENER_CONFIG_LIMITS.max_rvol.max}.` });
+                return res.status(400).json({ error: `Maximum RVOL must be between ${SCREENER_CONFIG_LIMITS.max_rvol.min} and ${SCREENER_CONFIG_LIMITS.max_rvol.max}.` });
             }
             newMaxRvol = val;
         }
 
         // Cross-field validation: min_rvol <= max_rvol
         if (newMinRvol > newMaxRvol) {
-            return res.status(400).json({ error: 'RVOL minimum tidak boleh melebihi RVOL maksimum.' });
+            return res.status(400).json({ error: 'Minimum RVOL cannot exceed maximum RVOL.' });
         }
 
         if (body.max_candidates_per_lane !== undefined) {
-            const parsed = parseStrictIntegerField(body.max_candidates_per_lane, 'Had calon per lorong');
+            const parsed = parseStrictIntegerField(body.max_candidates_per_lane, 'Candidates per lane');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.max_candidates_per_lane.min || val > SCREENER_CONFIG_LIMITS.max_candidates_per_lane.max) {
                 return res.status(400).json({
-                    error: `Had calon per lorong mestilah antara ${SCREENER_CONFIG_LIMITS.max_candidates_per_lane.min} dan ${SCREENER_CONFIG_LIMITS.max_candidates_per_lane.max} kaunter (Had Kuota Moomoo OpenAPI).`
+                    error: `Candidates per lane must be between ${SCREENER_CONFIG_LIMITS.max_candidates_per_lane.min} and ${SCREENER_CONFIG_LIMITS.max_candidates_per_lane.max} stocks (Moomoo OpenAPI quota limit).`
                 });
             }
             newMaxCandidatesPerLane = val;
         }
 
         if (body.max_buying_power !== undefined) {
-            const parsed = parseStrictNumericField(body.max_buying_power, 'Had buying power maksimum');
+            const parsed = parseStrictNumericField(body.max_buying_power, 'Maximum buying power');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (val < SCREENER_CONFIG_LIMITS.max_buying_power.min) {
-                return res.status(400).json({ error: `Had buying power maksimum tidak boleh kurang daripada $${SCREENER_CONFIG_LIMITS.max_buying_power.min.toLocaleString()}.` });
+                return res.status(400).json({ error: `Maximum buying power cannot be less than $${SCREENER_CONFIG_LIMITS.max_buying_power.min.toLocaleString()}.` });
             }
             if (val > SCREENER_CONFIG_LIMITS.max_buying_power.max) {
-                return res.status(400).json({ error: `Had buying power maksimum tidak boleh melebihi $${SCREENER_CONFIG_LIMITS.max_buying_power.max.toLocaleString()}.` });
+                return res.status(400).json({ error: `Maximum buying power cannot exceed $${SCREENER_CONFIG_LIMITS.max_buying_power.max.toLocaleString()}.` });
             }
             newMaxBuyingPower = val;
         }
 
         if (body.agent_orders_per_page !== undefined) {
-            const parsed = parseStrictIntegerField(body.agent_orders_per_page, 'Bilangan entri per halaman');
+            const parsed = parseStrictIntegerField(body.agent_orders_per_page, 'Rows per page');
             if (parsed.error) return res.status(400).json({ error: parsed.error });
             const val = parsed.value;
             if (![5, 10, 25, 50].includes(val)) {
-                return res.status(400).json({ error: 'Bilangan entri per halaman mestilah salah satu daripada: 5, 10, 25, atau 50.' });
+                return res.status(400).json({ error: 'Rows per page must be one of: 5, 10, 25, or 50.' });
             }
             newAgentOrdersPerPage = val;
         }
@@ -794,15 +794,15 @@ app.patch('/api/screener/config', authenticateDashboard, (req, res) => {
 app.post('/api/trading-mode', authenticateDashboard, async (req, res) => {
     try {
         if (!req.body || typeof req.body !== 'object') {
-            return res.status(400).json({ error: 'Body mestilah objek JSON yang sah.' });
+            return res.status(400).json({ error: 'Body must be a valid JSON object.' });
         }
         const { mode } = req.body;
         if (!mode || typeof mode !== 'string' || !mode.trim()) {
-            return res.status(400).json({ error: 'Parameter "mode" (string: DAY atau SWING) diperlukan.' });
+            return res.status(400).json({ error: 'Parameter "mode" (string: DAY or SWING) is required.' });
         }
         const normalizedMode = mode.trim().toUpperCase();
         if (normalizedMode !== 'DAY' && normalizedMode !== 'SWING') {
-            return res.status(400).json({ error: 'Mod dagangan tidak sah. Nilai yang diterima: "DAY" atau "SWING".' });
+            return res.status(400).json({ error: 'Invalid trading mode. Accepted values: "DAY" or "SWING".' });
         }
 
         const db = getScreenerDb();
@@ -1040,9 +1040,9 @@ async function getMoomooOpenApiQuota(customBridgeUrl = null) {
     } catch (err) {
         let errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
         if (/ECONNREFUSED|Connection refused|not reachable|ENOTFOUND|EAI_AGAIN|connect/i.test(errMsg)) {
-            errMsg = 'Moomoo OpenD tidak dapat dihubungi';
+            errMsg = 'Unable to connect to Moomoo OpenD';
         } else if (/ETIMEDOUT|timeout/i.test(errMsg)) {
-            errMsg = 'Sambungan ke Moomoo OpenD tamat masa';
+            errMsg = 'Connection to Moomoo OpenD timed out';
         }
         return {
             status: 'UNAVAILABLE',
@@ -1095,7 +1095,7 @@ app.get('/api/kline', authenticateDashboard, async (req, res) => {
     try {
         const symbol = req.query.symbol;
         if (!symbol || typeof symbol !== 'string') {
-            return res.status(400).json({ error: 'Parameter symbol diperlukan' });
+            return res.status(400).json({ error: 'Symbol parameter is required' });
         }
         const interval = String(req.query.interval || 'day').toLowerCase();
         const num = parseInt(req.query.num || '100', 10) || 100;
@@ -1119,7 +1119,7 @@ app.get('/api/kline', authenticateDashboard, async (req, res) => {
                 symbol,
                 interval,
                 candles: [],
-                error: 'Bridge service token tidak dikonfigurasi'
+                error: 'Bridge service token is not configured'
             });
         }
 
@@ -1145,9 +1145,9 @@ app.get('/api/kline', authenticateDashboard, async (req, res) => {
     } catch (err) {
         let errMsg = (err.response && err.response.data && (err.response.data.detail || err.response.data.error)) || err.message;
         if (/ECONNREFUSED|Connection refused|not reachable|ENOTFOUND|EAI_AGAIN|connect/i.test(errMsg)) {
-            errMsg = 'Moomoo OpenD tidak dapat dihubungi';
+            errMsg = 'Unable to connect to Moomoo OpenD';
         } else if (/ETIMEDOUT|timeout/i.test(errMsg)) {
-            errMsg = 'Sambungan ke Moomoo OpenD tamat masa';
+            errMsg = 'Connection to Moomoo OpenD timed out';
         }
         return res.status(200).json({
             status: 'UNAVAILABLE',
@@ -1168,7 +1168,7 @@ app.post('/api/kline/release', authenticateDashboard, async (req, res) => {
         }
         const { symbol, interval } = body || {};
         if (!symbol || typeof symbol !== 'string') {
-            return res.status(400).json({ error: 'Parameter symbol diperlukan' });
+            return res.status(400).json({ error: 'Symbol parameter is required' });
         }
         if (!BRIDGE_SERVICE_TOKEN) {
             return res.status(200).json({ status: 'OK', released: symbol, active: false });
@@ -1193,7 +1193,7 @@ app.post('/api/kline/release', authenticateDashboard, async (req, res) => {
 app.get('/api/kline/subscriptions', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const bridgeRes = await axios.get(`${targetUrl}/api/v1/kline/subscriptions`, {
@@ -1243,7 +1243,7 @@ app.get('/api/data', authenticateDashboard, async (req, res) => {
 app.get('/api/agents/activity', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const limit = req.query.limit || 10;
@@ -1264,7 +1264,7 @@ app.get('/api/agents/activity', authenticateDashboard, async (req, res) => {
 app.get(['/api/agents/orders', '/api/v1/agents/orders'], authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const limit = req.query.limit || 50;
@@ -1285,7 +1285,7 @@ app.get(['/api/agents/orders', '/api/v1/agents/orders'], authenticateDashboard, 
 app.post('/api/agents/simulate-run', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const bridgeRes = await axios.post(`${targetUrl}/api/v1/agents/simulate-run`, req.body || {}, {
@@ -1307,7 +1307,7 @@ app.post('/api/agents/simulate-run', authenticateDashboard, async (req, res) => 
 app.post('/api/agents/orders/:order_id/cancel', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const { order_id } = req.params;
@@ -1344,7 +1344,7 @@ app.post('/api/agents/pause-buying', authenticateDashboard, async (req, res) => 
     try {
         const { paused } = req.body || {};
         if (typeof paused !== 'boolean') {
-            return res.status(400).json({ error: 'Parameter "paused" (boolean) diperlukan.' });
+            return res.status(400).json({ error: 'Parameter "paused" (boolean) is required.' });
         }
         const db = getScreenerDb();
         const current = db.prepare('SELECT pause_buying FROM screener_config WHERE id = 1').get();
@@ -1386,7 +1386,7 @@ app.post('/api/agents/pause-buying', authenticateDashboard, async (req, res) => 
 app.get('/api/trade/orders', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const bridgeRes = await axios.get(`${targetUrl}/api/v1/trade/orders`, {
@@ -1407,7 +1407,7 @@ let lastKnownPortfolio = null;
 app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
     try {
         if (!BRIDGE_SERVICE_TOKEN) {
-            return res.status(500).json({ error: 'Bridge service token tidak dikonfigurasi' });
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         let bridgePositionsError = null;

@@ -174,7 +174,7 @@ async function runPlaywrightSuite() {
     await mobilePage.screenshot({ path: path.join(SCREENSHOT_DIR, '03_mobile_opend_filled.png'), fullPage: true });
 
     // Cancel credential change and revert to connected view
-    const cancelCredBtn = mobilePage.locator('button:has-text("Batal")');
+    const cancelCredBtn = mobilePage.locator('button:has-text("Cancel"), button:has-text("Batal")');
     if ((await cancelCredBtn.count()) > 0) {
       await cancelCredBtn.click();
       await mobilePage.waitForTimeout(300);
@@ -184,7 +184,7 @@ async function runPlaywrightSuite() {
     await menuBtn.click();
     await mobilePage.waitForTimeout(400);
     const drawerModal = mobilePage.locator('.MuiDrawer-modal');
-    const navWatchlist = drawerModal.locator('text=Watchlist Dwi-Lorong');
+    const navWatchlist = drawerModal.locator('text=Screening & Watchlist, text=Watchlist Dwi-Lorong');
     await navWatchlist.click();
     await mobilePage.waitForTimeout(500);
     assertCheck('Mobile Navigation: Navigated to #/watchlist', mobilePage.url().includes('#/watchlist'));

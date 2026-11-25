@@ -101,11 +101,11 @@ async function runSuite() {
     const currentUrl = page.url();
     assertCheck('Navigating to #/opend redirects gracefully to #/settings?tab=opend', currentUrl.includes('/settings') && currentUrl.includes('tab=opend'));
 
-    // Verify Tab 2 (Pengurusan Gerbang OpenD) is selected
-    const tab2 = page.locator('button[role="tab"]:has-text("Pengurusan Gerbang OpenD")');
-    assertCheck('Settings Tab "Pengurusan Gerbang OpenD" is present', (await tab2.count()) >= 1);
+    // Verify Tab 2 (OpenD Gateway Management / Pengurusan Gerbang OpenD) is selected
+    const tab2 = page.locator('button[role="tab"]:has-text("OpenD Gateway Management"), button[role="tab"]:has-text("Pengurusan Gerbang OpenD")');
+    assertCheck('Settings Tab "OpenD Gateway Management" is present', (await tab2.count()) >= 1);
     const isTab2Selected = await tab2.getAttribute('aria-selected');
-    assertCheck('Tab "Pengurusan Gerbang OpenD" is actively selected', isTab2Selected === 'true');
+    assertCheck('Tab "OpenD Gateway Management" is actively selected', isTab2Selected === 'true');
 
     // Verify OpenD panel is rendered and Specifications card is REMOVED
     const settingsBodyText = await page.innerText('body');
@@ -122,7 +122,7 @@ async function runSuite() {
     // Part C: SettingsPage Tab 1 (Parameter Screener & Modal)
     // -----------------------------------------------------------------------
     console.log('\n[Part C: SettingsPage Tab 1 & Limit Buying Power]');
-    const tab1 = page.locator('button[role="tab"]:has-text("Parameter Screener & Modal")');
+    const tab1 = page.locator('#tab-capital-risk, button[role="tab"]:has-text("Capital & Risk Management"), button[role="tab"]:has-text("Parameter Screener & Modal")');
     await tab1.click();
     await page.waitForTimeout(600);
 
@@ -131,7 +131,7 @@ async function runSuite() {
     assertCheck('Settings header cleaned: No "SQLite WAL: Aktif" badge', !tab1BodyText.includes('SQLite WAL: Aktif'));
 
     // 2. Field 6: Had Siling Modal Maksimum (Limit Buying Power)
-    assertCheck('Limit Buying Power title rendered', tab1BodyText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
+    assertCheck('Limit Buying Power title rendered', tab1BodyText.includes('Maximum Capital Ceiling (Limit Buying Power)') || tab1BodyText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
     const bpInput = page.locator('#inputMaxBuyingPower');
     assertCheck('Input #inputMaxBuyingPower is visible', await bpInput.isVisible());
 

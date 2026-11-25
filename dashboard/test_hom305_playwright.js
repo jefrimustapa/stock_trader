@@ -130,7 +130,7 @@ async function runSuite() {
     assertCheck('URL hash reflects #/settings?tab=capital', currentUrlAfterTab1.includes('tab=capital'));
 
     const capitalPanelText = await page.innerText('#tab-panel-capital');
-    assertCheck('Tab 1 contains "Had Siling Modal Maksimum (Limit Buying Power)"', capitalPanelText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
+    assertCheck('Tab 1 contains "Maximum Capital Ceiling (Limit Buying Power)"', capitalPanelText.includes('Maximum Capital Ceiling (Limit Buying Power)') || capitalPanelText.includes('Had Siling Modal Maksimum (Limit Buying Power)'));
     assertCheck('Tab 1 does NOT contain cliché "Prinsip Perlindungan Modal" card (HOM-305 feedback)', !capitalPanelText.includes('Prinsip Perlindungan Modal & Sizing Posisi Ejen'));
 
     // Verify Capital Input Field & Presets
@@ -243,7 +243,7 @@ async function runSuite() {
     await page.waitForTimeout(1000);
 
     const agentsText = await page.innerText('body');
-    assertCheck('Agents Page displays "Kaunter Semasa Lulus" metric', agentsText.includes('Kaunter Semasa Lulus'));
+    assertCheck('Agents Page displays "Passed Candidates" metric', agentsText.includes('Passed Candidates') || agentsText.includes('Kaunter Semasa Lulus'));
     assertCheck('Agents Page removed cliché labels "L1: " / "L2: "', !agentsText.includes('L1: 1 Lulus') && !agentsText.includes('L2: 1 Lulus'));
     assertCheck('Agents Page removed cliché chips "(L1_TECHNICAL)" / "(L4_DISPATCH)"', !agentsText.includes('(L1_TECHNICAL)') && !agentsText.includes('(L4_DISPATCH)'));
 
@@ -271,7 +271,7 @@ async function runSuite() {
     const tabL0 = page.locator('#nav-item-l0');
     assertCheck('Sidebar contains unified navigation item #nav-item-l0', (await tabL0.count()) >= 1);
     const l0NavText = await tabL0.first().innerText();
-    assertCheck('Sidebar #nav-item-l0 is labeled "L0: Saringan & Watchlist"', l0NavText.includes('L0: Saringan & Watchlist'));
+    assertCheck('Sidebar #nav-item-l0 is labeled "L0: Screening & Watchlist"', l0NavText.includes('L0: Screening & Watchlist') || l0NavText.includes('L0: Saringan & Watchlist'));
 
     await tabL0.first().click();
     await page.waitForTimeout(1000);
@@ -280,7 +280,7 @@ async function runSuite() {
     assertCheck('Unified L0 Page (#page-l0) is rendered', (await l0Page.count()) === 1);
 
     const l0Text = await l0Page.innerText();
-    assertCheck('L0 Page contains header "L0: Saringan & Watchlist Dwi-Lorong"', l0Text.includes('L0: Saringan & Watchlist Dwi-Lorong'));
+    assertCheck('L0 Page contains header "L0: Stock Screening & Dual-Lane Watchlist"', l0Text.includes('L0: Stock Screening & Dual-Lane Watchlist') || l0Text.includes('L0: Saringan & Watchlist Dwi-Lorong'));
     assertCheck('L0 Page contains 5-stage Funnel Stepper', l0Text.includes('STAGE 1') || l0Text.includes('Cloud Universe'));
     assertCheck('L0 Page contains Watchlist Table component', l0Text.includes('LORONG MOMENTUM') || l0Text.includes('Watchlist'));
     assertCheck('Cliché chips removed from Funnel Stepper (no "Aliran Progresif")', !l0Text.includes('Aliran Progresif'));

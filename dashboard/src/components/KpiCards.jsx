@@ -72,7 +72,7 @@ export function KpiCards({ statusData, dataPayload }) {
           <Card
             sx={cardActionSx}
             onClick={() => { window.location.hash = '#/settings?tab=opend'; }}
-            title="Klik untuk ke halaman Tetapan & Pengurusan Gerbang OpenD"
+            title="Click to view OpenD Gateway Settings & Management"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -105,7 +105,7 @@ export function KpiCards({ statusData, dataPayload }) {
                 </Box>
 
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Gerbang OpenD Moomoo
+                  Moomoo OpenD Gateway
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: isOpendConnected ? sneatTokens.success.main : sneatTokens.warning.main }}>
                   {opendStatus}
@@ -127,7 +127,7 @@ export function KpiCards({ statusData, dataPayload }) {
           <Card
             sx={cardActionSx}
             onClick={() => { window.location.hash = '#/portfolio'; }}
-            title="Klik untuk ke halaman Portfolio Pegangan & Harga Semasa"
+            title="Click to view Portfolio Holdings & Current Prices"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -160,7 +160,7 @@ export function KpiCards({ statusData, dataPayload }) {
                 </Box>
 
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Baki Tunai &amp; Jumlah Ekuiti
+                  Cash Balance &amp; Total Equity
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
                   {cashBalance}
@@ -169,7 +169,7 @@ export function KpiCards({ statusData, dataPayload }) {
 
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                  Jumlah Ekuiti: <strong>{totalEquity}</strong>
+                  Total Equity: <strong>{totalEquity}</strong>
                 </Typography>
                 <ArrowForwardIosIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
               </Box>
@@ -183,7 +183,7 @@ export function KpiCards({ statusData, dataPayload }) {
             id="kpi-card-kline-quota"
             sx={cardActionSx}
             onClick={() => { window.location.hash = '#/quota'; }}
-            title="Klik untuk lihat perincian kuota K-Line Moomoo OpenAPI sebenar"
+            title="Click to view real Moomoo OpenAPI K-Line quota details"
           >
             <CardContent sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2.5 } }}>
               <Box>
@@ -204,7 +204,7 @@ export function KpiCards({ statusData, dataPayload }) {
                   </Box>
                   <Chip
                     size="small"
-                    label={isMoomooConnected ? `${klineUsed} / ${klineTotal} Terpakai` : 'Tidak Tersedia'}
+                    label={isMoomooConnected ? `${klineUsed} / ${klineTotal} Used` : 'Unavailable'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -216,20 +216,20 @@ export function KpiCards({ statusData, dataPayload }) {
                 </Box>
 
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kuota API K-Line (Moomoo Sebenar)
+                  K-Line API Quota (Real Moomoo)
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {isMoomooConnected ? `${klineRemaining} Baki` : '-'}
+                  {isMoomooConnected ? `${klineRemaining} Remaining` : '-'}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Kadar Penggunaan
+                    Usage Rate
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isMoomooConnected ? `${Math.round(klinePercent)}%` : 'Tidak tersedia'}
+                    {isMoomooConnected ? `${Math.round(klinePercent)}%` : 'Unavailable'}
                   </Typography>
                 </Box>
                 <LinearProgress

@@ -154,13 +154,13 @@ export function OpendControlPanel({ statusData, onRefresh }) {
       });
       const data = await resp.json();
       if (resp.ok) {
-        setAccMessage({ type: 'success', text: `Akaun berjaya ditukar kepada ${targetId}` });
+        setAccMessage({ type: 'success', text: `Account switched to ${targetId}` });
         if (onRefresh) onRefresh();
       } else {
-        setAccMessage({ type: 'error', text: data.error || 'Gagal menukar akaun dagangan.' });
+        setAccMessage({ type: 'error', text: data.error || 'Failed to switch trading account.' });
       }
     } catch (err) {
-      setAccMessage({ type: 'error', text: `Ralat rangkaian: ${err.message}` });
+      setAccMessage({ type: 'error', text: `Network error: ${err.message}` });
     } finally {
       setSwitchingAcc(false);
     }
@@ -177,15 +177,15 @@ export function OpendControlPanel({ statusData, onRefresh }) {
       });
       const data = await resp.json();
       if (resp.ok) {
-        setSignOutMessage({ type: 'success', text: 'Sesi OpenD berjaya ditamatkan.' });
+        setSignOutMessage({ type: 'success', text: 'OpenD session ended successfully.' });
         setOpenSignOutDialog(false);
         setManualShowLogin(false);
         if (onRefresh) onRefresh();
       } else {
-        setSignOutMessage({ type: 'error', text: data.error || 'Gagal menamatkan sesi OpenD.' });
+        setSignOutMessage({ type: 'error', text: data.error || 'Failed to end OpenD session.' });
       }
     } catch (err) {
-      setSignOutMessage({ type: 'error', text: `Ralat: ${err.message}` });
+      setSignOutMessage({ type: 'error', text: `Error: ${err.message}` });
     } finally {
       setSigningOut(false);
     }
@@ -198,11 +198,11 @@ export function OpendControlPanel({ statusData, onRefresh }) {
     const effectivePwd = loginPwd || document.getElementById('loginPwdInput')?.value || '';
 
     if (!effectiveAcc || !effectivePwd) {
-      setSignInMessage({ type: 'error', text: 'Sila lengkapkan Account ID dan kata laluan.' });
+      setSignInMessage({ type: 'error', text: 'Enter Account ID and password.' });
       return;
     }
     setSigningIn(true);
-    setSignInMessage({ type: 'info', text: 'Menghubungi OpenD Telnet gateway...' });
+    setSignInMessage({ type: 'info', text: 'Connecting to OpenD Telnet gateway...' });
     try {
       const resp = await fetch('/api/opend/sign-in', {
         method: 'POST',
@@ -215,21 +215,21 @@ export function OpendControlPanel({ statusData, onRefresh }) {
         const pwdInputEl = document.getElementById('loginPwdInput');
         if (pwdInputEl) pwdInputEl.value = '';
         if (data.status === 'WAIT_OTP') {
-          setSignInMessage({ type: 'warning', text: 'Kredensial disahkan! Kod OTP 2FA diperlukan.' });
+          setSignInMessage({ type: 'warning', text: 'Credentials verified. 2FA OTP code required.' });
           setOpenOtpDialog(true);
         } else if (data.status === 'CONNECTED') {
-          setSignInMessage({ type: 'success', text: 'Log masuk berjaya! Status OpenD kini CONNECTED.' });
+          setSignInMessage({ type: 'success', text: 'Sign-in successful. OpenD status is CONNECTED.' });
           setManualShowLogin(false);
           if (onRefresh) onRefresh();
         } else {
-          setSignInMessage({ type: 'info', text: data.message || `Status dikemas kini: ${data.status}` });
+          setSignInMessage({ type: 'info', text: data.message || `Status updated: ${data.status}` });
           if (onRefresh) onRefresh();
         }
       } else {
-        setSignInMessage({ type: 'error', text: data.error || data.detail || 'Log masuk gagal.' });
+        setSignInMessage({ type: 'error', text: data.error || data.detail || 'Sign-in failed.' });
       }
     } catch (err) {
-      setSignInMessage({ type: 'error', text: `Ralat: ${err.message}` });
+      setSignInMessage({ type: 'error', text: `Error: ${err.message}` });
     } finally {
       setSigningIn(false);
     }
@@ -239,7 +239,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
   const handleSubmitOtp = async (e) => {
     if (e) e.preventDefault();
     if (!otpCode) {
-      setOtpMessage({ type: 'error', text: 'Sila masukkan kod OTP.' });
+      setOtpMessage({ type: 'error', text: 'Enter OTP code.' });
       return;
     }
     setSubmittingOtp(true);
@@ -252,7 +252,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
       });
       const data = await resp.json();
       if (resp.ok) {
-        setOtpMessage({ type: 'success', text: 'Kod OTP diterima! Memulakan pengesahan...' });
+        setOtpMessage({ type: 'success', text: 'OTP code received. Authenticating...' });
         setOtpCode('');
         setTimeout(() => {
           setOpenOtpDialog(false);
@@ -260,10 +260,10 @@ export function OpendControlPanel({ statusData, onRefresh }) {
           if (onRefresh) onRefresh();
         }, 1200);
       } else {
-        setOtpMessage({ type: 'error', text: data.error || 'Pengesahan OTP gagal.' });
+        setOtpMessage({ type: 'error', text: data.error || 'OTP verification failed.' });
       }
     } catch (err) {
-      setOtpMessage({ type: 'error', text: `Ralat: ${err.message}` });
+      setOtpMessage({ type: 'error', text: `Error: ${err.message}` });
     } finally {
       setSubmittingOtp(false);
     }
@@ -296,10 +296,10 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                     </Box>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.15rem' } }}>
-                        Sesi Broker Moomoo Aktif &amp; Terhubung
+                        Active &amp; Connected Moomoo Broker Session
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Gerbang OpenD sedia untuk suapan pasaran langsung dan pelaksanaan pesanan.
+                        OpenD gateway is ready for live market feeds and order execution.
                       </Typography>
                     </Box>
                   </Box>
@@ -328,20 +328,20 @@ export function OpendControlPanel({ statusData, onRefresh }) {
 
                 <Box sx={{ mb: 3, mt: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
-                    Pertukaran Akaun Dagangan Pantas
+                    Fast Trading Account Switch
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1.5 }}>
-                    Pilih akaun Paper Trading (SIMULATE) atau akaun Margin (REAL) secara dinamik tanpa memulakan semula OpenD.
+                    Select Paper Trading (SIMULATE) or Margin (REAL) dynamically without restarting OpenD.
                   </Typography>
 
                   <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                     <FormControl fullWidth size="small">
-                      <InputLabel id="acc-select-label">Pilih Akaun Aktif (acc_id)</InputLabel>
+                      <InputLabel id="acc-select-label">Select Active Account (acc_id)</InputLabel>
                       <Select
                         labelId="acc-select-label"
                         id="accSelect"
                         value={selectedAccount || (accounts.length > 0 ? extractAccId(accounts[0]) : '')}
-                        label="Pilih Akaun Aktif (acc_id)"
+                        label="Select Active Account (acc_id)"
                         disabled={switchingAcc}
                         onChange={(e) => handleSwitchAccount(e.target.value)}
                       >
@@ -357,7 +357,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                           })
                         ) : (
                           <MenuItem value={selectedAccount || 'SIMULATE-1'}>
-                            {selectedAccount || 'SIMULATE-1 (Akaun Aktif)'}
+                            {selectedAccount || 'SIMULATE-1 (Active Account)'}
                           </MenuItem>
                         )}
                       </Select>
@@ -372,10 +372,10 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                      Tamatkan Sesi Semasa
+                      End Current Session
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      Membersihkan token fail sesi dan meletakkan gerbang Telnet ke mod idle.
+                      Clears session token file and sets Telnet gateway to idle mode.
                     </Typography>
                   </Box>
 
@@ -389,7 +389,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                       disabled={signingOut}
                       size="medium"
                     >
-                      Sign-Out Sesi OpenD
+                      Sign Out OpenD Session
                     </Button>
 
                     <Button
@@ -399,7 +399,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                       onClick={() => setManualShowLogin(true)}
                       sx={{ color: 'text.secondary', textTransform: 'none' }}
                     >
-                      Tukar Kredensial Moomoo
+                      Change Moomoo Credentials
                     </Button>
                   </Box>
                 </Box>
@@ -427,10 +427,10 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                     </Box>
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.15rem' } }}>
-                        Log Masuk &amp; Kredensial Moomoo
+                        Moomoo Sign-In &amp; Credentials
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Masukkan ID akaun dan kata laluan Moomoo untuk memulakan sesi OpenD.
+                        Enter Moomoo account ID and password to start OpenD session.
                       </Typography>
                     </Box>
                   </Box>
@@ -455,14 +455,14 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                   <TextField
                     id="loginAccInput"
                     name="username"
-                    label="Moomoo Account ID / Emel"
+                    label="Moomoo Account ID / Email"
                     variant="outlined"
                     size="small"
                     fullWidth
                     autoComplete="username"
                     value={loginAcc}
                     onChange={(e) => setLoginAcc(e.target.value)}
-                    placeholder="cth. 12345678"
+                    placeholder="e.g. 12345678"
                     required
                     inputProps={{
                       autoComplete: 'username',
@@ -472,7 +472,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                   <TextField
                     id="loginPwdInput"
                     name="password"
-                    label="Kata Laluan Moomoo"
+                    label="Moomoo Password"
                     type={showPassword ? 'text' : 'password'}
                     variant="outlined"
                     size="small"
@@ -480,7 +480,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                     autoComplete="current-password"
                     value={loginPwd}
                     onChange={(e) => setLoginPwd(e.target.value)}
-                    placeholder="Kata laluan akaun"
+                    placeholder="Account password"
                     required
                     inputProps={{
                       autoComplete: 'current-password',
@@ -489,7 +489,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                       endAdornment: (
                         <InputAdornment position="end">
                           <IconButton
-                            aria-label="papar atau sembunyikan kata laluan"
+                            aria-label="show or hide password"
                             onClick={() => setShowPassword(!showPassword)}
                             edge="end"
                             size="small"
@@ -511,7 +511,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                       disabled={signingIn}
                       sx={{ flex: 1 }}
                     >
-                      {signingIn ? 'Menghantar Kredensial...' : 'Log Masuk ke OpenD'}
+                      {signingIn ? 'Sending Credentials...' : 'Sign In to OpenD'}
                     </Button>
 
                     {isConnected && manualShowLogin && (
@@ -520,7 +520,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
                         color="secondary"
                         onClick={() => setManualShowLogin(false)}
                       >
-                        Batal
+                        Cancel
                       </Button>
                     )}
                   </Box>
@@ -533,15 +533,15 @@ export function OpendControlPanel({ statusData, onRefresh }) {
 
       {/* Dialog Pengesahan Sign-Out */}
       <Dialog open={openSignOutDialog} onClose={() => setOpenSignOutDialog(false)}>
-        <DialogTitle sx={{ fontWeight: 600 }}>Sahkan Penamatan Sesi OpenD</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 600 }}>Confirm OpenD Session Termination</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Adakah anda pasti mahu menamatkan sesi OpenD ini? Sambungan data langsung pasaran dan pelaksanaan pesanan akan digantung sehingga log masuk semula.
+            Are you sure you want to end this OpenD session? Live market data and order execution will pause until you sign in again.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setOpenSignOutDialog(false)} color="secondary">
-            Batal
+            Cancel
           </Button>
           <Button
             onClick={handleOpenDSignOut}
@@ -549,7 +549,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
             color="error"
             disabled={signingOut}
           >
-            {signingOut ? 'Sedang Ditamatkan...' : 'Ya, Sign-Out Sekarang'}
+            {signingOut ? 'Ending Session...' : 'Sign Out Now'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -557,11 +557,11 @@ export function OpendControlPanel({ statusData, onRefresh }) {
       {/* Dialog Masukan Kod 2FA OTP (Hanya dipaparkan secara popup bila WAIT_OTP atau semasa log masuk) */}
       <Dialog open={openOtpDialog} onClose={() => setOpenOtpDialog(false)}>
         <DialogTitle sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <KeyIcon sx={{ color: sneatTokens.warning.main }} /> Masukkan Kod Pengesahan 2FA OTP
+          <KeyIcon sx={{ color: sneatTokens.warning.main }} /> Enter 2FA OTP Verification Code
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Sila semak mesej SMS atau peranti Moomoo anda dan masukkan kod OTP 4-8 digit untuk melengkapkan pengesahan Telnet broker.
+            Check SMS or your Moomoo device and enter the 4-8 digit OTP code to complete broker authentication.
           </DialogContentText>
 
           {otpMessage && (
@@ -573,18 +573,18 @@ export function OpendControlPanel({ statusData, onRefresh }) {
           <TextField
             id="otpInput"
             autoFocus
-            label="Kod 2FA OTP (4-8 Digit)"
+            label="2FA OTP Code (4-8 Digits)"
             fullWidth
             size="small"
             value={otpCode}
             onChange={(e) => setOtpCode(e.target.value)}
-            placeholder="cth. 123456"
+            placeholder="e.g. 123456"
             sx={{ mt: 1 }}
           />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setOpenOtpDialog(false)} color="secondary">
-            Tutup
+            Close
           </Button>
           <Button
             onClick={handleSubmitOtp}
@@ -592,7 +592,7 @@ export function OpendControlPanel({ statusData, onRefresh }) {
             color="primary"
             disabled={submittingOtp}
           >
-            {submittingOtp ? 'Mengesahkan...' : 'Hantar Kod OTP'}
+            {submittingOtp ? 'Verifying...' : 'Submit OTP Code'}
           </Button>
         </DialogActions>
       </Dialog>

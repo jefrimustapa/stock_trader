@@ -66,18 +66,18 @@ export function KlineDrawer({ open, onClose, stock }) {
 
   const getCandleCountLabel = () => {
     const total = klineData?.candles?.length || 0;
-    if (total === 0) return '0 lilin';
+    if (total === 0) return '0 candles';
     if (zoomMode === 'all') {
-      return `${total} lilin`;
+      return `${total} candles`;
     }
     if (zoomMode === '40') {
-      if (total <= 40) return `${total} lilin`;
-      return `40 / ${total} lilin`;
+      if (total <= 40) return `${total} candles`;
+      return `40 / ${total} candles`;
     }
     // zoomMode === 'custom'
     const count = Math.min(total, Math.max(0, visibleCandleCount));
-    if (count >= total) return `${total} lilin`;
-    return `${count} / ${total} lilin`;
+    if (count >= total) return `${total} candles`;
+    return `${count} / ${total} candles`;
   };
 
   const handleShowRecent = () => {
@@ -164,10 +164,10 @@ export function KlineDrawer({ open, onClose, stock }) {
       activeSubRef.current = { symbol: sym, interval: intv };
 
       if (data.status !== 'HEALTHY') {
-        setErrorMsg(data.error || 'Data Graf K-line Moomoo Tidak Tersedia');
+        setErrorMsg(data.error || 'Moomoo K-Line Chart Data Unavailable');
       }
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Ralat sambungan pelayan';
+      const msg = err.response?.data?.error || err.message || 'Server connection error';
       setErrorMsg(msg);
       setKlineData({
         status: 'UNAVAILABLE',
@@ -665,35 +665,35 @@ export function KlineDrawer({ open, onClose, stock }) {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Tooltip title="Muat semula graf">
+          <Tooltip title="Reload chart">
             <IconButton
               size="small"
               onClick={() => fetchKline(symbol, interval)}
               disabled={loading}
-              title="Muat semula graf"
-              aria-label="Muat semula graf"
+              title="Reload chart"
+              aria-label="Reload chart"
             >
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           {!isMobile && (
-            <Tooltip title={isMaximized ? "Kecilkan panel" : "Besarkan panel graf"}>
+            <Tooltip title={isMaximized ? "Collapse panel" : "Expand chart panel"}>
               <IconButton
                 size="small"
                 onClick={() => setIsMaximized(!isMaximized)}
-                title={isMaximized ? "Kecilkan panel" : "Besarkan panel graf"}
-                aria-label={isMaximized ? "Kecilkan panel" : "Besarkan panel graf"}
+                title={isMaximized ? "Collapse panel" : "Expand chart panel"}
+                aria-label={isMaximized ? "Collapse panel" : "Expand chart panel"}
               >
                 {isMaximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
           )}
-          <Tooltip title="Tutup panel">
+          <Tooltip title="Close panel">
             <IconButton
               size="small"
               onClick={handleClose}
-              title="Tutup panel"
-              aria-label="Tutup panel"
+              title="Close panel"
+              aria-label="Close panel"
             >
               <CloseIcon fontSize="small" />
             </IconButton>
@@ -791,7 +791,7 @@ export function KlineDrawer({ open, onClose, stock }) {
           >
             <CircularProgress size={36} sx={{ color: sneatTokens.primary.main }} />
             <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-              Memuatkan data K-line {symbol} ({interval})...
+              Loading K-line data {symbol} ({interval})...
             </Typography>
           </Box>
         )}
@@ -827,15 +827,15 @@ export function KlineDrawer({ open, onClose, stock }) {
                   <>
                     <InfoOutlinedIcon sx={{ fontSize: 44, color: sneatTokens.info.main, mb: 1 }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: sneatTokens.info.main }}>
-                      Pasaran OTC Tidak Disokong Moomoo OpenAPI
+                      OTC Market Not Supported by Moomoo OpenAPI
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 440, mx: 'auto', lineHeight: 1.6 }}>
-                      Kaunter <strong>{symbol}</strong> ({companyName}) didagangkan di pasaran Over-The-Counter (OTC) US.
-                      Moomoo OpenAPI tidak menyediakan suapan data sebut harga atau graf K-line bagi kaunter pasaran OTC.
+                      Symbol <strong>{symbol}</strong> ({companyName}) trades on the US Over-The-Counter (OTC) market.
+                      Moomoo OpenAPI does not provide real-time quote feeds or K-line charts for OTC symbols.
                     </Typography>
                     <Chip
                       size="small"
-                      label="US OTC Market · Tiada Suapan Data Moomoo"
+                      label="US OTC Market · No Moomoo Data Feed"
                       sx={{
                         mb: 2,
                         fontWeight: 700,
@@ -845,7 +845,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                       }}
                     />
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 2.5 }}>
-                      Sila pilih kaunter pasaran utama (NYSE / NASDAQ / AMEX) dalam senarai Watchlist untuk melihat graf candlestick masa nyata.
+                      Please select a primary market symbol (NYSE / NASDAQ / AMEX) in the Watchlist to view real-time candlestick charts.
                     </Typography>
                     <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                       <Button
@@ -860,7 +860,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                           '&:hover': { backgroundColor: sneatTokens.primary.dark },
                         }}
                       >
-                        Tutup Panel
+                        Close Panel
                       </Button>
                       <Button
                         variant="outlined"
@@ -871,7 +871,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         rel="noopener noreferrer"
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                       >
-                        Lihat di Yahoo Finance
+                        View on Yahoo Finance
                       </Button>
                     </Box>
                   </>
@@ -879,11 +879,11 @@ export function KlineDrawer({ open, onClose, stock }) {
                   <>
                     <WarningAmberIcon sx={{ fontSize: 44, color: sneatTokens.warning.main, mb: 1 }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: isDark ? '#FFD071' : '#B87A00' }}>
-                      Sambungan Moomoo OpenD Terputus
+                      Moomoo OpenD Disconnected
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 420, mx: 'auto' }}>
-                      Sambungan OpenD daemon terputus atau sesi belum disahkan. Graf K-line sebenar tidak dapat dimuatkan.
-                      Tiada data lilin olok-olok dijana mengikut prinsip fail-closed.
+                      The OpenD daemon connection was lost or the session is not authenticated. Real K-line charts cannot be loaded.
+                      No mock candle data is generated under fail-closed principles.
                     </Typography>
                     {errorMsg && (
                       <Chip
@@ -916,7 +916,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                           '&:hover': { backgroundColor: sneatTokens.warning.dark },
                         }}
                       >
-                        Buka Panel Kawalan OpenD
+                        Open OpenD Control Panel
                       </Button>
                       <Button
                         variant="outlined"
@@ -924,7 +924,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         onClick={() => fetchKline(symbol, interval)}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                       >
-                        Cuba Semula
+                        Retry
                       </Button>
                     </Box>
                   </>
@@ -932,10 +932,10 @@ export function KlineDrawer({ open, onClose, stock }) {
                   <>
                     <WarningAmberIcon sx={{ fontSize: 44, color: sneatTokens.warning.main, mb: 1 }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: sneatTokens.warning.main }}>
-                      Had Kuota Langganan OpenD Penuh
+                      OpenD Subscription Quota Full
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 420, mx: 'auto' }}>
-                      Maksimum 100 slot langganan serentak Moomoo telah dicapai. Slot yang tidak digunakan akan dilepaskan secara automatik selepas tempoh pegangan minimum 60 saat tamat.
+                      Maximum 100 concurrent Moomoo subscription slots reached. Unused slots release automatically after the 60-second hold period expires.
                     </Typography>
                     <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1.5 }}>
                       <Button
@@ -949,7 +949,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                           textTransform: 'none',
                         }}
                       >
-                        Cuba Semula
+                        Retry
                       </Button>
                       <Button
                         variant="outlined"
@@ -957,7 +957,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         onClick={handleClose}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                       >
-                        Tutup Panel
+                        Close Panel
                       </Button>
                     </Box>
                   </>
@@ -965,10 +965,10 @@ export function KlineDrawer({ open, onClose, stock }) {
                   <>
                     <ErrorOutlineIcon sx={{ fontSize: 44, color: sneatTokens.error.main, mb: 1 }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: sneatTokens.error.main }}>
-                      Data Graf K-line Tidak Tersedia
+                      K-Line Chart Data Unavailable
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 420, mx: 'auto' }}>
-                      Data K-line lilin untuk kaunter ini tidak dapat dimuatkan daripada Moomoo OpenAPI pada masa ini.
+                      Candlestick K-line data for this symbol cannot be loaded from Moomoo OpenAPI at this time.
                     </Typography>
                     {errorMsg && (
                       <Chip
@@ -999,7 +999,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                           textTransform: 'none',
                         }}
                       >
-                        Cuba Semula
+                        Retry
                       </Button>
                       <Button
                         variant="outlined"
@@ -1007,7 +1007,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         onClick={handleClose}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                       >
-                        Tutup Panel
+                        Close Panel
                       </Button>
                     </Box>
                   </>
@@ -1082,7 +1082,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                 </Box>
               ) : (
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                  Arahkan kursor ke graf untuk metrik lilin
+                  Hover over chart for candle metrics
                 </Typography>
               )}
 
@@ -1119,9 +1119,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Fokus 40 lilin terkini"
+                    title="Focus latest 40 candles"
                   >
-                    40 Lilin
+                    40 Candles
                   </Button>
                   <Button
                     onClick={handleFitAll}
@@ -1143,9 +1143,9 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Papar semua lilin (Fit All)"
+                    title="View all candles (Fit All)"
                   >
-                    Semua
+                    All
                   </Button>
                   <Button
                     onClick={handleZoomIn}
@@ -1166,7 +1166,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Zum Masuk (+)"
+                    title="Zoom In (+)"
                   >
                     +
                   </Button>
@@ -1189,7 +1189,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                         borderColor: `${sneatTokens.primary.main} !important`,
                       },
                     }}
-                    title="Zum Keluar (-)"
+                    title="Zoom Out (-)"
                   >
                     -
                   </Button>
@@ -1247,7 +1247,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <InfoOutlinedIcon sx={{ fontSize: 18, color: sneatTokens.info.main }} />
                   <Typography variant="caption" sx={{ color: sneatTokens.info.main, fontWeight: 700 }}>
-                    Saham Penyenaraian Baharu (IPO): Hanya {klineData.candles.length} hari dagangan wujud sejak penyenaraian di bursa.
+                    Recent IPO: Only {klineData.candles.length} trading days exist since exchange listing.
                   </Typography>
                 </Box>
                 <Button
@@ -1264,7 +1264,7 @@ export function KlineDrawer({ open, onClose, stock }) {
                     '&:hover': { backgroundColor: sneatTokens.info.dark },
                   }}
                 >
-                  Papar Lilin 15M (Intraday)
+                  Show 15M Candles (Intraday)
                 </Button>
               </Box>
             )}
@@ -1288,10 +1288,10 @@ export function KlineDrawer({ open, onClose, stock }) {
             {/* Bottom Status & Info Bar */}
             <Box sx={{ mt: isSmallHeight ? 0.5 : isMobilePortrait ? 0.75 : 1.5, display: isSmallHeight ? 'none' : 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5, flexShrink: 0 }}>
               <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: isMobilePortrait ? '0.62rem' : '0.68rem' }}>
-                Sumber: Moomoo OpenAPI (K-line Semasa · Kuota Sejarah Sifar)
+                Source: Moomoo OpenAPI (Real-time K-line · Zero History Quota)
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: isMobilePortrait ? '0.62rem' : '0.68rem' }}>
-                Pelepasan automatik selepas panel ditutup
+                Auto-releases after closing panel
               </Typography>
             </Box>
           </Box>
