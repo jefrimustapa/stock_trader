@@ -100,7 +100,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                 lineHeight: 1.25,
               }}
             >
-              Ringkasan &amp; Prestasi Pasaran
+              Overview &amp; Market Performance
             </Typography>
             <Typography
               variant="body2"
@@ -110,7 +110,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                 fontSize: { xs: '0.78rem', sm: '0.85rem' },
               }}
             >
-              Pemantauan masa nyata gerbang OpenD, akaun Moomoo, enjin Sentinel L4, dan kuota API.
+              Real-time monitoring of OpenD gateway, Moomoo account, Sentinel L4 engine, and API quota.
             </Typography>
           </Box>
         </Box>
@@ -120,7 +120,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           <Chip
             size="small"
             id="chip-trading-mode-overview"
-            label={isSwingMode ? 'MOD: SWING (MULTI-DAY)' : 'MOD: DAY (INTRADAY)'}
+            label={isSwingMode ? 'MODE: SWING (MULTI-DAY)' : 'MODE: DAY (INTRADAY)'}
             sx={{
               fontWeight: 700,
               borderRadius: 1.5,
@@ -131,7 +131,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           <Chip
             size="small"
             icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important' }} />}
-            label={`Pasaran US: ${marketStatus}`}
+            label={`US Market: ${marketStatus}`}
             sx={{
               fontWeight: 600,
               borderRadius: 1.5,
@@ -141,7 +141,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
           />
           <Chip
             size="small"
-            label={`${items.length} Kaunter Aktif`}
+            label={`${items.length} Active Stocks`}
             sx={{
               fontWeight: 600,
               borderRadius: 1.5,
@@ -175,10 +175,10 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.95rem', sm: '1.05rem' } }}>
-                      Akses Pantas Bahagian Papan Pemuka
+                      Dashboard Quick Access
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                      Navigasi pantas dan kawalan operasi 4 modul utama sistem perdagangan
+                      Quick navigation and operational controls for the 4 core trading system modules
                     </Typography>
                   </Box>
                 </Box>
@@ -231,10 +231,10 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                           />
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          Pengurusan OpenD
+                          OpenD Management
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 0.5, mb: 2, lineHeight: 1.4 }}>
-                          Urus akaun SIMULATE / REAL, sign-out sesi broker, borang log masuk, dan relay 2FA OTP.
+                          Manage SIMULATE / REAL accounts, sign out broker session, login form, and 2FA OTP relay.
                         </Typography>
                       </Box>
                       <Button
@@ -247,7 +247,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         onClick={() => onNavigate && onNavigate('opend')}
                         sx={{ borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
                       >
-                        Buka Pengurusan OpenD
+                        Open OpenD Management
                       </Button>
                     </Card>
                   </Grid>
@@ -299,10 +299,10 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                           />
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          Corong Saringan
+                          Screening Funnel
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 0.5, mb: 2, lineHeight: 1.4 }}>
-                          Visualisasi penapisan 5 peringkat daripada 8,500+ Universe ke Watchlist Akhir.
+                          5-stage screening visualization from 8,500+ Universe to Final Watchlist.
                         </Typography>
                       </Box>
                       <Button
@@ -315,7 +315,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         onClick={() => onNavigate && onNavigate('funnel')}
                         sx={{ borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
                       >
-                        Lihat Corong Saringan
+                        View Screening Funnel
                       </Button>
                     </Card>
                   </Grid>
@@ -367,10 +367,10 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                           />
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          Watchlist Dwi-Lorong
+                          Dual-Lane Watchlist
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 0.5, mb: 2, lineHeight: 1.4 }}>
-                          Jadual kaunter terpilih dengan skor lorong, nisbah RS vs SPY, ADV20, dan RVOL 15m.
+                          Ranked stock table with lane score, RS vs SPY ratio, ADV20, and 15m RVOL.
                         </Typography>
                       </Box>
                       <Button
@@ -383,7 +383,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         onClick={() => onNavigate && onNavigate('watchlist')}
                         sx={{ borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
                       >
-                        Buka Watchlist Dwi-Lorong
+                        Open Dual-Lane Watchlist
                       </Button>
                     </Card>
                   </Grid>
@@ -424,7 +424,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                           </Box>
                           <Chip
                             size="small"
-                            label="Parameter L0"
+                            label="L0 Parameters"
                             sx={{
                               fontSize: '0.68rem',
                               fontWeight: 600,
@@ -435,10 +435,10 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                           />
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          Tetapan Screener
+                          Screener Settings
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 0.5, mb: 2, lineHeight: 1.4 }}>
-                          Konfigurasi had keselamatan saringan: Min Price &gt;= $1.00, Volum ADV20, &amp; RVOL.
+                          Screening safety limits configuration: Min Price &gt;= $1.00, ADV20 Volume, &amp; RVOL.
                         </Typography>
                       </Box>
                       <Button
@@ -451,7 +451,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         onClick={() => onNavigate && onNavigate('settings')}
                         sx={{ borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
                       >
-                        Buka Tetapan Screener
+                        Open Screener Settings
                       </Button>
                     </Card>
                   </Grid>
@@ -473,7 +473,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <TrendingUpIcon sx={{ color: sneatTokens.primary.main, fontSize: 20 }} />
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.92rem', sm: '1rem' } }}>
-                      Kaunter Tumpuan Semasa (Watchlist Snapshot)
+                      Current Focus Stocks (Watchlist Snapshot)
                     </Typography>
                   </Box>
                   <Button
@@ -482,14 +482,14 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                     onClick={() => onNavigate && onNavigate('watchlist')}
                     sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.78rem' }}
                   >
-                    Lihat Penuh ({items.length})
+                    View All ({items.length})
                   </Button>
                 </Box>
 
                 {previewItems.length === 0 ? (
                   <Box sx={{ py: 3, textAlign: 'center' }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Tiada kaunter aktif pada masa ini. Sila jalankan Corong Saringan untuk memuatkan senarai pantauan.
+                      No active stocks currently. Run Screening Funnel to load watchlist.
                     </Typography>
                   </Box>
                 ) : (
@@ -497,11 +497,11 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                     <Table size="small" sx={{ minWidth: 420 }}>
                       <TableHead>
                         <TableRow sx={{ '& th': { fontWeight: 700, fontSize: '0.75rem', color: 'text.secondary', py: 1 } }}>
-                          <TableCell>Simbol</TableCell>
-                          <TableCell>Lorong</TableCell>
-                          <TableCell align="right">Harga</TableCell>
-                          <TableCell align="right">Perubahan</TableCell>
-                          <TableCell align="right">RVOL 15m</TableCell>
+                          <TableCell>Symbol</TableCell>
+                          <TableCell>Lane</TableCell>
+                          <TableCell align="right">Price</TableCell>
+                          <TableCell align="right">Change</TableCell>
+                          <TableCell align="right">15m RVOL</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -580,12 +580,12 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <StorageIcon sx={{ color: sneatTokens.primary.main, fontSize: 20 }} />
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: { xs: '0.92rem', sm: '1rem' } }}>
-                      Status Sambungan &amp; Diagnostik
+                      Connection Status &amp; Diagnostics
                     </Typography>
                   </Box>
                   <Chip
                     size="small"
-                    label="Sistem Normal"
+                    label="System Normal"
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -600,12 +600,12 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                        Mod Dagangan Aktif
+                        Active Trading Mode
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
                         {isSwingMode
-                          ? 'Radar Top-Down (09:00, 13:00, 16:30 NY) + Pemicu 1H'
-                          : 'Imbasan Intraday 300s (5M) + Wyckoff 5M/15M'}
+                          ? 'Top-Down Radar (09:00, 13:00, 16:30 NY) + 1H Trigger'
+                          : 'Intraday Scan 300s (5M) + Wyckoff 5M/15M'}
                       </Typography>
                     </Box>
                     <Chip
@@ -626,7 +626,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                        Gerbang Moomoo OpenD
+                        Moomoo OpenD Gateway
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
                         127.0.0.1:11111 (API) &bull; 22222 (Telnet)
@@ -652,12 +652,12 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         MCP FastAPI Python Bridge
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                        Port 8005 (Port Dalaman 8000)
+                        Port 8005 (Internal Port 8000)
                       </Typography>
                     </Box>
                     <Chip
                       size="small"
-                      label="AKTIF"
+                      label="ACTIVE"
                       sx={{
                         fontSize: '0.68rem',
                         fontWeight: 700,
@@ -672,7 +672,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                        Pangkalan Data Konfigurasi
+                        Configuration Database
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
                         SQLite equity_baseline.sqlite
@@ -680,7 +680,7 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                     </Box>
                     <Chip
                       size="small"
-                      label="SEGERAK"
+                      label="SYNCED"
                       sx={{
                         fontSize: '0.68rem',
                         fontWeight: 700,
@@ -706,19 +706,19 @@ export function OverviewPage({ statusData, dataPayload, onNavigate }) {
                         backgroundColor: 'action.hover',
                       },
                     }}
-                    title="Klik untuk lihat perincian kuota K-line Moomoo sebenar"
+                    title="Click to view real Moomoo K-line quota details"
                   >
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                        Kuota K-Line (Moomoo OpenAPI)
+                        K-Line Quota (Moomoo OpenAPI)
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                        {isMoomooConnected ? `Baki ${klineRemaining} kuota Moomoo sebenar (Klik untuk perincian)` : 'Moomoo OpenD tidak dapat dihubungi - kuota tidak tersedia (Klik untuk perincian)'}
+                        {isMoomooConnected ? `Remaining ${klineRemaining} real Moomoo quota (Click for details)` : 'Moomoo OpenD unreachable - quota unavailable (Click for details)'}
                       </Typography>
                     </Box>
                     <Chip
                       size="small"
-                      label={isMoomooConnected ? `${klineRemaining} BAKI` : 'TIDAK TERSEDIA'}
+                      label={isMoomooConnected ? `${klineRemaining} REMAINING` : 'UNAVAILABLE'}
                       sx={{
                         fontSize: '0.68rem',
                         fontWeight: 700,

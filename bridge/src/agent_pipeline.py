@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from .config import BridgeConfig
+from .fee_model import MoomooFeeModel
 from .hard_rules import HardRulesEngine, OrderRequest, HardRuleViolation
 from .moomoo_client import get_moomoo_client
 
@@ -587,6 +588,19 @@ class AgentPipeline:
         tp1_price = round(price + (rr_target_mult * risk_per_share), 2)
         rr_ratio = round((tp1_price - price) / risk_per_share, 2)
 
+        # Moomoo Realistic Fee Model & Dynamic Break-Even Stop Loss (HOM-374 / Issue #12)
+        fee_rt_details = MoomooFeeModel.calculate_roundtrip_fee(
+            entry_price=price,
+            quantity=allocated_shares,
+            exit_price=price
+        )
+        fee_roundtrip = fee_rt_details["total_fee"]
+        be_buffer_per_share = round(fee_roundtrip / allocated_shares, 4) if allocated_shares > 0 else 0.0
+        break_even_stop_loss = MoomooFeeModel.calculate_breakeven_sl(
+            entry_price=price,
+            quantity=allocated_shares
+        )
+
         # Active Position Watch for held positions (Anti-Stop-Hunt & Early Threat Exit)
         is_held = bool(candidate.get("is_held"))
         held_action = "ENTER"
@@ -614,6 +628,7 @@ class AgentPipeline:
                 f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}, ATR: ${atr_14:.2f}), "
                 f"TP1: ${tp1_price:.2f} (1:{rr_ratio}). Saiz: {allocated_shares} unit "
                 f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% modal efektif). "
+                f"Kos Yuran Moomoo (Round-Trip): ${fee_roundtrip:.2f} (${be_buffer_per_share:.4f}/unit). SL Break-Even: ${break_even_stop_loss:.2f}. "
                 f"Asas Modal: ${account_equity:,.2f}."
             )
 
@@ -637,6 +652,9 @@ class AgentPipeline:
             "account_equity_used": account_equity,
             "risk_reward_ratio": rr_ratio,
             "rr_ratio": rr_ratio,
+            "fee_roundtrip": fee_roundtrip,
+            "be_buffer_per_share": be_buffer_per_share,
+            "break_even_stop_loss": break_even_stop_loss,
             "thesis": thesis
         }
 

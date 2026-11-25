@@ -41,6 +41,20 @@ class BridgeConfig:
     RSA_KEY_PATH: Path = OPEND_SESSION_DATA_DIR / "rsa_key.pem"
     ENABLE_PROTO_ENCRYPT: bool = os.getenv("ENABLE_PROTO_ENCRYPT", "true").lower() in ("true", "1", "yes")
 
+    # Moomoo US Equities Fee Model Configuration (HOM-374 / Issue #12)
+    MOOMOO_PLATFORM_FEE: float = float(os.getenv("MOOMOO_PLATFORM_FEE", "0.99"))
+    MOOMOO_COMMISSION_RATE: float = float(os.getenv("MOOMOO_COMMISSION_RATE", "0.0003"))  # 0.03%
+    MOOMOO_COMMISSION_MIN: float = float(os.getenv("MOOMOO_COMMISSION_MIN", "0.01"))
+    MOOMOO_SETTLEMENT_FEE_PER_SHARE: float = float(os.getenv("MOOMOO_SETTLEMENT_FEE_PER_SHARE", "0.003"))
+    MOOMOO_SETTLEMENT_FEE_MAX_PCT: float = float(os.getenv("MOOMOO_SETTLEMENT_FEE_MAX_PCT", "0.01"))  # 1%
+    MOOMOO_SEC_FEE_RATE: float = float(os.getenv("MOOMOO_SEC_FEE_RATE", "0.0000206"))
+    MOOMOO_SEC_FEE_MIN: float = float(os.getenv("MOOMOO_SEC_FEE_MIN", "0.01"))
+    MOOMOO_FINRA_TAF_PER_SHARE: float = float(os.getenv("MOOMOO_FINRA_TAF_PER_SHARE", "0.000166"))
+    MOOMOO_FINRA_TAF_MIN: float = float(os.getenv("MOOMOO_FINRA_TAF_MIN", "0.01"))
+    MOOMOO_FINRA_TAF_MAX: float = float(os.getenv("MOOMOO_FINRA_TAF_MAX", "8.30"))
+    MOOMOO_INCLUDE_STAMP_DUTY: bool = os.getenv("MOOMOO_INCLUDE_STAMP_DUTY", "true").lower() in ("true", "1", "yes")
+    MOOMOO_USD_MYR_RATE: float = float(os.getenv("MOOMOO_USD_MYR_RATE", "4.45"))
+
     @classmethod
     def get_trading_mode(cls) -> str:
         """

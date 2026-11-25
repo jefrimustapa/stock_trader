@@ -26,7 +26,7 @@ export function WatchlistPage({ dataPayload }) {
   const marketStatus = watchlist.market_status || 'CLOSED';
   const isMarketOpen = String(marketStatus).toUpperCase() === 'OPEN';
   const isLive = watchlist.is_live || false;
-  const rawDataAsOf = watchlist.data_as_of || dataPayload?.timestamp || 'Terkini';
+  const rawDataAsOf = watchlist.data_as_of || dataPayload?.timestamp || 'Latest';
   const dataAsOf = typeof rawDataAsOf === 'string' && rawDataAsOf.includes('T')
     ? rawDataAsOf.split('.')[0].replace('T', ' ')
     : rawDataAsOf;
@@ -81,7 +81,7 @@ export function WatchlistPage({ dataPayload }) {
                 letterSpacing: -0.4,
               }}
             >
-              Watchlist Saham Aktif Dwi-Lorong
+              Dual-Lane Active Stock Watchlist
             </Typography>
             <Typography
               variant="body2"
@@ -92,7 +92,7 @@ export function WatchlistPage({ dataPayload }) {
                 lineHeight: 1.4,
               }}
             >
-              Kaunter saham US melepasi saringan corong 5-peringkat, disusun mengikut lorong MOMENTUM dan SETUP.
+              US stocks passing the 5-stage screening funnel, organized into MOMENTUM and SETUP lanes.
             </Typography>
           </Box>
         </Box>
@@ -101,7 +101,7 @@ export function WatchlistPage({ dataPayload }) {
           <Chip
             size="small"
             icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important' }} />}
-            label={`Pasaran US: ${marketStatus}`}
+            label={`US Market: ${marketStatus}`}
             sx={{
               fontWeight: 700,
               fontSize: '0.75rem',
@@ -113,7 +113,7 @@ export function WatchlistPage({ dataPayload }) {
           />
           <Chip
             size="small"
-            label={isLive ? 'Data Langsung' : 'Data Sedia Ada'}
+            label={isLive ? 'Live Data' : 'Cached Data'}
             sx={{
               fontWeight: 600,
               fontSize: '0.75rem',
@@ -182,10 +182,10 @@ export function WatchlistPage({ dataPayload }) {
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    JUMLAH KAUNTER AKTIF
+                    TOTAL ACTIVE STOCKS
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.2 }}>
-                    Calon melepasi corong
+                    Funnel qualified candidates
                   </Typography>
                 </Box>
               </Box>
@@ -209,7 +209,7 @@ export function WatchlistPage({ dataPayload }) {
                   {totalCount}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                  100% daripada senarai
+                  100% of watchlist
                 </Typography>
               </Box>
               <LinearProgress
@@ -270,10 +270,10 @@ export function WatchlistPage({ dataPayload }) {
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    LORONG MOMENTUM
+                    MOMENTUM LANE
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.2 }}>
-                    Breakout & kesinambungan trend
+                    Breakout &amp; trend continuation
                   </Typography>
                 </Box>
               </Box>
@@ -297,7 +297,7 @@ export function WatchlistPage({ dataPayload }) {
                   {momentumCount}
                 </Typography>
                 <Typography variant="caption" sx={{ color: sneatTokens.primary.main, fontWeight: 700 }}>
-                  {momentumPercent}% daripada senarai
+                  {momentumPercent}% of watchlist
                 </Typography>
               </Box>
               <LinearProgress
@@ -358,10 +358,10 @@ export function WatchlistPage({ dataPayload }) {
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    LORONG SETUP
+                    SETUP LANE
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.2 }}>
-                    Pullback teknikal & asas sokongan
+                    Technical pullback &amp; support base
                   </Typography>
                 </Box>
               </Box>
@@ -385,7 +385,7 @@ export function WatchlistPage({ dataPayload }) {
                   {setupCount}
                 </Typography>
                 <Typography variant="caption" sx={{ color: sneatTokens.warning.main, fontWeight: 700 }}>
-                  {setupPercent}% daripada senarai
+                  {setupPercent}% of watchlist
                 </Typography>
               </Box>
               <LinearProgress

@@ -90,56 +90,56 @@ export function FunnelStepper({ dataPayload, screenerConfig, configLoading, conf
 
   const steps = [
     {
-      stage: 'Peringkat 1',
+      stage: 'Stage 1',
       title: 'Cloud Universe',
       count: stage1Count,
-      unit: 'Kaunter',
-      desc: 'Semua saham US aktif di Moomoo',
-      ratio: '100% Pasaran',
+      unit: 'Symbols',
+      desc: 'All active US stocks on Moomoo',
+      ratio: '100% Market',
       color: sneatTokens.secondary.main,
       bg: sneatTokens.secondary.soft,
       icon: <CloudQueueIcon sx={{ fontSize: 20 }} />,
     },
     {
-      stage: 'Peringkat 2',
-      title: 'Kualiti Stage 0',
+      stage: 'Stage 2',
+      title: 'Stage 0 Quality',
       count: stage2Count,
-      unit: 'Kaunter',
+      unit: 'Symbols',
       desc: getStage0Summary(activeConfig, status),
-      ratio: stage1Count > 0 ? `${((stage2Count / stage1Count) * 100).toFixed(1)}% Lolos` : '16.7% Lolos',
+      ratio: stage1Count > 0 ? `${((stage2Count / stage1Count) * 100).toFixed(1)}% Passed` : '16.7% Passed',
       color: sneatTokens.info.main,
       bg: sneatTokens.info.soft,
       icon: <VerifiedUserIcon sx={{ fontSize: 20 }} />,
     },
     {
-      stage: 'Peringkat 3',
-      title: 'Dwi-Lorong',
+      stage: 'Stage 3',
+      title: 'Dual-Lane',
       count: stage3Count,
-      unit: 'Calon',
+      unit: 'Candidates',
       desc: getStage3Summary(activeConfig, status),
-      ratio: stage2Count > 0 ? `${((stage3Count / stage2Count) * 100).toFixed(1)}% Dwi-Lorong` : '3.4% Calon',
+      ratio: stage2Count > 0 ? `${((stage3Count / stage2Count) * 100).toFixed(1)}% Dual-Lane` : '3.4% Candidates',
       color: sneatTokens.warning.main,
       bg: sneatTokens.warning.soft,
       icon: <AltRouteIcon sx={{ fontSize: 20 }} />,
     },
     {
-      stage: 'Peringkat 4',
+      stage: 'Stage 4',
       title: 'Enriched K-Line',
       count: stage4Count,
-      unit: 'Teratas',
-      desc: 'Kuota API 3-5 kaunter per lorong',
-      ratio: 'Kuota API Fokus',
+      unit: 'Top Candidates',
+      desc: 'API quota 3-5 symbols per lane',
+      ratio: 'Focused API Quota',
       color: sneatTokens.primary.main,
       bg: sneatTokens.primary.soft,
       icon: <ShowChartIcon sx={{ fontSize: 20 }} />,
     },
     {
-      stage: 'Peringkat 5',
-      title: 'Watchlist Akhir',
+      stage: 'Stage 5',
+      title: 'Final Watchlist',
       count: stage5Count,
-      unit: 'Saham Terpilih',
-      desc: 'Sedia untuk eksekusi Tariq & Nawwar',
-      ratio: 'Sedia Eksekusi',
+      unit: 'Selected Stocks',
+      desc: 'Ready for Tariq & Nawwar execution',
+      ratio: 'Execution Ready',
       color: sneatTokens.success.main,
       bg: sneatTokens.success.soft,
       icon: <CheckCircleIcon sx={{ fontSize: 20 }} />,
@@ -191,10 +191,10 @@ export function FunnelStepper({ dataPayload, screenerConfig, configLoading, conf
             </Box>
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
-                Saluran Penapisan Corong 5-Peringkat
+                5-Stage Screening Funnel
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                Penapisan kuantitatif bertingkat dari Cloud Universe sehingga Calon Akhir
+                Multi-stage quantitative screening from Cloud Universe to final candidates
               </Typography>
             </Box>
           </Box>
@@ -206,7 +206,7 @@ export function FunnelStepper({ dataPayload, screenerConfig, configLoading, conf
             {steps.map((step, idx) => (
               <Grid item xs={12} sm={6} md={2.4} key={step.stage}>
                 <Paper
-                  id={step.stage === 'Peringkat 2' ? 'card-funnel-stage2' : undefined}
+                  id={step.stage === 'Stage 2' || step.stage === 'Peringkat 2' ? 'card-funnel-stage2' : undefined}
                   elevation={0}
                   sx={{
                     p: 2,
@@ -281,8 +281,8 @@ export function FunnelStepper({ dataPayload, screenerConfig, configLoading, conf
                       {step.title}
                     </Typography>
                     <Typography
-                      id={step.stage === 'Peringkat 2' ? 'funnel-stage2-desc' : undefined}
-                      data-testid={step.stage === 'Peringkat 2' ? 'funnel-stage2-desc' : undefined}
+                      id={step.stage === 'Stage 2' || step.stage === 'Peringkat 2' ? 'funnel-stage2-desc' : undefined}
+                      data-testid={step.stage === 'Stage 2' || step.stage === 'Peringkat 2' ? 'funnel-stage2-desc' : undefined}
                       variant="caption"
                       sx={{
                         color: 'text.secondary',

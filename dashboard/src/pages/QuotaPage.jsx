@@ -45,13 +45,13 @@ export function QuotaPage({ initialQuotaData = null }) {
     try {
       const res = await fetch('/api/screener/kline-quota');
       if (!res.ok) {
-        throw new Error(`Ralat pelayan: ${res.status} ${res.statusText}`);
+        throw new Error(`Server error: ${res.status} ${res.statusText}`);
       }
       const data = await res.json();
       setQuotaData(data);
     } catch (err) {
-      console.error('[QuotaPage] Ralat memuatkan kuota K-line:', err);
-      setError(err.message || 'Gagal menyambung ke endpoint kuota K-line.');
+      console.error('[QuotaPage] Failed to load K-line quota:', err);
+      setError(err.message || 'Failed to connect to K-line quota endpoint.');
     } finally {
       setLoading(false);
     }
@@ -84,16 +84,16 @@ export function QuotaPage({ initialQuotaData = null }) {
     : [];
 
   const formatMoomooError = (rawErr) => {
-    if (!rawErr) return 'Moomoo OpenD tidak dapat dihubungi';
+    if (!rawErr) return 'Moomoo OpenD unreachable';
     const str = String(rawErr);
     if (/ECONNREFUSED|Connection refused|not reachable/i.test(str)) {
-      return 'Moomoo OpenD tidak dapat dihubungi';
+      return 'Moomoo OpenD unreachable';
     }
     if (/ETIMEDOUT|timeout/i.test(str)) {
-      return 'Sambungan ke Moomoo OpenD tamat masa';
+      return 'Connection to Moomoo OpenD timed out';
     }
     if (/not authenticated|WAIT_LOGIN/i.test(str)) {
-      return 'OpenD gateway belum log masuk broker';
+      return 'OpenD gateway not logged in to broker';
     }
     return str;
   };
@@ -111,7 +111,7 @@ export function QuotaPage({ initialQuotaData = null }) {
     try {
       const d = new Date(isoStr);
       if (isNaN(d.getTime())) return isoStr;
-      return d.toLocaleString('ms-MY', {
+      return d.toLocaleString('en-US', {
         year: 'numeric',
         month: 'short',
         day: '2-digit',
@@ -126,10 +126,10 @@ export function QuotaPage({ initialQuotaData = null }) {
   };
 
   const getStatusColor = (status, percent) => {
-    if (!isMoomooConnected) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'TIDAK TERSEDIA' };
-    if (percent >= 90) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'KRITIKAL' };
-    if (percent >= 75) return { bg: sneatTokens.warning.soft, text: sneatTokens.warning.main, label: 'AMARAN' };
-    return { bg: sneatTokens.success.soft, text: sneatTokens.success.main, label: 'SIHAT' };
+    if (!isMoomooConnected) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'UNAVAILABLE' };
+    if (percent >= 90) return { bg: sneatTokens.error.soft, text: sneatTokens.error.main, label: 'CRITICAL' };
+    if (percent >= 75) return { bg: sneatTokens.warning.soft, text: sneatTokens.warning.main, label: 'WARNING' };
+    return { bg: sneatTokens.success.soft, text: sneatTokens.success.main, label: 'HEALTHY' };
   };
 
   const statusBadge = getStatusColor(quotaData?.status, realPercent ?? 0);
@@ -155,11 +155,11 @@ export function QuotaPage({ initialQuotaData = null }) {
               <QueryStatsIcon sx={{ fontSize: 22 }} />
             </Box>
             <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: -0.5 }}>
-              Penggunaan Kuota K-Line 30-Hari
+              30-Day K-Line Quota Usage
             </Typography>
             <Chip
               size="small"
-              label={isMoomooConnected ? `Had Kuota: ${realTotal} Simbol` : 'Had Kuota: -'}
+              label={isMoomooConnected ? `Quota Limit: ${realTotal} Symbols` : 'Quota Limit: -'}
               sx={{
                 fontWeight: 700,
                 fontSize: '0.72rem',
@@ -169,7 +169,7 @@ export function QuotaPage({ initialQuotaData = null }) {
             />
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, ml: 6 }}>
-            Pemantauan baki dan penggunaan kuota K-Line Moomoo OpenAPI sebenar.
+            Monitoring remaining and used real Moomoo OpenAPI K-Line quota.
           </Typography>
         </Box>
 
@@ -183,7 +183,7 @@ export function QuotaPage({ initialQuotaData = null }) {
             disabled={loading}
             sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
           >
-            Muat Semula
+            Refresh
           </Button>
         </Box>
       </Box>
@@ -204,11 +204,11 @@ export function QuotaPage({ initialQuotaData = null }) {
           }}
         >
           <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, display: 'inline' }}>
-            Kuota Moomoo OpenAPI Sebenar:&nbsp;
+            Real Moomoo OpenAPI Quota:&nbsp;
           </Typography>
           <Chip
             size="small"
-            label="TIDAK TERSEDIA"
+            label="UNAVAILABLE"
             sx={{
               fontWeight: 700,
               fontSize: '0.68rem',
@@ -217,7 +217,7 @@ export function QuotaPage({ initialQuotaData = null }) {
               color: sneatTokens.error.main,
             }}
           />
-          Baki Sebenar: <strong>-</strong> ({formatMoomooError(moomooQuota?.error)}). Mengikut peraturan fail-closed, baki kuota tidak tersedia.
+          Real Remaining: <strong>-</strong> ({formatMoomooError(moomooQuota?.error)}). Under fail-closed rules, remaining quota is unavailable.
         </Alert>
       ) : null}
 
@@ -235,9 +235,9 @@ export function QuotaPage({ initialQuotaData = null }) {
         }}
       >
         <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 600, display: 'inline' }}>
-          Maklumat Kuota &amp; Kaunter:&nbsp;
+          Quota &amp; Symbol Details:&nbsp;
         </Typography>
-        Kad ringkasan dan jadual di bawah menyenaraikan kaunter sebenar yang ditarik K-line sejarahnya dari Moomoo OpenAPI (tetingkap bergolek 30-hari).
+        Summary cards and table below list real symbols with historical K-lines retrieved from Moomoo OpenAPI (30-day rolling window).
       </Alert>
 
       {error && (
@@ -246,7 +246,7 @@ export function QuotaPage({ initialQuotaData = null }) {
           sx={{ mb: 3, borderRadius: 2 }}
           action={
             <Button color="inherit" size="small" onClick={fetchQuotaData}>
-              Cuba Lagi
+              Retry
             </Button>
           }
         >
@@ -278,7 +278,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                   </Box>
                   <Chip
                     size="small"
-                    label={isMoomooConnected ? `${realRemain} Baki Sebenar` : 'Tidak Tersedia'}
+                    label={isMoomooConnected ? `${realRemain} Remaining` : 'Unavailable'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -289,7 +289,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Baki Kuota Sebenar (Moomoo)
+                  Real Remaining Quota (Moomoo)
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
                   {isMoomooConnected ? `${realRemain} / ${realTotal}` : '-'}
@@ -299,10 +299,10 @@ export function QuotaPage({ initialQuotaData = null }) {
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Kapasiti Tersedia
+                    Available Capacity
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isMoomooConnected ? `${100 - Math.round(realPercent)}%` : 'Tidak tersedia'}
+                    {isMoomooConnected ? `${100 - Math.round(realPercent)}%` : 'Unavailable'}
                   </Typography>
                 </Box>
                 <LinearProgress
@@ -345,7 +345,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                   </Box>
                   <Chip
                     size="small"
-                    label={isMoomooConnected ? `${realUsed} / ${realTotal} Terpakai` : 'Tidak Tersedia'}
+                    label={isMoomooConnected ? `${realUsed} / ${realTotal} Used` : 'Unavailable'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.7rem',
@@ -356,20 +356,20 @@ export function QuotaPage({ initialQuotaData = null }) {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kuota Terpakai (Moomoo)
+                  Used Quota (Moomoo)
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
-                  {isMoomooConnected ? `${realUsed} Simbol` : '-'}
+                  {isMoomooConnected ? `${realUsed} Symbols` : '-'}
                 </Typography>
               </Box>
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Tetingkap Bergolek 30-Hari
+                    30-Day Rolling Window
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isMoomooConnected ? `Maks ${realTotal}` : '-'}
+                    {isMoomooConnected ? `Max ${realTotal}` : '-'}
                   </Typography>
                 </Box>
                 <LinearProgress
@@ -423,7 +423,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Kadar Penggunaan Kuota
+                  Quota Utilization Rate
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
                   {isMoomooConnected ? `${realPercent}%` : '-'}
@@ -433,10 +433,10 @@ export function QuotaPage({ initialQuotaData = null }) {
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
-                    Had Amaran (75% / 90%)
+                    Warning Thresholds (75% / 90%)
                   </Typography>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {isMoomooConnected ? (realPercent >= 90 ? 'Tinggi' : (realPercent >= 75 ? 'Sederhana' : 'Rendah')) : '-'}
+                    {isMoomooConnected ? (realPercent >= 90 ? 'High' : (realPercent >= 75 ? 'Moderate' : 'Low')) : '-'}
                   </Typography>
                 </Box>
                 <LinearProgress
@@ -498,7 +498,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                   />
                 </Box>
                 <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
-                  Status Kuota Moomoo
+                  Moomoo Quota Status
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5, color: statusBadge.text }}>
                   {statusBadge.label}
@@ -507,7 +507,7 @@ export function QuotaPage({ initialQuotaData = null }) {
 
               <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {isMoomooConnected ? 'Status: Gateway OpenD Aktif' : 'Status: Gateway OpenD tidak tersedia'}
+                  {isMoomooConnected ? 'Status: OpenD Gateway Active' : 'Status: OpenD Gateway Unavailable'}
                 </Typography>
               </Box>
             </CardContent>
@@ -521,10 +521,10 @@ export function QuotaPage({ initialQuotaData = null }) {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Senarai Kaunter Ditarik (Moomoo OpenAPI)
+                Retrieved Symbols List (Moomoo OpenAPI)
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Senarai kaunter yang ditarik K-line sejarahnya dari Moomoo OpenAPI (tetingkap bergolek 30-hari).
+                List of symbols with historical K-lines retrieved from Moomoo OpenAPI (30-day rolling window).
               </Typography>
             </Box>
 
@@ -532,7 +532,7 @@ export function QuotaPage({ initialQuotaData = null }) {
               <TextField
                 id="input-search-quota-symbol"
                 size="small"
-                placeholder="Cari kaunter (cth: MY.1155)..."
+                placeholder="Search symbol (e.g. MY.1155)..."
                 value={searchQuery}
                 disabled={!isMoomooConnected}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -551,7 +551,7 @@ export function QuotaPage({ initialQuotaData = null }) {
               <Chip
                 id="chip-quota-counter-count"
                 size="small"
-                label={isMoomooConnected ? `${filteredCounters.length} / ${rawCounters.length} Kaunter Ditarik` : 'Tidak Tersedia'}
+                label={isMoomooConnected ? `${filteredCounters.length} / ${rawCounters.length} Symbols Retrieved` : 'Unavailable'}
                 sx={{
                   fontWeight: 600,
                   fontSize: '0.75rem',
@@ -567,7 +567,7 @@ export function QuotaPage({ initialQuotaData = null }) {
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
               <CircularProgress size={36} color="primary" />
               <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-                Memuatkan rekod kuota K-line...
+                Loading K-line quota records...
               </Typography>
             </Box>
           ) : !isMoomooConnected ? (
@@ -584,10 +584,10 @@ export function QuotaPage({ initialQuotaData = null }) {
             >
               <ErrorOutlineIcon sx={{ fontSize: 48, color: sneatTokens.error.main, mb: 1 }} />
               <Typography variant="body1" sx={{ fontWeight: 700, color: sneatTokens.error.main }}>
-                Data Kaunter Moomoo Tidak Tersedia
+                Moomoo Symbol Data Unavailable
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
-                Sambungan ke gateway Moomoo OpenD tidak aktif ({formatMoomooError(moomooQuota?.error)}). Senarai kaunter K-line dari Moomoo OpenAPI tidak dapat dimuatkan (bukan senarai kosong palsu).
+                Connection to Moomoo OpenD gateway is not active ({formatMoomooError(moomooQuota?.error)}). K-line symbol list from Moomoo OpenAPI cannot be loaded (not a false empty list).
               </Typography>
             </Box>
           ) : rawCounters.length === 0 ? (
@@ -603,10 +603,10 @@ export function QuotaPage({ initialQuotaData = null }) {
             >
               <InventoryIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
               <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Tiada Kaunter Ditarik (0 Simbol)
+                No Symbols Retrieved (0 Symbols)
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, maxWidth: 500, mx: 'auto' }}>
-                Tiada K-line sejarah ditarik daripada Moomoo OpenAPI dalam tetingkap 30-hari ini (0 / {realTotal} kuota terpakai).
+                No historical K-lines retrieved from Moomoo OpenAPI within this 30-day window (0 / {realTotal} quota used).
               </Typography>
             </Box>
           ) : (
@@ -620,14 +620,14 @@ export function QuotaPage({ initialQuotaData = null }) {
                 overflowX: 'auto',
               }}
             >
-              <Table id="table-kline-quota" size="small" aria-label="Jadual Kuota K-Line">
+              <Table id="table-kline-quota" size="small" aria-label="K-Line Quota Table">
                 <TableHead sx={{ backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#2b2c40' : '#f5f5f9' }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>SIMBOL</TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>MASA DITARIK</TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>TARIKH LUPUT (+30 HARI)</TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>BAKI HARI</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>STATUS WATCHLIST</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>SYMBOL</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>REQUEST TIME</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>EXPIRATION DATE (+30 DAYS)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>DAYS REMAINING</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: '0.78rem', py: 1.5 }}>WATCHLIST STATUS</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -666,7 +666,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.5 }}>
                           {row.request_time ? (
-                            <Tooltip title={`Masa Ditarik: ${row.request_time}`} arrow>
+                            <Tooltip title={`Request Time: ${row.request_time}`} arrow>
                               <span>{formatDate(row.request_time)}</span>
                             </Tooltip>
                           ) : (
@@ -675,7 +675,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.5 }}>
                           {row.expires_at ? (
-                            <Tooltip title={`Tarikh Luput: ${row.expires_at}`} arrow>
+                            <Tooltip title={`Expiration Date: ${row.expires_at}`} arrow>
                               <span>{formatDate(row.expires_at)}</span>
                             </Tooltip>
                           ) : (
@@ -686,7 +686,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                           {row.days_remaining !== null && row.days_remaining !== undefined ? (
                             <Chip
                               icon={<ScheduleIcon sx={{ fontSize: '14px !important' }} />}
-                              label={isExpired ? 'Luput' : `${row.days_remaining} Hari Lagi`}
+                              label={isExpired ? 'Expired' : `${row.days_remaining} Days Left`}
                               size="small"
                               sx={{
                                 fontWeight: 600,
@@ -706,7 +706,7 @@ export function QuotaPage({ initialQuotaData = null }) {
                         </TableCell>
                         <TableCell align="center" sx={{ py: 1.5 }}>
                           <Chip
-                            label={isInWatchlist ? 'DALAM WATCHLIST' : 'TERKELUAR'}
+                            label={isInWatchlist ? 'IN WATCHLIST' : 'REMOVED'}
                             size="small"
                             sx={{
                               fontWeight: 700,

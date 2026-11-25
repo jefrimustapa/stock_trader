@@ -38,6 +38,7 @@ async function runSuite() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
+    ignoreHTTPSErrors: true,
   });
 
   const page = await context.newPage();
@@ -63,20 +64,20 @@ async function runSuite() {
     const drawer = page.locator('.MuiDrawer-paperAnchorRight');
     assertCheck('MUI KlineDrawer is visible', await drawer.isVisible());
 
-    // Locate 40 Lilin and Semua buttons
-    const btn40 = drawer.locator('button:has-text("40 Lilin")');
-    const btnAll = drawer.locator('button:has-text("Semua")');
+    // Locate 40 Lilin / 40 Candles and Semua / All buttons
+    const btn40 = drawer.locator('button:has-text("40 Candles"), button:has-text("40 Lilin")');
+    const btnAll = drawer.locator('button:has-text("All"), button:has-text("Semua")');
     const btnPlus = drawer.locator('button:has-text("+")');
     const btnMinus = drawer.locator('button:has-text("-")');
 
-    assertCheck('"40 Lilin" button exists', (await btn40.count()) > 0);
-    assertCheck('"Semua" button exists', (await btnAll.count()) > 0);
+    assertCheck('"40 Candles / 40 Lilin" button exists', (await btn40.count()) > 0);
+    assertCheck('"All / Semua" button exists', (await btnAll.count()) > 0);
     assertCheck('"+" zoom button exists', (await btnPlus.count()) > 0);
     assertCheck('"-" zoom button exists', (await btnMinus.count()) > 0);
 
     // Locate candle count label element
-    // The label text contains 'lilin'
-    const labelLocator = drawer.locator('text=/\\d+.*lilin/');
+    // The label text contains 'candles' or 'lilin'
+    const labelLocator = drawer.locator('text=/\\d+.*(candles|lilin)/');
     assertCheck('Candle count label is rendered', (await labelLocator.count()) > 0);
     const initialLabel = await labelLocator.first().textContent();
     console.log(`   Initial candle count label: "${initialLabel}"`);
@@ -157,7 +158,7 @@ async function runSuite() {
 
     const labelZoom = await labelLocator.first().textContent();
     console.log(`   Label after zooming in: "${labelZoom}"`);
-    assertCheck('Candle count label remains visible and formatted during zoom', labelZoom && labelZoom.includes('lilin'));
+    assertCheck('Candle count label remains visible and formatted during zoom', labelZoom && (labelZoom.includes('candles') || labelZoom.includes('lilin')));
 
     // Capture screenshot in custom zoom mode
     const shotCustom = path.join(QA_DIR, 'hom368-kline-custom-zoom.png');

@@ -1,7 +1,7 @@
 /**
  * formatters.js
- * Utiliti pemformatan konsisten bagi nilai konfigurasi parameter screener
- * dan teks dinamik peringkat corong saringan (HOM-205).
+ * Consistent formatting utilities for screener configuration parameters
+ * and dynamic screening funnel stage texts (HOM-205).
  */
 
 export function formatPrice(val) {
@@ -41,55 +41,55 @@ export function formatCompactNumber(val, prefix = '') {
 
 export function getStage0Summary(config, status) {
   if (status === 'loading') {
-    return 'Memuatkan tetapan screener...';
+    return 'Loading screener settings...';
   }
   if (status === 'error' || !config) {
-    return 'Harga >= -, Cap >= -, ADV >= -';
+    return 'Price >= -, Cap >= -, ADV >= -';
   }
   const price = formatPrice(config.min_price);
   const cap = formatCompactNumber(config.min_market_cap, '$');
   const adv = formatCompactNumber(config.min_volume);
-  return `Harga >= ${price}, Cap >= ${cap}, ADV >= ${adv}`;
+  return `Price >= ${price}, Cap >= ${cap}, ADV >= ${adv}`;
 }
 
 export function getStage0Detail(config, status) {
   if (status === 'loading') {
-    return 'Penyingkiran saham sen, modal terhad, dan volum nipis (memuatkan tetapan...).';
+    return 'Filter penny stocks, micro-caps, and thin liquidity (loading settings...).';
   }
   if (status === 'error' || !config) {
-    return 'Penyingkiran saham sen, modal terhad, dan volum nipis (Harga >= -, Nilai Pasaran >= -, ADV >= -).';
+    return 'Filter penny stocks, micro-caps, and thin liquidity (Price >= -, Market Cap >= -, ADV >= -).';
   }
   const price = formatPrice(config.min_price);
   const cap = formatCompactNumber(config.min_market_cap, '$');
   const adv = formatCompactNumber(config.min_volume);
-  return `Penyingkiran saham sen, modal terhad, dan volum nipis (Harga >= ${price}, Nilai Pasaran >= ${cap}, ADV >= ${adv}).`;
+  return `Filter penny stocks, micro-caps, and thin liquidity (Price >= ${price}, Market Cap >= ${cap}, ADV >= ${adv}).`;
 }
 
 export function getStage3Summary(config, status) {
   if (status === 'loading') {
-    return 'Momentum & Setup RS vs SPY (memuatkan...)';
+    return 'Momentum & RS Setup vs SPY (loading...)';
   }
   if (status === 'error' || !config) {
-    return 'Momentum & Setup RS vs SPY';
+    return 'Momentum & RS Setup vs SPY';
   }
   if (config.min_rvol !== undefined && config.min_rvol !== null) {
-    return `Momentum (RVOL >= ${config.min_rvol}x) & Setup RS vs SPY`;
+    return `Momentum (RVOL >= ${config.min_rvol}x) & RS Setup vs SPY`;
   }
-  return 'Momentum & Setup RS vs SPY';
+  return 'Momentum & RS Setup vs SPY';
 }
 
 export function getStage3Detail(config, status) {
   if (status === 'loading') {
-    return 'Pengasingan berasaskan logik kuantitatif: Momentum atau Setup (memuatkan tetapan...).';
+    return 'Quantitative separation: Momentum or RS Setup (loading settings...).';
   }
   if (status === 'error' || !config) {
-    return 'Pengasingan berasaskan logik kuantitatif: Momentum (trend agresif & RVOL tinggi) atau Setup (konsolidasi rapi & hampiran 52W).';
+    return 'Quantitative separation: Momentum (strong trend & high RVOL) or RS Setup (tight consolidation near 52W high).';
   }
   if (config.min_rvol !== undefined && config.max_rvol !== undefined) {
-    return `Pengasingan berasaskan logik kuantitatif: Momentum (trend agresif, RVOL ${config.min_rvol}x-${config.max_rvol}x) atau Setup (konsolidasi rapi & hampiran 52W).`;
+    return `Quantitative separation: Momentum (strong trend, RVOL ${config.min_rvol}x-${config.max_rvol}x) or RS Setup (tight consolidation near 52W high).`;
   }
   if (config.min_rvol !== undefined) {
-    return `Pengasingan berasaskan logik kuantitatif: Momentum (trend agresif, RVOL >= ${config.min_rvol}x) atau Setup (konsolidasi rapi & hampiran 52W).`;
+    return `Quantitative separation: Momentum (strong trend, RVOL >= ${config.min_rvol}x) or RS Setup (tight consolidation near 52W high).`;
   }
-  return 'Pengasingan berasaskan logik kuantitatif: Momentum (trend agresif & RVOL tinggi) atau Setup (konsolidasi rapi & hampiran 52W).';
+  return 'Quantitative separation: Momentum (strong trend & high RVOL) or RS Setup (tight consolidation near 52W high).';
 }

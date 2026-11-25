@@ -53,6 +53,15 @@ class MockMoomooClient:
             "message": "Order accepted by mock OpenD"
         }
 
+    def get_cur_kline_with_sub(self, symbol, num=30, ktype="K_5M", **kwargs):
+        return []
+
+    def get_news_for_symbol(self, symbol):
+        return []
+
+    def get_earnings_calendar(self, market="US", begin_date=None, end_date=None):
+        return {"status": "OK", "calendar": []}
+
     def cancel_order(self, order_id):
         return {"success": True, "order_id": order_id, "status": "CANCELLED"}
 
@@ -67,7 +76,8 @@ class TestExitSentinelBVA(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = Path(self.temp_dir) / "test_pipeline.sqlite"
         self.hard_rules_engine = HardRulesEngine(self.db_path)
-        self.pipeline = AgentPipeline(db_path=self.db_path)
+        self.mock_moomoo_client = MockMoomooClient()
+        self.pipeline = AgentPipeline(db_path=self.db_path, moomoo_client=self.mock_moomoo_client)
         self.pipeline.hard_rules_engine = self.hard_rules_engine
 
         # Baseline equity setup
@@ -87,7 +97,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         now_iso = datetime.now(timezone.utc).isoformat()
         with self.pipeline._get_connection() as conn:
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -126,7 +136,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         now_iso = datetime.now(timezone.utc).isoformat()
         with self.pipeline._get_connection() as conn:
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -154,7 +164,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         now_iso = datetime.now(timezone.utc).isoformat()
         with self.pipeline._get_connection() as conn:
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -187,7 +197,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         now_iso = datetime.now(timezone.utc).isoformat()
         with self.pipeline._get_connection() as conn:
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -222,7 +232,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         now_iso = datetime.now(timezone.utc).isoformat()
         with self.pipeline._get_connection() as conn:
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -253,7 +263,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         with self.pipeline._get_connection() as conn:
             # Baseline buy
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -265,7 +275,7 @@ class TestExitSentinelBVA(unittest.TestCase):
             ))
             # TP1 already executed
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -361,7 +371,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         with self.pipeline._get_connection() as conn:
             # Filled buy
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -373,7 +383,7 @@ class TestExitSentinelBVA(unittest.TestCase):
             ))
             # Pending open order for AAPL
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
@@ -472,7 +482,7 @@ class TestExitSentinelBVA(unittest.TestCase):
         now_iso = datetime.now(timezone.utc).isoformat()
         with pipeline._get_connection() as conn:
             conn.execute("""
-                INSERT INTO paper_orders (
+                INSERT OR REPLACE INTO paper_orders (
                     client_order_id, order_id, cycle_id, symbol, order_side,
                     quantity, entry_price, stop_loss_price, take_profit_price,
                     status, opend_status, message, time_in_force, trading_mode, source, created_at
