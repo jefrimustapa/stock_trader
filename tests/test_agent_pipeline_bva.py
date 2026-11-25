@@ -170,6 +170,27 @@ class TestAgentPipelineBVA(unittest.TestCase):
         self.assertEqual(res["allocated_shares"], 200)
         self.assertEqual(res["position_value"], 20000.0)
 
+    def test_bva_haziq_moomoo_fee_and_breakeven_sl(self):
+        """Haziq synthesis includes Moomoo round-trip fee, per-share buffer, and SL_BE."""
+        equity = 100000.0
+        candidate = {
+            "symbol": "US.NVDA",
+            "price": 140.0,
+            "setup_metrics": {"atr_14_pct": 2.5}
+        }
+        tariq = {"s_tech": 85.0}
+        nawwar = {"s_sent_norm": 90.0}
+
+        res = self.pipeline.evaluate_haziq_synthesis(candidate, tariq, nawwar, equity)
+        self.assertIn("fee_roundtrip", res)
+        self.assertIn("be_buffer_per_share", res)
+        self.assertIn("break_even_stop_loss", res)
+        self.assertGreater(res["fee_roundtrip"], 0.0)
+        self.assertGreater(res["be_buffer_per_share"], 0.0)
+        self.assertGreater(res["break_even_stop_loss"], res["entry_price"])
+        self.assertIn("Kos Yuran Moomoo (Round-Trip)", res["thesis"])
+        self.assertIn("SL Break-Even", res["thesis"])
+
     # =========================================================================
     # 4. Danial 8 Hard Rules Gatekeeper
     # =========================================================================

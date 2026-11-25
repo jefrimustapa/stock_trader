@@ -1443,9 +1443,39 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
 
         const validPositionsList = Array.isArray(rawPositions) ? rawPositions : [];
 
+// Moomoo US Equities Fee Model Calculation (HOM-374 / Issue #12)
+function calculateMoomooOrderFee(price, quantity, side = 'BUY', usdMyrRate = 4.45, includeStampDuty = true) {
+    if (!quantity || quantity <= 0 || !price || price <= 0) return 0;
+    const tradeAmount = Number((price * quantity).toFixed(2));
+    const commission = Math.max(0.01, Number((tradeAmount * 0.0003).toFixed(2)));
+    const platformFee = 0.99;
+    const settlementFee = Math.min(Number((quantity * 0.003).toFixed(2)), Number((tradeAmount * 0.01).toFixed(2)));
+    let secFee = 0;
+    let finraTaf = 0;
+    if (side === 'SELL') {
+        secFee = Math.max(0.01, Number((tradeAmount * 0.0000206).toFixed(2)));
+        finraTaf = Math.max(0.01, Number((quantity * 0.000166).toFixed(2)));
+    }
+    let stampDuty = 0;
+    if (includeStampDuty && tradeAmount > 0) {
+        const notionalMyr = tradeAmount * usdMyrRate;
+        const stampMyr = Math.ceil(notionalMyr / 1000.0) * 1.0;
+        stampDuty = Number((stampMyr / usdMyrRate).toFixed(2));
+    }
+    return Number((commission + platformFee + settlementFee + secFee + finraTaf + stampDuty).toFixed(2));
+}
+
+function calculateMoomooRoundtripFees(boughtPrice, currentPrice, qty, usdMyrRate = 4.45) {
+    const buyFee = calculateMoomooOrderFee(boughtPrice, qty, 'BUY', usdMyrRate, true);
+    const estSellFee = calculateMoomooOrderFee(currentPrice, qty, 'SELL', usdMyrRate, true);
+    const roundTripFee = Number((buyFee + estSellFee).toFixed(2));
+    return { buyFee, estSellFee, roundTripFee };
+}
+
         let totalCostBasis = 0;
         let totalMarketValue = 0;
         let totalPlVal = 0;
+        let totalEstimatedFees = 0;
 
         const positions = validPositionsList.map(p => {
             const qty = Number(p.qty) || 0;
@@ -1456,9 +1486,15 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
             const plVal = Number((p.pl_val !== undefined ? p.pl_val : (marketValue - totalCost)).toFixed(2));
             const plPct = totalCost > 0 ? Number(((plVal / totalCost) * 100).toFixed(2)) : 0;
 
+            const feeDetails = calculateMoomooRoundtripFees(costPrice, currentPrice, qty);
+            const estimatedFees = feeDetails.roundTripFee;
+            const netPlVal = Number((plVal - estimatedFees).toFixed(2));
+            const netPlPct = totalCost > 0 ? Number(((netPlVal / totalCost) * 100).toFixed(2)) : 0;
+
             totalCostBasis += totalCost;
             totalMarketValue += marketValue;
             totalPlVal += plVal;
+            totalEstimatedFees += estimatedFees;
 
             return {
                 position_id: p.position_id,
@@ -1473,6 +1509,11 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
                 market_value: marketValue,
                 unrealized_pl: plVal,
                 unrealized_pl_pct: plPct,
+                estimated_fees: estimatedFees,
+                buy_fee: feeDetails.buyFee,
+                sell_fee: feeDetails.estSellFee,
+                net_unrealized_pl: netPlVal,
+                net_pl_pct: netPlPct,
                 source: p.source || 'POSITION_RECONCILED',
                 order_id: p.order_id || null,
                 cycle_id: p.cycle_id || null,
@@ -1483,7 +1524,10 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
         totalCostBasis = Number(totalCostBasis.toFixed(2));
         totalMarketValue = Number(totalMarketValue.toFixed(2));
         totalPlVal = Number(totalPlVal.toFixed(2));
+        const totalEstimatedFeesVal = Number(totalEstimatedFees.toFixed(2));
+        const totalNetPl = Number((totalPlVal - totalEstimatedFeesVal).toFixed(2));
         const totalPlPct = totalCostBasis > 0 ? Number(((totalPlVal / totalCostBasis) * 100).toFixed(2)) : 0;
+        const totalNetPlPct = totalCostBasis > 0 ? Number(((totalNetPl / totalCostBasis) * 100).toFixed(2)) : 0;
 
         const payload = {
             opend_status: opendStatus,
@@ -1493,7 +1537,11 @@ app.get('/api/portfolio', authenticateDashboard, async (req, res) => {
                 total_cost_basis: totalCostBasis,
                 total_market_value: totalMarketValue,
                 total_unrealized_pl: totalPlVal,
+                total_gross_pl: totalPlVal,
+                total_estimated_fees: totalEstimatedFeesVal,
+                total_net_pl: totalNetPl,
                 total_pl_pct: totalPlPct,
+                total_net_pl_pct: totalNetPlPct,
                 position_count: positions.length,
             },
             positions,
