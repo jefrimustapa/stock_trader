@@ -53,7 +53,21 @@ class TestPositionReconciliation(unittest.TestCase):
         self.assertEqual(corrections[0]["action"], "INJECT_STOP_LOSS")
         self.assertEqual(corrections[0]["symbol"], "US.NVDA")
         self.assertEqual(corrections[0]["quantity"], 100)
-        self.assertEqual(corrections[0]["stop_price"], 133.0)  # 140 * 0.95 = 133.00
+        # Anti-Stop-Hunt: Default ATR is 3% of 140 = 4.2. SL buffer is 1.5 * 4.2 = 6.3. SL = 140 - 6.3 = 133.70
+        self.assertEqual(corrections[0]["stop_price"], 133.7)
+
+    def test_reconcile_with_explicit_atr_and_structural_support(self):
+        broker_positions = [{"symbol": "US.NVDA", "quantity": 100, "entry_price": 140.0}]
+        broker_orders = []
+        atrs = {"US.NVDA": 4.0}
+        swing_lows = {"US.NVDA": 136.0}
+
+        # With structural low 136.0 and ATR 4.0 (buffer 1.5 * 4.0 = 6.0), SL placed at 136.0 - 6.0 = 130.00
+        corrections = self.reconciler.reconcile_positions(
+            broker_positions, broker_orders, atrs=atrs, swing_lows=swing_lows
+        )
+        self.assertEqual(len(corrections), 1)
+        self.assertEqual(corrections[0]["stop_price"], 130.0)
 
 
 if __name__ == "__main__":

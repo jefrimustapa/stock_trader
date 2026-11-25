@@ -992,8 +992,8 @@ export function AgentsPage({ screenerConfig }) {
                               size="small"
                               sx={{
                                 fontWeight: 700,
-                                bgcolor: sneatTokens.success.soft,
-                                color: sneatTokens.success.main,
+                                bgcolor: ord.order_side === 'SELL' ? sneatTokens.error.soft : sneatTokens.success.soft,
+                                color: ord.order_side === 'SELL' ? sneatTokens.error.main : sneatTokens.success.main,
                               }}
                             />
                           </TableCell>

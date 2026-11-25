@@ -315,6 +315,29 @@ class AgentPipeline:
             support_level = round(price * 0.96, 2)
             resistance_level = round(price * 1.08, 2)
 
+        # Anti-Stop-Hunt: Detect Wyckoff Spring / Shakeout vs High-Volume Breakdown for held positions
+        wyckoff_spring_detected = False
+        structural_breakdown = False
+        if is_held:
+            if candles and len(candles) >= 5:
+                recent_vol = vols[-1] if vols else 1.0
+                avg_vol = (sum(vols) / len(vols)) if vols else 1.0
+                vol_ratio = recent_vol / avg_vol if avg_vol > 0 else 1.0
+                if latest_close <= support_level * 1.01:
+                    if vol_ratio <= 1.0:
+                        wyckoff_spring_detected = True
+                        wyckoff_phase = "ACCUMULATION_SPRING"
+                    elif vol_ratio > 1.5:
+                        structural_breakdown = True
+                        wyckoff_phase = "DISTRIBUTION_BREAKDOWN"
+            else:
+                if candidate.get("wyckoff_spring") or (candidate.get("volume_ratio", 1.0) <= 1.0 and candidate.get("testing_support")):
+                    wyckoff_spring_detected = True
+                    wyckoff_phase = "ACCUMULATION_SPRING"
+                elif candidate.get("structural_breakdown") or (candidate.get("volume_ratio", 1.0) > 1.5 and candidate.get("breakdown")):
+                    structural_breakdown = True
+                    wyckoff_phase = "DISTRIBUTION_BREAKDOWN"
+
         fvg_confluence = "BULLISH_FVG_CONFIRMED" if s_tech >= 65.0 else "TESTING_LIQUIDITY_ZONE"
         passed = s_tech >= 60.0
         timeframe_label = "4H/Daily+1H_ADAPTIVE" if mode == "SWING" else "5M/15M"
@@ -327,6 +350,8 @@ class AgentPipeline:
             "s_tech": s_tech,
             "passed": passed,
             "wyckoff_phase": wyckoff_phase,
+            "wyckoff_spring_detected": wyckoff_spring_detected,
+            "structural_breakdown": structural_breakdown,
             "elliott_wave": "Wave 3 Impulse Expansion" if lane == "MOMENTUM" else "Wave 1 / Leading Diagonal",
             "smc_fvg_confluence": fvg_confluence,
             "support_level": support_level,
@@ -337,7 +362,9 @@ class AgentPipeline:
             "fail_fast": not passed,
             "notes": (
                 f"[{mode} | {timeframe_label}] S_tech={s_tech}/100. Wyckoff {wyckoff_phase} with SMC {fvg_confluence} ({data_source}). "
-                f"Konfluens teknikal {'memenuhi' if passed else 'tidak memenuhi'} syarat ambang >= 60.0."
+                + (f"Anti-Stop-Hunt: Wyckoff Spring detected on low volume (Hold). " if wyckoff_spring_detected else "")
+                + (f"Amaran: High Volume Breakdown dikesan (Exit). " if structural_breakdown else "")
+                + f"Konfluens teknikal {'memenuhi' if passed else 'tidak memenuhi'} syarat ambang >= 60.0."
                 + (" [K-line API dilangkau: Mod Jeda Pembelian aktif memelihara kuota 30 hari]." if (is_paused and not is_held) else "")
             )
         }
@@ -560,13 +587,35 @@ class AgentPipeline:
         tp1_price = round(price + (rr_target_mult * risk_per_share), 2)
         rr_ratio = round((tp1_price - price) / risk_per_share, 2)
 
-        thesis = (
-            f"[{mode}] S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
-            f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}, ATR: ${atr_14:.2f}), "
-            f"TP1: ${tp1_price:.2f} (1:{rr_ratio}). Saiz: {allocated_shares} unit "
-            f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% modal efektif). "
-            f"Asas Modal: ${account_equity:,.2f}."
-        )
+        # Active Position Watch for held positions (Anti-Stop-Hunt & Early Threat Exit)
+        is_held = bool(candidate.get("is_held"))
+        held_action = "ENTER"
+        if is_held:
+            if tariq_res.get("wyckoff_spring_detected"):
+                held_action = "HOLD"
+                thesis = (
+                    f"[{mode}] Active Position Watch {symbol}: Wyckoff Spring / Shakeout dikesan pada volum rendah. "
+                    f"Perlindungan Anti-Stop-Hunt aktif: Kekalkan posisi dan elakkan perangkap jualan likuiditi jerung."
+                )
+            elif tariq_res.get("structural_breakdown") or nawwar_res.get("s_sent_raw", 0.0) <= -30.0:
+                held_action = "EXIT_REQUEST"
+                thesis = (
+                    f"[{mode}] Active Position Watch {symbol}: Penembusan struktur sah dikesan pada volum tinggi "
+                    f"(atau ancaman sentimen melampau). Mencetuskan permintaan keluar awal (Early Threat Exit)."
+                )
+            else:
+                held_action = "HOLD"
+                thesis = (
+                    f"[{mode}] Active Position Watch {symbol}: Posisi dalam keadaan stabil dan mematuhi saluran volatiliti. Kekalkan pegangan."
+                )
+        else:
+            thesis = (
+                f"[{mode}] S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
+                f"Entri: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}, ATR: ${atr_14:.2f}), "
+                f"TP1: ${tp1_price:.2f} (1:{rr_ratio}). Saiz: {allocated_shares} unit "
+                f"(${position_value:.2f}, Risiko: ${actual_risk_amount:.2f} / {actual_risk_amount/account_equity*100:.2f}% modal efektif). "
+                f"Asas Modal: ${account_equity:,.2f}."
+            )
 
         return {
             "agent": "Haziq",
@@ -574,7 +623,9 @@ class AgentPipeline:
             "symbol": symbol,
             "trading_mode": mode,
             "s_total": s_total,
-            "passed": passed_entry_gate,
+            "passed": passed_entry_gate if not is_held else (held_action == "EXIT_REQUEST"),
+            "is_held": is_held,
+            "held_action": held_action,
             "entry_price": price,
             "stop_loss_price": stop_loss_price,
             "take_profit_price": tp1_price,
@@ -816,12 +867,13 @@ class AgentPipeline:
         candidates: Optional[List[Dict[str, Any]]] = None,
         force_simulation: bool = False,
         mock_market_window: bool = False,
-        trading_mode: Optional[str] = None
+        trading_mode: Optional[str] = None,
+        include_active_positions: bool = False
     ) -> Dict[str, Any]:
         """
         Executes a complete deliberative cycle over watchlist candidates:
         L0 Screener -> L1 Tariq & Nawwar -> L2 Haziq -> L3 Danial -> L4 OpenD Paper Order.
-        Supports DAY and SWING modes.
+        Supports DAY and SWING modes, plus Active Position Watch for held positions.
         """
         mode = (trading_mode or BridgeConfig.TRADING_MODE).upper()
         now_utc = datetime.now(timezone.utc)
@@ -845,6 +897,23 @@ class AgentPipeline:
         effective_equity = min(raw_equity, max_buying_power) if max_buying_power and max_buying_power > 0 else raw_equity
         account_equity = effective_equity
 
+        # Include open broker positions for Active Position Watch if requested
+        if include_active_positions:
+            active_broker_positions = client.query_positions() if client.is_connected() else []
+            for b_pos in active_broker_positions:
+                b_code = str(b_pos.get("code", "")).strip()
+                b_qty = int(b_pos.get("qty", 0))
+                b_cost = float(b_pos.get("cost_price", 0.0))
+                if b_qty > 0 and b_code:
+                    candidates.append({
+                        "symbol": b_code,
+                        "price": b_cost,
+                        "cost_price": b_cost,
+                        "is_held": True,
+                        "held_qty": b_qty,
+                        "trading_mode": mode
+                    })
+
         total_candidates = len(candidates)
         passed_l1_count = 0
         passed_l2_count = 0
@@ -856,6 +925,7 @@ class AgentPipeline:
 
         for candidate in candidates:
             symbol = candidate.get("symbol", "UNKNOWN")
+            is_held = bool(candidate.get("is_held"))
 
             # 1. Tariq L1 Analysis
             tariq_res = self.evaluate_tariq_technical(candidate, trading_mode=mode)
@@ -878,106 +948,139 @@ class AgentPipeline:
             if l2_passed:
                 passed_l2_count += 1
 
-            # 4. Danial L3 Compliance
-            danial_res = self.evaluate_danial_compliance(
-                candidate=candidate,
-                haziq_res=haziq_res,
-                account_equity=account_equity,
-                now_ny=now_ny,
-                mock_market_window=mock_market_window or force_simulation,
-                force_simulation=force_simulation,
-                trading_mode=mode
-            )
-            l3_passed = l2_passed and danial_res["passed"]
-            if l3_passed:
-                passed_l3_count += 1
-
-            # Determine stage and final decision
-            if not tariq_res["passed"]:
-                stage_reached = "L1_TECHNICAL"
-                final_decision = "REJECTED_TARIQ_TECHNICAL_SCORE"
-            elif not nawwar_res["passed"]:
-                stage_reached = "L1_SENTIMENT"
-                final_decision = "REJECTED_NAWWAR_SENTIMENT_GATE"
-            elif not haziq_res["passed"]:
-                stage_reached = "L2_STRATEGY"
-                final_decision = "REJECTED_HAZIQ_COMPOSITE_THRESHOLD"
-            elif not danial_res["passed"]:
-                stage_reached = "L3_RISK"
-                final_decision = f"REJECTED_DANIAL_HARD_RULES ({danial_res['rejection_reason']})"
-            else:
-                stage_reached = "L4_DISPATCH"
-                final_decision = "APPROVED_FOR_EXECUTION"
-
+            danial_res = None
+            l3_passed = False
             order_id = None
-            client_order_id = danial_res["client_order_id"]
+            client_order_id = f"ORDER-{uuid.uuid4().hex[:8]}"
 
-            # L4 Execution to OpenD Paper Trading if fully approved
-            if l3_passed:
-                order_req_data = danial_res["order_request"]
-                order_req_obj = OrderRequest(**order_req_data)
-
-                # Submit to OpenD client or simulation runner
-                if client.is_connected():
-                    gateway_resp = client.submit_order(order_req_data)
-                    opend_status = client.get_connection_status()
-                    order_id = gateway_resp.get("order_id") or f"ORD-{client_order_id[:8]}"
-                    status_str = gateway_resp.get("status", "SUBMITTED")
-                elif force_simulation:
-                    opend_status = client.get_connection_status()
-                    order_id = f"SIM-ORD-{client_order_id[:8]}"
-                    status_str = "SUBMITTED_PAPER_SIM"
+            if is_held:
+                # Active Position Watch branch
+                if haziq_res.get("held_action") == "EXIT_REQUEST":
+                    stage_reached = "L2_EARLY_EXIT"
+                    final_decision = "AGENT_EARLY_EXIT_DISPATCHED"
+                    exit_res = self.execute_position_exit(
+                        symbol=symbol,
+                        quantity=candidate.get("held_qty"),
+                        reason="AGENT_EARLY_EXIT",
+                        exit_price=candidate.get("price")
+                    )
+                    if exit_res.get("success"):
+                        order_id = exit_res.get("order_id")
+                        client_order_id = exit_res.get("client_order_id")
+                        orders_placed_count += 1
+                        orders_placed.append({
+                            "order_id": order_id,
+                            "client_order_id": client_order_id,
+                            "symbol": symbol,
+                            "quantity": exit_res.get("quantity"),
+                            "entry_price": exit_res.get("exit_price"),
+                            "order_side": "SELL",
+                            "status": exit_res.get("status"),
+                            "source": "AGENT_EARLY_EXIT"
+                        })
                 else:
-                    gateway_resp = client.submit_order(order_req_data)
-                    opend_status = client.get_connection_status()
-                    order_id = gateway_resp.get("order_id") or f"ORD-{client_order_id[:8]}"
-                    status_str = gateway_resp.get("status", "REJECTED")
+                    stage_reached = "ACTIVE_WATCH"
+                    final_decision = "HOLD_POSITION_MAINTAINED"
+            else:
+                # Standard new entry candidate evaluation
+                danial_res = self.evaluate_danial_compliance(
+                    candidate=candidate,
+                    haziq_res=haziq_res,
+                    account_equity=account_equity,
+                    now_ny=now_ny,
+                    mock_market_window=mock_market_window or force_simulation,
+                    force_simulation=force_simulation,
+                    trading_mode=mode
+                )
+                l3_passed = l2_passed and danial_res["passed"]
+                if l3_passed:
+                    passed_l3_count += 1
 
-                # Register in hard rules engine for idempotency
-                self.hard_rules_engine.register_order_processed(order_req_obj)
+                # Determine stage and final decision
+                if not tariq_res["passed"]:
+                    stage_reached = "L1_TECHNICAL"
+                    final_decision = "REJECTED_TARIQ_TECHNICAL_SCORE"
+                elif not nawwar_res["passed"]:
+                    stage_reached = "L1_SENTIMENT"
+                    final_decision = "REJECTED_NAWWAR_SENTIMENT_GATE"
+                elif not haziq_res["passed"]:
+                    stage_reached = "L2_STRATEGY"
+                    final_decision = "REJECTED_HAZIQ_COMPOSITE_THRESHOLD"
+                elif not danial_res["passed"]:
+                    stage_reached = "L3_RISK"
+                    final_decision = f"REJECTED_DANIAL_HARD_RULES ({danial_res['rejection_reason']})"
+                else:
+                    stage_reached = "L4_DISPATCH"
+                    final_decision = "APPROVED_FOR_EXECUTION"
 
-                # Persist to paper_orders table
-                with self._get_connection() as conn:
-                    conn.execute("""
-                        INSERT INTO paper_orders (
-                            client_order_id, order_id, cycle_id, symbol, order_side,
-                            quantity, entry_price, stop_loss_price, take_profit_price,
-                            status, opend_status, message, time_in_force, trading_mode, source, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        client_order_id,
-                        order_id,
-                        cycle_id,
-                        symbol,
-                        order_req_data["order_side"],
-                        order_req_data["quantity"],
-                        order_req_data["entry_price"],
-                        order_req_data["stop_loss_price"],
-                        haziq_res["take_profit_price"],
-                        status_str,
-                        opend_status,
-                        f"Paper Trading Simulation Order to Moomoo OpenD (Env: {client.trd_env}, Mode: {mode})",
-                        order_req_data.get("time_in_force", "DAY"),
-                        mode,
-                        "AGENT_PIPELINE",
-                        now_utc.isoformat()
-                    ))
-                    conn.commit()
+                client_order_id = danial_res["client_order_id"]
 
-                orders_placed_count += 1
-                orders_placed.append({
-                    "order_id": order_id,
-                    "client_order_id": client_order_id,
-                    "symbol": symbol,
-                    "quantity": order_req_data["quantity"],
-                    "entry_price": order_req_data["entry_price"],
-                    "stop_loss_price": order_req_data["stop_loss_price"],
-                    "take_profit_price": haziq_res["take_profit_price"],
-                    "time_in_force": order_req_data.get("time_in_force", "DAY"),
-                    "trading_mode": mode,
-                    "status": status_str,
-                    "opend_status": opend_status
-                })
+                # L4 Execution to OpenD Paper Trading if fully approved
+                if l3_passed:
+                    order_req_data = danial_res["order_request"]
+                    order_req_obj = OrderRequest(**order_req_data)
+
+                    # Submit to OpenD client or simulation runner
+                    if client.is_connected():
+                        gateway_resp = client.submit_order(order_req_data)
+                        opend_status = client.get_connection_status()
+                        order_id = gateway_resp.get("order_id") or f"ORD-{client_order_id[:8]}"
+                        status_str = gateway_resp.get("status", "SUBMITTED")
+                    elif force_simulation:
+                        opend_status = client.get_connection_status()
+                        order_id = f"SIM-ORD-{client_order_id[:8]}"
+                        status_str = "SUBMITTED_PAPER_SIM"
+                    else:
+                        gateway_resp = client.submit_order(order_req_data)
+                        opend_status = client.get_connection_status()
+                        order_id = gateway_resp.get("order_id") or f"ORD-{client_order_id[:8]}"
+                        status_str = gateway_resp.get("status", "REJECTED")
+
+                    # Register in hard rules engine for idempotency
+                    self.hard_rules_engine.register_order_processed(order_req_obj)
+
+                    # Persist to paper_orders table
+                    with self._get_connection() as conn:
+                        conn.execute("""
+                            INSERT INTO paper_orders (
+                                client_order_id, order_id, cycle_id, symbol, order_side,
+                                quantity, entry_price, stop_loss_price, take_profit_price,
+                                status, opend_status, message, time_in_force, trading_mode, source, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            client_order_id,
+                            order_id,
+                            cycle_id,
+                            symbol,
+                            order_req_data["order_side"],
+                            order_req_data["quantity"],
+                            order_req_data["entry_price"],
+                            order_req_data["stop_loss_price"],
+                            haziq_res["take_profit_price"],
+                            status_str,
+                            opend_status,
+                            f"Paper Trading Simulation Order to Moomoo OpenD (Env: {client.trd_env}, Mode: {mode})",
+                            order_req_data.get("time_in_force", "DAY"),
+                            mode,
+                            "AGENT_PIPELINE",
+                            now_utc.isoformat()
+                        ))
+                        conn.commit()
+
+                    orders_placed_count += 1
+                    orders_placed.append({
+                        "order_id": order_id,
+                        "client_order_id": client_order_id,
+                        "symbol": symbol,
+                        "quantity": order_req_data["quantity"],
+                        "entry_price": order_req_data["entry_price"],
+                        "stop_loss_price": order_req_data["stop_loss_price"],
+                        "take_profit_price": haziq_res["take_profit_price"],
+                        "time_in_force": order_req_data.get("time_in_force", "DAY"),
+                        "trading_mode": mode,
+                        "status": status_str,
+                        "opend_status": opend_status
+                    })
 
             deliberation = {
                 "symbol": symbol,
@@ -1053,6 +1156,274 @@ class AgentPipeline:
         }
 
     # =========================================================================
+    # Position Exit Execution & L4 Exit Sentinel Daemon
+    # =========================================================================
+    def execute_position_exit(
+        self,
+        symbol: str,
+        quantity: Optional[int] = None,
+        reason: str = "AGENT_EARLY_EXIT",
+        exit_price: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Executes a SELL order to OpenD gateway to liquidate/close open position,
+        cancels open orders for the symbol, updates hard rules PDT tracking,
+        and records the transaction in paper_orders.
+        """
+        client = self.moomoo_client or get_moomoo_client()
+        mode = getattr(self, "trading_mode", BridgeConfig.TRADING_MODE).upper()
+        now_utc = datetime.now(timezone.utc)
+        now_ny = datetime.now(NY_TZ)
+        trade_date = now_ny.strftime("%Y-%m-%d")
+
+        # Query active positions to verify position exists and get qty & cost
+        positions = client.query_positions() if (client and hasattr(client, "is_connected") and client.is_connected()) else []
+        matching_pos = None
+        for p in positions:
+            code = str(p.get("code", "")).strip()
+            clean_c = code.split(".")[-1] if "." in code else code
+            clean_s = symbol.split(".")[-1] if "." in symbol else symbol
+            if code == symbol or clean_c == clean_s:
+                matching_pos = p
+                break
+
+        pos_qty = int(matching_pos.get("qty", 0)) if matching_pos else 0
+        cost_price = float(matching_pos.get("cost_price", 0.0)) if matching_pos else 0.0
+
+        if pos_qty <= 0:
+            # Check local filled positions from paper_orders
+            with self._get_connection() as conn:
+                po_row = conn.execute("""
+                    SELECT quantity, entry_price FROM paper_orders
+                    WHERE symbol = ? AND order_side = 'BUY' AND status = 'FILLED'
+                    ORDER BY id DESC LIMIT 1
+                """, (symbol,)).fetchone()
+                if po_row:
+                    pos_qty = int(po_row["quantity"])
+                    cost_price = float(po_row["entry_price"])
+
+        if pos_qty <= 0:
+            return {
+                "success": False,
+                "message": f"No active open position found for {symbol}."
+            }
+
+        sell_qty = min(quantity, pos_qty) if quantity and quantity > 0 else pos_qty
+        current_price = exit_price or cost_price or 10.0
+        if not exit_price and client and hasattr(client, "is_connected") and client.is_connected():
+            try:
+                quote = client.get_stock_quote(symbol)
+                if quote and (quote.get("cur_price") or quote.get("price")):
+                    current_price = float(quote.get("cur_price") or quote.get("price"))
+            except Exception as q_err:
+                logger.warning("Could not fetch real-time quote for %s during exit: %s", symbol, q_err)
+
+        client_order_id = f"EXIT-{uuid.uuid4().hex[:8]}"
+        order_data = {
+            "client_order_id": client_order_id,
+            "symbol": symbol,
+            "quantity": sell_qty,
+            "entry_price": current_price,
+            "stop_loss_price": round(current_price * 0.95, 2),
+            "order_side": "SELL",
+            "time_in_force": "DAY",
+            "trading_mode": mode
+        }
+        order_obj = OrderRequest(**order_data)
+
+        # Cancel pending open orders for this symbol first
+        try:
+            with self._get_connection() as conn:
+                open_orders = conn.execute("""
+                    SELECT order_id, client_order_id FROM paper_orders
+                    WHERE symbol = ? AND status IN ('SUBMITTED', 'PENDING')
+                """, (symbol,)).fetchall()
+                for o in open_orders:
+                    self.cancel_paper_order(o["order_id"] or o["client_order_id"])
+        except Exception as c_err:
+            logger.warning("Error cancelling pending orders for %s: %s", symbol, c_err)
+
+        order_id = f"ORD-{client_order_id[:8]}"
+        opend_status = client.get_connection_status() if hasattr(client, "get_connection_status") else "CONNECTED"
+        if client and hasattr(client, "is_connected") and client.is_connected():
+            gateway_resp = client.submit_order(order_data)
+            order_id = gateway_resp.get("order_id") or order_id
+            status_str = gateway_resp.get("status", "FILLED")
+        else:
+            status_str = "FILLED"
+
+        # Register order processed for idempotency
+        self.hard_rules_engine.register_order_processed(order_obj)
+
+        # Detect round-trip & update Rule 3 PDT
+        self.hard_rules_engine.register_order_and_record_day_trade_if_roundtrip(trade_date, order_obj)
+
+        # Persist SELL order in paper_orders
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT INTO paper_orders (
+                    client_order_id, order_id, cycle_id, symbol, order_side,
+                    quantity, entry_price, stop_loss_price, take_profit_price,
+                    status, opend_status, message, time_in_force, trading_mode, source, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                client_order_id,
+                order_id,
+                f"EXIT-{now_utc.strftime('%Y%m%d')}",
+                symbol,
+                "SELL",
+                sell_qty,
+                current_price,
+                round(current_price * 0.95, 2),
+                round(current_price * 1.10, 2),
+                status_str,
+                opend_status,
+                f"Position Exit [{reason}]: Sold {sell_qty} shares at ${current_price:.2f}",
+                "DAY",
+                mode,
+                reason,
+                now_utc.isoformat()
+            ))
+            conn.commit()
+
+        return {
+            "success": True,
+            "order_id": order_id,
+            "client_order_id": client_order_id,
+            "symbol": symbol,
+            "quantity": sell_qty,
+            "exit_price": current_price,
+            "reason": reason,
+            "status": status_str,
+            "message": f"Successfully executed {reason} exit for {sell_qty} shares of {symbol} at ${current_price:.2f}."
+        }
+
+    def evaluate_exit_sentinel(
+        self,
+        mock_market_prices: Optional[Dict[str, float]] = None,
+        atrs: Optional[Dict[str, float]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        L4 Deterministic Exit Sentinel (Sole Execution Owner).
+        Monitors active positions against Stop Loss, Take Profit (TP1 50%), and Chandelier Trailing Stop.
+        Executes automated SELL orders to OpenD when thresholds are reached.
+        """
+        client = self.moomoo_client or get_moomoo_client()
+        positions = client.query_positions() if (client and hasattr(client, "is_connected") and client.is_connected()) else []
+        exits_executed = []
+
+        if not positions:
+            # Also check local filled positions without sells
+            with self._get_connection() as conn:
+                unclosed = conn.execute("""
+                    SELECT DISTINCT p1.symbol, p1.quantity, p1.entry_price, p1.stop_loss_price, p1.take_profit_price
+                    FROM paper_orders p1
+                    WHERE p1.order_side = 'BUY' AND p1.status = 'FILLED'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM paper_orders p2
+                        WHERE p2.symbol = p1.symbol AND p2.order_side = 'SELL' AND p2.status = 'FILLED'
+                        GROUP BY p2.symbol HAVING SUM(p2.quantity) >= p1.quantity
+                    )
+                """).fetchall()
+                for row in unclosed:
+                    positions.append({
+                        "code": row["symbol"],
+                        "qty": row["quantity"],
+                        "cost_price": row["entry_price"]
+                    })
+
+        for pos in positions:
+            symbol = str(pos.get("code", "")).strip()
+            qty = int(pos.get("qty", 0))
+            cost_price = float(pos.get("cost_price", 0.0))
+            if qty <= 0 or not symbol:
+                continue
+
+            current_price = cost_price
+            if mock_market_prices and symbol in mock_market_prices:
+                current_price = float(mock_market_prices[symbol])
+            elif client and hasattr(client, "is_connected") and client.is_connected():
+                try:
+                    q = client.get_stock_quote(symbol)
+                    if q and (q.get("cur_price") or q.get("price")):
+                        current_price = float(q.get("cur_price") or q.get("price"))
+                except Exception:
+                    pass
+
+            # Fetch structural SL & TP from paper_orders
+            with self._get_connection() as conn:
+                buy_row = conn.execute("""
+                    SELECT stop_loss_price, take_profit_price, entry_price
+                    FROM paper_orders
+                    WHERE symbol = ? AND order_side = 'BUY'
+                    ORDER BY id DESC LIMIT 1
+                """, (symbol,)).fetchone()
+
+                tp1_row = conn.execute("""
+                    SELECT id FROM paper_orders
+                    WHERE symbol = ? AND order_side = 'SELL' AND (source = 'EXIT_SENTINEL_TP1' OR message LIKE '%TP1%')
+                    LIMIT 1
+                """, (symbol,)).fetchone()
+
+            atr = (atrs and atrs.get(symbol)) or max(0.10, round(cost_price * 0.03, 2))
+            if buy_row and buy_row["stop_loss_price"] and float(buy_row["stop_loss_price"]) > 0:
+                sl_price = float(buy_row["stop_loss_price"])
+            else:
+                sl_price = round(max(0.01, cost_price - (1.5 * atr)), 2)
+
+            if buy_row and buy_row["take_profit_price"] and float(buy_row["take_profit_price"]) > 0:
+                tp1_price = float(buy_row["take_profit_price"])
+            else:
+                tp1_price = round(cost_price + (1.5 * max(0.05, cost_price - sl_price)), 2)
+
+            tp1_hit = (tp1_row is not None)
+
+            # 1. Chandelier Trailing Exit / Break-Even Defense (Post-TP1)
+            if tp1_hit:
+                trailing_stop = max(cost_price, round(current_price - (2.0 * atr), 2))
+                if current_price <= cost_price or current_price <= trailing_stop:
+                    logger.warning("EXIT SENTINEL TRIGGERED: %s price $%.2f <= Trailing/Break-Even Stop $%.2f. Executing trailing SELL.", symbol, current_price, trailing_stop)
+                    res = self.execute_position_exit(
+                        symbol=symbol,
+                        quantity=qty,
+                        reason="EXIT_SENTINEL_CHANDELIER_TRAILING",
+                        exit_price=current_price
+                    )
+                    exits_executed.append(res)
+
+            # 2. Stop Loss Hit (Pre-TP1) -> 100% full exit
+            elif current_price <= sl_price:
+                logger.warning("EXIT SENTINEL TRIGGERED: %s price $%.2f <= Stop Loss $%.2f. Executing full SELL.", symbol, current_price, sl_price)
+                res = self.execute_position_exit(
+                    symbol=symbol,
+                    quantity=qty,
+                    reason="EXIT_SENTINEL_STOP_LOSS",
+                    exit_price=current_price
+                )
+                exits_executed.append(res)
+
+            # 3. Take Profit TP1 Hit -> 50% partial exit, raise SL to Break-Even
+            elif current_price >= tp1_price:
+                sell_qty = max(1, qty // 2)
+                logger.info("EXIT SENTINEL TRIGGERED: %s price $%.2f >= TP1 $%.2f. Executing 50%% TP SELL.", symbol, current_price, tp1_price)
+                res = self.execute_position_exit(
+                    symbol=symbol,
+                    quantity=sell_qty,
+                    reason="EXIT_SENTINEL_TP1",
+                    exit_price=current_price
+                )
+                # Update SL to Break-Even in latest buy order
+                with self._get_connection() as conn:
+                    conn.execute("""
+                        UPDATE paper_orders SET stop_loss_price = entry_price
+                        WHERE symbol = ? AND order_side = 'BUY'
+                    """, (symbol,))
+                    conn.commit()
+                exits_executed.append(res)
+
+        return exits_executed
+
+    # =========================================================================
     # Query & Broker Synchronization Helpers
     # =========================================================================
     def sync_broker_orders(self) -> Dict[str, Any]:
@@ -1110,6 +1481,10 @@ class AgentPipeline:
                         b_qty = int(b_ord.get("qty", 0))
                         b_price = float(b_ord.get("price", 0.0))
                         b_time = str(b_ord.get("create_time", "")) or datetime.now(timezone.utc).isoformat()
+                        
+                        # Anti-Stop-Hunt: Use 1.5x ATR buffer instead of fixed 5% fallback
+                        b_atr = max(0.10, round(b_price * 0.03, 2))
+                        b_sl = round(max(0.01, b_price - (1.5 * b_atr)), 2)
                         conn.execute("""
                             INSERT INTO paper_orders (
                                 client_order_id, order_id, cycle_id, symbol, order_side,
@@ -1124,7 +1499,7 @@ class AgentPipeline:
                             b_side,
                             b_qty,
                             b_price,
-                            round(b_price * 0.95, 2),
+                            b_sl,
                             round(b_price * 1.15, 2),
                             mapped_status,
                             "CONNECTED",
@@ -1149,6 +1524,7 @@ class AgentPipeline:
         Queries active positions from OpenD broker. If any open position (qty > 0)
         lacks an existing transaction record in paper_orders, auto-creates an audit
         record with source='POSITION_RECONCILED'.
+        Anti-Stop-Hunt: Uses 1.5x ATR volatility buffer for Stop Loss instead of fixed 5%.
         """
         client = self.moomoo_client or get_moomoo_client()
         mode = getattr(self, "trading_mode", BridgeConfig.TRADING_MODE).upper()
@@ -1183,6 +1559,10 @@ class AgentPipeline:
                         now_str = datetime.now(timezone.utc).isoformat()
                         client_order_id = f"RECON-{clean_sym}-{int(datetime.now(timezone.utc).timestamp())}"
                         order_id = f"POS-{pos_id or clean_sym}"
+                        
+                        # Anti-Stop-Hunt: Use 1.5x ATR buffer instead of fixed 5% fallback
+                        pos_atr = max(0.10, round(cost_price * 0.03, 2))
+                        pos_sl = round(max(0.01, cost_price - (1.5 * pos_atr)), 2)
                         conn.execute("""
                             INSERT INTO paper_orders (
                                 client_order_id, order_id, cycle_id, symbol, order_side,
@@ -1197,7 +1577,7 @@ class AgentPipeline:
                             "BUY",
                             qty,
                             cost_price,
-                            round(cost_price * 0.95, 2),
+                            pos_sl,
                             round(cost_price * 1.15, 2),
                             "FILLED",
                             "CONNECTED",
