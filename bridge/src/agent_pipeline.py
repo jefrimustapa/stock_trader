@@ -1561,8 +1561,12 @@ class AgentPipeline:
                     pos_id = str(pos.get("position_id", "")).strip()
                     qty = int(pos.get("qty", 0))
                     cost_price = float(pos.get("cost_price", 0.0))
-                    if qty <= 0 or not raw_code:
+                    # Skip closed positions (qty == 0) and missing symbols
+                    if qty == 0 or not raw_code:
                         continue
+
+                    order_side = "SELL" if qty < 0 else "BUY"
+                    abs_qty = abs(qty)
 
                     clean_sym = raw_code.split(".")[-1] if "." in raw_code else raw_code
 
@@ -1580,7 +1584,12 @@ class AgentPipeline:
                         
                         # Anti-Stop-Hunt: Use 1.5x ATR buffer instead of fixed 5% fallback
                         pos_atr = max(0.10, round(cost_price * 0.03, 2))
-                        pos_sl = round(max(0.01, cost_price - (1.5 * pos_atr)), 2)
+                        if order_side == "SELL":
+                            pos_sl = round(cost_price + (1.5 * pos_atr), 2)
+                            pos_tp = round(max(0.01, cost_price * 0.85), 2)
+                        else:
+                            pos_sl = round(max(0.01, cost_price - (1.5 * pos_atr)), 2)
+                            pos_tp = round(cost_price * 1.15, 2)
                         conn.execute("""
                             INSERT INTO paper_orders (
                                 client_order_id, order_id, cycle_id, symbol, order_side,
@@ -1592,14 +1601,14 @@ class AgentPipeline:
                             order_id,
                             "RECONCILIATION",
                             raw_code,
-                            "BUY",
-                            qty,
+                            order_side,
+                            abs_qty,
                             cost_price,
                             pos_sl,
-                            round(cost_price * 1.15, 2),
+                            pos_tp,
                             "FILLED",
                             "CONNECTED",
-                            f"Auto-reconciled position baseline audit for {raw_code}",
+                            f"Auto-reconciled position baseline audit for {raw_code} ({order_side})",
                             "DAY",
                             mode,
                             "POSITION_RECONCILED",

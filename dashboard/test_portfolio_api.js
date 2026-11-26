@@ -260,6 +260,24 @@ check('Moomoo Fee Calculation accuracy and Net P&L reconciliation in server.js s
   assert(netPl < grossPl, 'Net P&L must be less than gross P&L by the exact roundtrip fees');
 });
 
+// 7. Verification for GitHub Issue #29 / HOM-385: Negative Unit Display & Short Position Handling
+check('server.js identifies side (LONG/SHORT) and separates longMarketValue from shortLiability', () => {
+  const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  assert(serverCode.includes("side: side"), 'Must map position side');
+  assert(serverCode.includes("shortLiability"), 'Must accumulate short liability');
+  assert(serverCode.includes("longMarketValue"), 'Must accumulate long market value');
+  assert(serverCode.includes("abs_qty: absQty"), 'Must map abs_qty');
+});
+
+check('PortfolioPage.jsx displays SHORT badge with tooltip and filters closed positions', () => {
+  const code = fs.readFileSync(path.join(__dirname, 'src/pages/PortfolioPage.jsx'), 'utf8');
+  assert(code.includes('label="SHORT"'), 'Must render SHORT badge chip');
+  assert(code.includes('Negative units indicate an active short position, not a closed sold trade.'), 'Must contain explanatory tooltip');
+  assert(code.includes('p.qty === 0') || code.includes('p.qty !== 0'), 'Must filter out closed positions with zero qty');
+  assert(code.includes("filterType === 'SHORT'"), 'Must support Short position filter');
+  assert(code.includes("filterType === 'LONG'"), 'Must support Long position filter');
+});
+
 console.log(`\n================================================================`);
 console.log(`  Tests Completed: ${passedTests}/${totalTests} Passed`);
 console.log(`================================================================\n`);

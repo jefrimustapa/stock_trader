@@ -33,6 +33,18 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import { sneatTokens } from '../theme';
 
+const formatCurrency = (val, showSign = false) => {
+  const num = Number(val) || 0;
+  const absFormatted = Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (num < 0) {
+    return `-$${absFormatted}`;
+  }
+  if (showSign && num > 0) {
+    return `+$${absFormatted}`;
+  }
+  return `$${absFormatted}`;
+};
+
 export function PortfolioPage({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -85,13 +97,18 @@ export function PortfolioPage({ onNavigate }) {
   const filteredPositions = useMemo(() => {
     const list = data?.positions || [];
     return list.filter((p) => {
+      // Exclude closed positions (qty === 0)
+      if (p.qty === 0) return false;
+
       // Search filter
       const matchesSearch =
         (p.symbol || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.stock_name || '').toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
 
-      // PnL filter
+      // Side / PnL filter
+      if (filterType === 'LONG') return p.side === 'LONG' || p.qty > 0;
+      if (filterType === 'SHORT') return p.side === 'SHORT' || p.qty < 0;
       if (filterType === 'GAINERS') return (p.unrealized_pl || 0) > 0;
       if (filterType === 'LOSERS') return (p.unrealized_pl || 0) < 0;
       return true;
@@ -241,11 +258,13 @@ export function PortfolioPage({ onNavigate }) {
                 <Skeleton variant="rounded" width={140} height={32} sx={{ my: 0.5 }} />
               ) : (
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                  ${summary.total_market_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${(summary.total_market_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Typography>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Total current value of all holdings
+                {summary.short_liability > 0
+                  ? `Long: $${(summary.long_market_value || summary.total_market_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Short Liability: $${summary.short_liability.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : 'Total current value of all holdings'}
               </Typography>
             </CardContent>
           </Card>
@@ -322,7 +341,7 @@ export function PortfolioPage({ onNavigate }) {
                       color: isPositiveNet ? sneatTokens.success.main : sneatTokens.error.main,
                     }}
                   >
-                    {isPositiveNet ? '+' : ''}${totalNetPl.toFixed(2)}
+                    {formatCurrency(totalNetPl, true)}
                   </Typography>
                   <Chip
                     size="small"
@@ -337,7 +356,7 @@ export function PortfolioPage({ onNavigate }) {
                 </Box>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Gross: {totalGrossPl >= 0 ? '+' : ''}${totalGrossPl.toFixed(2)} | Est. Fees: -${totalFees.toFixed(2)}
+                Gross: {formatCurrency(totalGrossPl, true)} | Est. Fees: -${totalFees.toFixed(2)}
               </Typography>
             </CardContent>
           </Card>
@@ -417,7 +436,23 @@ export function PortfolioPage({ onNavigate }) {
             onClick={() => setFilterType('ALL')}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            All ({loading && !data ? '...' : (data?.positions?.length || 0)})
+            All ({loading && !data ? '...' : (data?.positions?.filter(p => p.qty !== 0).length || 0)})
+          </Button>
+          <Button
+            variant={filterType === 'LONG' ? 'contained' : 'outlined'}
+            color="primary"
+            onClick={() => setFilterType('LONG')}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Long ({data?.positions?.filter(p => (p.side === 'LONG' || p.qty > 0) && p.qty !== 0).length || 0})
+          </Button>
+          <Button
+            variant={filterType === 'SHORT' ? 'contained' : 'outlined'}
+            color="warning"
+            onClick={() => setFilterType('SHORT')}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Short ({data?.positions?.filter(p => (p.side === 'SHORT' || p.qty < 0) && p.qty !== 0).length || 0})
           </Button>
           <Button
             variant={filterType === 'GAINERS' ? 'contained' : 'outlined'}
@@ -648,14 +683,49 @@ export function PortfolioPage({ onNavigate }) {
                         </Tooltip>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {pos.qty.toLocaleString()}
-                        </Typography>
-                        {pos.can_sell_qty !== pos.qty && (
-                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Available to sell: {pos.can_sell_qty}
-                          </Typography>
-                        )}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {(pos.abs_qty !== undefined ? pos.abs_qty : Math.abs(pos.qty)).toLocaleString()}
+                            </Typography>
+                            {pos.qty < 0 || pos.side === 'SHORT' ? (
+                              <Tooltip
+                                title="Negative units indicate an active short position, not a closed sold trade."
+                                arrow
+                              >
+                                <Chip
+                                  size="small"
+                                  label="SHORT"
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: '0.68rem',
+                                    height: 19,
+                                    backgroundColor: sneatTokens.warning.soft,
+                                    color: sneatTokens.warning.main,
+                                    cursor: 'help',
+                                  }}
+                                />
+                              </Tooltip>
+                            ) : (
+                              <Chip
+                                size="small"
+                                label="LONG"
+                                sx={{
+                                  fontWeight: 700,
+                                  fontSize: '0.68rem',
+                                  height: 19,
+                                  backgroundColor: sneatTokens.primary.soft,
+                                  color: sneatTokens.primary.main,
+                                }}
+                              />
+                            )}
+                          </Box>
+                          {pos.can_sell_qty !== pos.qty && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                              Available to sell: {Math.abs(pos.can_sell_qty)}
+                            </Typography>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
@@ -669,13 +739,18 @@ export function PortfolioPage({ onNavigate }) {
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                          ${pos.total_cost.toFixed(2)}
+                          ${Math.abs(pos.total_cost).toFixed(2)}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                          ${pos.market_value.toFixed(2)}
-                        </Typography>
+                        <Tooltip
+                          title={pos.side === 'SHORT' || pos.qty < 0 ? 'Short Position Liability (obligation to repurchase)' : 'Long Market Value'}
+                          arrow
+                        >
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                            ${Math.abs(pos.market_value).toFixed(2)}
+                          </Typography>
+                        </Tooltip>
                       </TableCell>
                       <TableCell align="right">
                         <Typography
@@ -686,7 +761,7 @@ export function PortfolioPage({ onNavigate }) {
                             color: isPos ? sneatTokens.success.main : sneatTokens.error.main,
                           }}
                         >
-                          {isPos ? '+' : ''}${pos.unrealized_pl.toFixed(2)}
+                          {formatCurrency(pos.unrealized_pl, true)}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
@@ -709,7 +784,7 @@ export function PortfolioPage({ onNavigate }) {
                               color: isNetPos ? sneatTokens.success.main : sneatTokens.error.main,
                             }}
                           >
-                            {isNetPos ? '+' : ''}${netPl.toFixed(2)}
+                            {formatCurrency(netPl, true)}
                           </Typography>
                           <Chip
                             size="small"
