@@ -228,7 +228,7 @@ class TestAgentMonitoringExitBVA(unittest.TestCase):
     # =========================================================================
 
     def test_simulation_cycle_dispatches_l1_l2_l3_agents(self):
-        """Verify simulation cycle invokes L1, L2, L3 agent heartbeats through PaperclipDispatcher."""
+        """Verify on-demand simulation cycle invokes L1, batched L2, and L3 agents when wake_agents=True."""
         mock_disp = MagicMock()
         mock_disp.dispatch_l1_agents.return_value = {"status": "SUCCESS"}
         mock_disp.aggregate_and_wake_haziq.return_value = {"status": "SUCCESS"}
@@ -236,12 +236,15 @@ class TestAgentMonitoringExitBVA(unittest.TestCase):
 
         self.pipeline.dispatcher = mock_disp
 
-        candidate = {
-            "symbol": "US.AAPL",
-            "price": 180.0,
-            "candles": [{"close": 180.0, "high": 185.0, "low": 178.0, "volume": 1000000}] * 10,
-            "setup_metrics": {"relative_volume": 2.5, "dist_to_52w_high_pct": 3.0}
-        }
+        candidates = [
+            {
+                "symbol": f"US.STK{i}",
+                "price": 100.0 + i,
+                "candles": [{"close": 100.0, "high": 105.0, "low": 98.0, "volume": 1000000}] * 10,
+                "setup_metrics": {"relative_volume": 2.5, "dist_to_52w_high_pct": 3.0}
+            }
+            for i in range(3)
+        ]
 
         # Mock Tariq and Nawwar passing so cycle flows from L1 -> L2 -> L3
         with patch.object(self.pipeline, "evaluate_tariq_technical", return_value={"passed": True, "score": 85.0}), \
@@ -250,18 +253,63 @@ class TestAgentMonitoringExitBVA(unittest.TestCase):
              patch.object(self.pipeline, "evaluate_danial_compliance", return_value={"passed": False, "rejection_reason": "TEST_GATE", "client_order_id": "ORD-123"}):
 
             res = self.pipeline.run_simulation_cycle(
+                candidates=candidates,
+                force_simulation=True,
+                mock_market_window=True,
+                include_active_positions=False,
+                wake_agents=True
+            )
+
+            # L1 dispatcher called once for candidate list
+            mock_disp.dispatch_l1_agents.assert_called_once_with(candidates)
+            # L2 dispatcher called EXACTLY ONCE with all 3 candidates batched together
+            mock_disp.aggregate_and_wake_haziq.assert_called_once()
+            batched_arg = mock_disp.aggregate_and_wake_haziq.call_args[0][0]
+            self.assertEqual(len(batched_arg), 3)
+            # L3 dispatcher called for each qualifying proposal
+            self.assertEqual(mock_disp.haziq_wake_danial.call_count, 3)
+
+    def test_simulation_cycle_background_monitoring_zero_agent_heartbeats(self):
+        """BVA: Background monitoring cycle with wake_agents=False never invokes agent heartbeats."""
+        mock_disp = MagicMock()
+        self.pipeline.dispatcher = mock_disp
+
+        candidate = {
+            "symbol": "US.NVDA",
+            "price": 120.0,
+            "candles": [{"close": 120.0, "high": 125.0, "low": 118.0, "volume": 1000000}] * 10,
+        }
+
+        with patch.object(self.pipeline, "evaluate_tariq_technical", return_value={"passed": True, "score": 90.0}), \
+             patch.object(self.pipeline, "evaluate_nawwar_sentiment", return_value={"passed": True, "score": 50.0}), \
+             patch.object(self.pipeline, "evaluate_haziq_synthesis", return_value={"passed": True, "composite_score": 85.0, "trading_mode": "DAY"}), \
+             patch.object(self.pipeline, "evaluate_danial_compliance", return_value={"passed": False, "rejection_reason": "TEST_GATE", "client_order_id": "ORD-999"}):
+
+            res = self.pipeline.run_simulation_cycle(
                 candidates=[candidate],
                 force_simulation=True,
                 mock_market_window=True,
-                include_active_positions=False
+                include_active_positions=False,
+                wake_agents=False  # Background loop setting
             )
 
-            # L1 dispatcher called for initial candidate list
-            mock_disp.dispatch_l1_agents.assert_called_once_with([candidate])
-            # L2 dispatcher called when L1 passes
-            mock_disp.aggregate_and_wake_haziq.assert_called_once()
-            # L3 dispatcher called when L2 passes
-            mock_disp.haziq_wake_danial.assert_called_once()
+            # Ensure ZERO agent heartbeat calls are made
+            mock_disp.dispatch_l1_agents.assert_not_called()
+            mock_disp.aggregate_and_wake_haziq.assert_not_called()
+            mock_disp.haziq_wake_danial.assert_not_called()
+
+    def test_simulation_cycle_in_flight_lock_rejection(self):
+        """BVA: Duplicate concurrent run_simulation_cycle trigger returns IN_PROGRESS_SKIPPED."""
+        with self.pipeline._pipeline_lock:
+            self.pipeline._is_running = True
+
+        try:
+            res = self.pipeline.run_simulation_cycle(candidates=[{"symbol": "US.AAPL"}])
+            self.assertEqual(res["status"], "IN_PROGRESS_SKIPPED")
+            self.assertTrue(res["in_flight"])
+        finally:
+            with self.pipeline._pipeline_lock:
+                self.pipeline._is_running = False
 
     def test_simulation_cycle_dispatcher_exception_non_blocking(self):
         """Verify that dispatcher network/runtime exceptions do NOT crash simulation execution."""
@@ -278,7 +326,8 @@ class TestAgentMonitoringExitBVA(unittest.TestCase):
             res = self.pipeline.run_simulation_cycle(
                 candidates=[candidate],
                 force_simulation=True,
-                mock_market_window=True
+                mock_market_window=True,
+                wake_agents=True
             )
             self.assertEqual(res["summary"]["total_candidates"], 1)
             self.assertEqual(res["summary"]["passed_l1"], 0)

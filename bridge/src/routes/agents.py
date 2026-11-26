@@ -30,6 +30,10 @@ class SimulateRunRequest(BaseModel):
         default=True,
         description="Simulates valid market hours (09:45 - 15:45 NY) during off-hours simulation testing."
     )
+    wake_agents: bool = Field(
+        default=True,
+        description="Enables pure on-demand Paperclip agent deliberation."
+    )
 
 
 @router.get("/activity")
@@ -67,7 +71,8 @@ def trigger_simulate_run(
         result = pipeline.run_simulation_cycle(
             candidates=req.candidates,
             force_simulation=req.force_simulation,
-            mock_market_window=req.mock_market_window
+            mock_market_window=req.mock_market_window,
+            wake_agents=req.wake_agents
         )
         return result
     except Exception as e:

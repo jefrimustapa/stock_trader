@@ -12,6 +12,7 @@ import json
 import logging
 import math
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -62,6 +63,8 @@ class AgentPipeline:
         self.trading_mode = BridgeConfig.TRADING_MODE.upper()
         self.dispatcher = dispatcher if dispatcher is not None else get_dispatcher()
         self._earnings_cache: Dict[str, Any] = {}
+        self._is_running: bool = False
+        self._pipeline_lock = threading.Lock()
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -893,13 +896,46 @@ class AgentPipeline:
         force_simulation: bool = False,
         mock_market_window: bool = False,
         trading_mode: Optional[str] = None,
-        include_active_positions: bool = False
+        include_active_positions: bool = False,
+        wake_agents: bool = False
     ) -> Dict[str, Any]:
         """
         Executes a complete deliberative cycle over watchlist candidates:
         L0 Screener -> L1 Tariq & Nawwar -> L2 Haziq -> L3 Danial -> L4 OpenD Paper Order.
         Supports DAY and SWING modes, plus Active Position Watch for held positions.
         """
+        with self._pipeline_lock:
+            if self._is_running:
+                logger.info("[AgentPipeline] Deliberation cycle already in-flight; rejecting duplicate trigger.")
+                return {
+                    "status": "IN_PROGRESS_SKIPPED",
+                    "message": "Agent analysis already in progress",
+                    "in_flight": True
+                }
+            self._is_running = True
+
+        try:
+            return self._execute_simulation_cycle_body(
+                candidates=candidates,
+                force_simulation=force_simulation,
+                mock_market_window=mock_market_window,
+                trading_mode=trading_mode,
+                include_active_positions=include_active_positions,
+                wake_agents=wake_agents
+            )
+        finally:
+            with self._pipeline_lock:
+                self._is_running = False
+
+    def _execute_simulation_cycle_body(
+        self,
+        candidates: Optional[List[Dict[str, Any]]] = None,
+        force_simulation: bool = False,
+        mock_market_window: bool = False,
+        trading_mode: Optional[str] = None,
+        include_active_positions: bool = False,
+        wake_agents: bool = False
+    ) -> Dict[str, Any]:
         mode = (trading_mode or BridgeConfig.TRADING_MODE).upper()
         now_utc = datetime.now(timezone.utc)
         now_ny = datetime.now(NY_TZ)
@@ -947,9 +983,10 @@ class AgentPipeline:
 
         deliberation_records = []
         orders_placed = []
+        l1_batch_evaluations: List[Dict[str, Any]] = []
 
         # Dispatch L1 analysis (Tariq Technical & Nawwar Sentiment)
-        if candidates and getattr(self, "dispatcher", None):
+        if candidates and getattr(self, "dispatcher", None) and wake_agents:
             try:
                 self.dispatcher.dispatch_l1_agents(candidates)
             except Exception as e:
@@ -968,17 +1005,13 @@ class AgentPipeline:
             if l1_passed:
                 passed_l1_count += 1
 
-            # Dispatch L2 synthesis (Haziq Portfolio Lead)
-            if getattr(self, "dispatcher", None) and (l1_passed or is_held):
-                try:
-                    self.dispatcher.aggregate_and_wake_haziq([{
-                        "symbol": symbol,
-                        "tariq": tariq_res,
-                        "nawwar": nawwar_res,
-                        "is_held": is_held
-                    }])
-                except Exception as e:
-                    logger.warning("[Dispatcher] Failed to wake L2 Haziq: %s", e)
+            if l1_passed or is_held:
+                l1_batch_evaluations.append({
+                    "symbol": symbol,
+                    "tariq": tariq_res,
+                    "nawwar": nawwar_res,
+                    "is_held": is_held
+                })
 
             # 3. Haziq L2 Synthesis
             haziq_res = self.evaluate_haziq_synthesis(
@@ -1027,7 +1060,7 @@ class AgentPipeline:
                     final_decision = "HOLD_POSITION_MAINTAINED"
             else:
                 # Dispatch L3 compliance audit (Danial Risk Gatekeeper)
-                if l2_passed and getattr(self, "dispatcher", None):
+                if l2_passed and getattr(self, "dispatcher", None) and wake_agents:
                     try:
                         self.dispatcher.haziq_wake_danial({
                             "symbol": symbol,
@@ -1172,6 +1205,13 @@ class AgentPipeline:
                     client_order_id
                 ))
                 conn.commit()
+
+        # Dispatch batched L2 Haziq wake once for all qualifying candidates
+        if l1_batch_evaluations and getattr(self, "dispatcher", None) and wake_agents:
+            try:
+                self.dispatcher.aggregate_and_wake_haziq(l1_batch_evaluations)
+            except Exception as e:
+                logger.warning("[Dispatcher] Failed to wake L2 Haziq: %s", e)
 
         # Persist simulation cycle summary
         cycle_status = "COMPLETED" if orders_placed_count > 0 else "COMPLETED_NO_ORDERS"
@@ -1609,8 +1649,8 @@ class AgentPipeline:
                     pos_id = str(pos.get("position_id", "")).strip()
                     qty = int(pos.get("qty", 0))
                     cost_price = float(pos.get("cost_price", 0.0))
-                    # Skip closed positions (qty == 0) and missing symbols
-                    if qty == 0 or not raw_code:
+                    # Skip closed positions (qty <= 0) and missing symbols
+                    if qty <= 0 or not raw_code:
                         continue
 
                     order_side = "SELL" if qty < 0 else "BUY"

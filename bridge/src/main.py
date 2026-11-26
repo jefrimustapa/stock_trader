@@ -51,11 +51,12 @@ async def lifespan(app: FastAPI):
                 def _run_active_monitoring_cycle():
                     # 1. Evaluate open portfolio positions with Exit Sentinel (SL, TP1 50%, Chandelier Trailing)
                     pipeline.evaluate_portfolio_positions()
-                    # 2. Run simulation cycle with active positions included
+                    # 2. Run simulation cycle with active positions included (local evaluation only, wake_agents=False)
                     pipeline.run_simulation_cycle(
                         force_simulation=True,
                         mock_market_window=True,
-                        include_active_positions=True
+                        include_active_positions=True,
+                        wake_agents=False
                     )
                 await loop.run_in_executor(None, _run_active_monitoring_cycle)
             except Exception as e:
