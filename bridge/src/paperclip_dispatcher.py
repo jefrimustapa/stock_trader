@@ -30,7 +30,20 @@ class PaperclipDispatcher:
     """
 
     def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
-        self.api_url = (api_url if api_url is not None else os.environ.get("PAPERCLIP_API_URL", "https://crew.julietmike.net")).rstrip("/")
+        if api_url is None:
+            try:
+                from .config import BridgeConfig
+                api_url = getattr(BridgeConfig, "PAPERCLIP_API_URL", None)
+            except Exception:
+                api_url = None
+        if api_key is None:
+            try:
+                from .config import BridgeConfig
+                api_key = getattr(BridgeConfig, "PAPERCLIP_API_KEY", None)
+            except Exception:
+                api_key = None
+
+        self.api_url = (api_url if api_url is not None and api_url != "" else os.environ.get("PAPERCLIP_API_URL", "https://crew.julietmike.net")).rstrip("/")
         self.api_key = os.environ.get("PAPERCLIP_API_KEY", "") if api_key is None else api_key
         self.run_id = os.environ.get("PAPERCLIP_RUN_ID", "")
 

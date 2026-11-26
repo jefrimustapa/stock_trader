@@ -48,10 +48,16 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None,
-                    lambda: pipeline.run_simulation_cycle(force_simulation=True, mock_market_window=True)
-                )
+                def _run_active_monitoring_cycle():
+                    # 1. Evaluate open portfolio positions with Exit Sentinel (SL, TP1 50%, Chandelier Trailing)
+                    pipeline.evaluate_portfolio_positions()
+                    # 2. Run simulation cycle with active positions included
+                    pipeline.run_simulation_cycle(
+                        force_simulation=True,
+                        mock_market_window=True,
+                        include_active_positions=True
+                    )
+                await loop.run_in_executor(None, _run_active_monitoring_cycle)
             except Exception as e:
                 logger.error("Periodic agent simulation cycle error: %s", e)
             await asyncio.sleep(60)

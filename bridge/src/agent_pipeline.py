@@ -22,6 +22,7 @@ from .config import BridgeConfig
 from .fee_model import MoomooFeeModel
 from .hard_rules import HardRulesEngine, OrderRequest, HardRuleViolation
 from .moomoo_client import get_moomoo_client
+from .paperclip_dispatcher import get_dispatcher, PaperclipDispatcher
 
 logger = logging.getLogger(__name__)
 NY_TZ = ZoneInfo("America/New_York")
@@ -49,11 +50,17 @@ class AgentPipeline:
     Coordinates and persists deliberative AI workflow and Moomoo OpenD simulation execution.
     """
 
-    def __init__(self, db_path: Optional[Path] = None, moomoo_client: Optional[Any] = None):
+    def __init__(
+        self,
+        db_path: Optional[Path] = None,
+        moomoo_client: Optional[Any] = None,
+        dispatcher: Optional[Any] = None
+    ):
         self.db_path = db_path or BridgeConfig.AGENT_ACTIVITY_DB
         self.hard_rules_engine = HardRulesEngine(BridgeConfig.EQUITY_BASELINE_DB)
         self.moomoo_client = moomoo_client or get_moomoo_client()
         self.trading_mode = BridgeConfig.TRADING_MODE.upper()
+        self.dispatcher = dispatcher if dispatcher is not None else get_dispatcher()
         self._earnings_cache: Dict[str, Any] = {}
         self._init_db()
 
@@ -941,6 +948,13 @@ class AgentPipeline:
         deliberation_records = []
         orders_placed = []
 
+        # Dispatch L1 analysis (Tariq Technical & Nawwar Sentiment)
+        if candidates and getattr(self, "dispatcher", None):
+            try:
+                self.dispatcher.dispatch_l1_agents(candidates)
+            except Exception as e:
+                logger.warning("[Dispatcher] Failed to dispatch L1 agents: %s", e)
+
         for candidate in candidates:
             symbol = candidate.get("symbol", "UNKNOWN")
             is_held = bool(candidate.get("is_held"))
@@ -953,6 +967,18 @@ class AgentPipeline:
             l1_passed = tariq_res["passed"] and nawwar_res["passed"]
             if l1_passed:
                 passed_l1_count += 1
+
+            # Dispatch L2 synthesis (Haziq Portfolio Lead)
+            if getattr(self, "dispatcher", None) and (l1_passed or is_held):
+                try:
+                    self.dispatcher.aggregate_and_wake_haziq([{
+                        "symbol": symbol,
+                        "tariq": tariq_res,
+                        "nawwar": nawwar_res,
+                        "is_held": is_held
+                    }])
+                except Exception as e:
+                    logger.warning("[Dispatcher] Failed to wake L2 Haziq: %s", e)
 
             # 3. Haziq L2 Synthesis
             haziq_res = self.evaluate_haziq_synthesis(
@@ -1000,6 +1026,17 @@ class AgentPipeline:
                     stage_reached = "ACTIVE_WATCH"
                     final_decision = "HOLD_POSITION_MAINTAINED"
             else:
+                # Dispatch L3 compliance audit (Danial Risk Gatekeeper)
+                if l2_passed and getattr(self, "dispatcher", None):
+                    try:
+                        self.dispatcher.haziq_wake_danial({
+                            "symbol": symbol,
+                            "candidate": candidate,
+                            "haziq": haziq_res
+                        })
+                    except Exception as e:
+                        logger.warning("[Dispatcher] Failed to wake L3 Danial: %s", e)
+
                 # Standard new entry candidate evaluation
                 danial_res = self.evaluate_danial_compliance(
                     candidate=candidate,
@@ -1441,6 +1478,17 @@ class AgentPipeline:
 
         return exits_executed
 
+    def evaluate_portfolio_positions(
+        self,
+        mock_market_prices: Optional[Dict[str, float]] = None,
+        atrs: Optional[Dict[str, float]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Alias for evaluate_exit_sentinel providing explicit backward and API compatibility (HOM-386 / HOM-384).
+        Monitors active positions against Stop Loss, Take Profit (TP1 50%), and Chandelier Trailing Stop.
+        """
+        return self.evaluate_exit_sentinel(mock_market_prices=mock_market_prices, atrs=atrs)
+
     # =========================================================================
     # Query & Broker Synchronization Helpers
     # =========================================================================
@@ -1561,8 +1609,12 @@ class AgentPipeline:
                     pos_id = str(pos.get("position_id", "")).strip()
                     qty = int(pos.get("qty", 0))
                     cost_price = float(pos.get("cost_price", 0.0))
-                    if qty <= 0 or not raw_code:
+                    # Skip closed positions (qty == 0) and missing symbols
+                    if qty == 0 or not raw_code:
                         continue
+
+                    order_side = "SELL" if qty < 0 else "BUY"
+                    abs_qty = abs(qty)
 
                     clean_sym = raw_code.split(".")[-1] if "." in raw_code else raw_code
 
@@ -1580,7 +1632,12 @@ class AgentPipeline:
                         
                         # Anti-Stop-Hunt: Use 1.5x ATR buffer instead of fixed 5% fallback
                         pos_atr = max(0.10, round(cost_price * 0.03, 2))
-                        pos_sl = round(max(0.01, cost_price - (1.5 * pos_atr)), 2)
+                        if order_side == "SELL":
+                            pos_sl = round(cost_price + (1.5 * pos_atr), 2)
+                            pos_tp = round(max(0.01, cost_price * 0.85), 2)
+                        else:
+                            pos_sl = round(max(0.01, cost_price - (1.5 * pos_atr)), 2)
+                            pos_tp = round(cost_price * 1.15, 2)
                         conn.execute("""
                             INSERT INTO paper_orders (
                                 client_order_id, order_id, cycle_id, symbol, order_side,
@@ -1592,14 +1649,14 @@ class AgentPipeline:
                             order_id,
                             "RECONCILIATION",
                             raw_code,
-                            "BUY",
-                            qty,
+                            order_side,
+                            abs_qty,
                             cost_price,
                             pos_sl,
-                            round(cost_price * 1.15, 2),
+                            pos_tp,
                             "FILLED",
                             "CONNECTED",
-                            f"Auto-reconciled position baseline audit for {raw_code}",
+                            f"Auto-reconciled position baseline audit for {raw_code} ({order_side})",
                             "DAY",
                             mode,
                             "POSITION_RECONCILED",

@@ -68,6 +68,8 @@ services:
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
       - PAPERCLIP_BRIDGE_SECRET=${PAPERCLIP_BRIDGE_SECRET:?PAPERCLIP_BRIDGE_SECRET is required}
       - BRIDGE_SERVICE_TOKEN=${BRIDGE_SERVICE_TOKEN:?BRIDGE_SERVICE_TOKEN is required}
+      - PAPERCLIP_API_URL=${PAPERCLIP_API_URL:-https://crew.julietmike.net}
+      - PAPERCLIP_API_KEY=${PAPERCLIP_API_KEY:-}
       - SHARED_DATA_DIR=/app/shared_data
       - TRADING_MODE=${TRADING_MODE:-DAY}
       - TZ=America/New_York
