@@ -23,6 +23,11 @@ import {
   TableSortLabel,
   ButtonGroup,
   Skeleton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
@@ -31,7 +36,22 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
+import CloseIcon from '@mui/icons-material/Close';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { sneatTokens } from '../theme';
+
+const formatCurrency = (val, showSign = false) => {
+  const num = Number(val) || 0;
+  const absFormatted = Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (num < 0) {
+    return `-$${absFormatted}`;
+  }
+  if (showSign && num > 0) {
+    return `+$${absFormatted}`;
+  }
+  return `$${absFormatted}`;
+};
 
 export function PortfolioPage({ onNavigate }) {
   const [data, setData] = useState(null);
@@ -43,6 +63,39 @@ export function PortfolioPage({ onNavigate }) {
   const [orderBy, setOrderBy] = useState('market_value');
   const [orderDir, setOrderDir] = useState('desc');
   const [lastRefreshed, setLastRefreshed] = useState(null);
+
+  // Drill-down dialog state (HOM-396)
+  const [selectedPosition, setSelectedPosition] = useState(null);
+  const [drillDownOrders, setDrillDownOrders] = useState([]);
+  const [drillDownLoading, setDrillDownLoading] = useState(false);
+  const [drillDownError, setDrillDownError] = useState(null);
+
+  const handleOpenDrillDown = useCallback(async (position) => {
+    setSelectedPosition(position);
+    setDrillDownLoading(true);
+    setDrillDownError(null);
+    setDrillDownOrders([]);
+    try {
+      const sym = position.symbol || '';
+      const res = await fetch(`/api/agents/orders?symbol=${encodeURIComponent(sym)}&limit=100`);
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      setDrillDownOrders(json.orders || []);
+    } catch (err) {
+      console.error('[Portfolio] Error fetching orders drilldown:', err);
+      setDrillDownError(err.message || 'Failed to load agent orders for this symbol.');
+    } finally {
+      setDrillDownLoading(false);
+    }
+  }, []);
+
+  const handleCloseDrillDown = useCallback(() => {
+    setSelectedPosition(null);
+    setDrillDownOrders([]);
+    setDrillDownError(null);
+  }, []);
 
   const fetchPortfolio = useCallback(async (isManual = false) => {
     setData((prev) => {
@@ -85,13 +138,18 @@ export function PortfolioPage({ onNavigate }) {
   const filteredPositions = useMemo(() => {
     const list = data?.positions || [];
     return list.filter((p) => {
+      // Exclude closed positions (qty === 0)
+      if (p.qty === 0) return false;
+
       // Search filter
       const matchesSearch =
         (p.symbol || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.stock_name || '').toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
 
-      // PnL filter
+      // Side / PnL filter
+      if (filterType === 'LONG') return p.side === 'LONG' || p.qty > 0;
+      if (filterType === 'SHORT') return p.side === 'SHORT' || p.qty < 0;
       if (filterType === 'GAINERS') return (p.unrealized_pl || 0) > 0;
       if (filterType === 'LOSERS') return (p.unrealized_pl || 0) < 0;
       return true;
@@ -241,11 +299,13 @@ export function PortfolioPage({ onNavigate }) {
                 <Skeleton variant="rounded" width={140} height={32} sx={{ my: 0.5 }} />
               ) : (
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                  ${summary.total_market_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${(summary.total_market_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Typography>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Total current value of all holdings
+                {summary.short_liability > 0
+                  ? `Long: $${(summary.long_market_value || summary.total_market_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Short Liability: $${summary.short_liability.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : 'Total current value of all holdings'}
               </Typography>
             </CardContent>
           </Card>
@@ -322,7 +382,7 @@ export function PortfolioPage({ onNavigate }) {
                       color: isPositiveNet ? sneatTokens.success.main : sneatTokens.error.main,
                     }}
                   >
-                    {isPositiveNet ? '+' : ''}${totalNetPl.toFixed(2)}
+                    {formatCurrency(totalNetPl, true)}
                   </Typography>
                   <Chip
                     size="small"
@@ -337,7 +397,7 @@ export function PortfolioPage({ onNavigate }) {
                 </Box>
               )}
               <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
-                Gross: {totalGrossPl >= 0 ? '+' : ''}${totalGrossPl.toFixed(2)} | Est. Fees: -${totalFees.toFixed(2)}
+                Gross: {formatCurrency(totalGrossPl, true)} | Est. Fees: -${totalFees.toFixed(2)}
               </Typography>
             </CardContent>
           </Card>
@@ -417,7 +477,23 @@ export function PortfolioPage({ onNavigate }) {
             onClick={() => setFilterType('ALL')}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            All ({loading && !data ? '...' : (data?.positions?.length || 0)})
+            All ({loading && !data ? '...' : (data?.positions?.filter(p => p.qty !== 0).length || 0)})
+          </Button>
+          <Button
+            variant={filterType === 'LONG' ? 'contained' : 'outlined'}
+            color="primary"
+            onClick={() => setFilterType('LONG')}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Long ({data?.positions?.filter(p => (p.side === 'LONG' || p.qty > 0) && p.qty !== 0).length || 0})
+          </Button>
+          <Button
+            variant={filterType === 'SHORT' ? 'contained' : 'outlined'}
+            color="warning"
+            onClick={() => setFilterType('SHORT')}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Short ({data?.positions?.filter(p => (p.side === 'SHORT' || p.qty < 0) && p.qty !== 0).length || 0})
           </Button>
           <Button
             variant={filterType === 'GAINERS' ? 'contained' : 'outlined'}
@@ -582,27 +658,36 @@ export function PortfolioPage({ onNavigate }) {
                     <TableRow
                       key={pos.position_id || pos.symbol}
                       hover
+                      onClick={() => handleOpenDrillDown(pos)}
+                      data-testid={`portfolio-row-${pos.symbol}`}
                       sx={{
                         '&:last-child td, &:last-child th': { border: 0 },
                         transition: 'background-color 0.15s',
+                        cursor: 'pointer',
                       }}
                     >
                       <TableCell component="th" scope="row">
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <Chip
-                            size="small"
-                            label={pos.symbol}
-                            sx={{
-                              fontWeight: 700,
-                              fontFamily: 'monospace',
-                              fontSize: '0.75rem',
-                              borderRadius: 1.5,
-                              backgroundColor: sneatTokens.secondary.soft,
-                            }}
-                          />
+                          <Tooltip title="Klik untuk lihat pesanan ejen (Drill-down)" arrow>
+                            <Chip
+                              size="small"
+                              label={pos.symbol}
+                              sx={{
+                                fontWeight: 700,
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                                borderRadius: 1.5,
+                                backgroundColor: sneatTokens.secondary.soft,
+                                cursor: 'pointer',
+                              }}
+                            />
+                          </Tooltip>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {pos.stock_name}
                           </Typography>
+                          <Tooltip title="Drill-down pesanan ejen">
+                            <OpenInNewIcon sx={{ fontSize: 15, color: 'text.secondary', opacity: 0.7 }} />
+                          </Tooltip>
                         </Box>
                       </TableCell>
                       <TableCell align="center">
@@ -648,14 +733,49 @@ export function PortfolioPage({ onNavigate }) {
                         </Tooltip>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {pos.qty.toLocaleString()}
-                        </Typography>
-                        {pos.can_sell_qty !== pos.qty && (
-                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                            Available to sell: {pos.can_sell_qty}
-                          </Typography>
-                        )}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {(pos.abs_qty !== undefined ? pos.abs_qty : Math.abs(pos.qty)).toLocaleString()}
+                            </Typography>
+                            {pos.qty < 0 || pos.side === 'SHORT' ? (
+                              <Tooltip
+                                title="Negative units indicate an active short position, not a closed sold trade."
+                                arrow
+                              >
+                                <Chip
+                                  size="small"
+                                  label="SHORT"
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: '0.68rem',
+                                    height: 19,
+                                    backgroundColor: sneatTokens.warning.soft,
+                                    color: sneatTokens.warning.main,
+                                    cursor: 'help',
+                                  }}
+                                />
+                              </Tooltip>
+                            ) : (
+                              <Chip
+                                size="small"
+                                label="LONG"
+                                sx={{
+                                  fontWeight: 700,
+                                  fontSize: '0.68rem',
+                                  height: 19,
+                                  backgroundColor: sneatTokens.primary.soft,
+                                  color: sneatTokens.primary.main,
+                                }}
+                              />
+                            )}
+                          </Box>
+                          {pos.can_sell_qty !== pos.qty && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                              Available to sell: {Math.abs(pos.can_sell_qty)}
+                            </Typography>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
@@ -669,13 +789,18 @@ export function PortfolioPage({ onNavigate }) {
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                          ${pos.total_cost.toFixed(2)}
+                          ${Math.abs(pos.total_cost).toFixed(2)}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                          ${pos.market_value.toFixed(2)}
-                        </Typography>
+                        <Tooltip
+                          title={pos.side === 'SHORT' || pos.qty < 0 ? 'Short Position Liability (obligation to repurchase)' : 'Long Market Value'}
+                          arrow
+                        >
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                            ${Math.abs(pos.market_value).toFixed(2)}
+                          </Typography>
+                        </Tooltip>
                       </TableCell>
                       <TableCell align="right">
                         <Typography
@@ -686,7 +811,7 @@ export function PortfolioPage({ onNavigate }) {
                             color: isPos ? sneatTokens.success.main : sneatTokens.error.main,
                           }}
                         >
-                          {isPos ? '+' : ''}${pos.unrealized_pl.toFixed(2)}
+                          {formatCurrency(pos.unrealized_pl, true)}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
@@ -709,7 +834,7 @@ export function PortfolioPage({ onNavigate }) {
                               color: isNetPos ? sneatTokens.success.main : sneatTokens.error.main,
                             }}
                           >
-                            {isNetPos ? '+' : ''}${netPl.toFixed(2)}
+                            {formatCurrency(netPl, true)}
                           </Typography>
                           <Chip
                             size="small"
@@ -733,6 +858,163 @@ export function PortfolioPage({ onNavigate }) {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Drill-down Dialog for Linked Agent Orders (HOM-396) */}
+      <Dialog
+        open={Boolean(selectedPosition)}
+        onClose={handleCloseDrillDown}
+        maxWidth="md"
+        fullWidth
+        data-testid="drilldown-dialog"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1,
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: '8px',
+                backgroundColor: sneatTokens.primary.soft,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: sneatTokens.primary.main,
+              }}
+            >
+              <ReceiptLongIcon sx={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                Agent Orders Breakdown: {selectedPosition?.symbol}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {selectedPosition?.stock_name} • Current Units: {selectedPosition?.qty}
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton onClick={handleCloseDrillDown} size="small" data-testid="drilldown-close-btn">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ pt: 2 }}>
+          {/* Summary KPIs */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 2.5, flexWrap: 'wrap' }}>
+            <Paper variant="outlined" sx={{ p: 1.5, flex: 1, minWidth: 140, borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary">Total Linked Orders</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }} data-testid="drilldown-order-count">
+                {drillDownOrders ? drillDownOrders.length : 0}
+              </Typography>
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 1.5, flex: 1, minWidth: 140, borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary">Holding Units</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {selectedPosition?.qty || 0}
+              </Typography>
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 1.5, flex: 1, minWidth: 140, borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary">Avg Buy Price</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                ${(selectedPosition?.bought_price || 0).toFixed(3)}
+              </Typography>
+            </Paper>
+          </Box>
+
+          {drillDownLoading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 1.5 }}>
+              <CircularProgress size={36} />
+              <Typography variant="body2" color="text.secondary">Loading linked agent orders...</Typography>
+            </Box>
+          ) : drillDownError ? (
+            <Alert severity="error" sx={{ my: 2 }}>{drillDownError}</Alert>
+          ) : drillDownOrders.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 5 }}>
+              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                No agent orders recorded for {selectedPosition?.symbol}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Position may have originated from direct broker imports or manual reconciliation.
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, maxHeight: 380 }}>
+              <Table size="small" stickyHeader data-testid="drilldown-orders-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Timestamp</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Side</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Status</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Qty</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Price ($)</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Exec Price ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Cycle ID</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.78rem' }}>Client Order ID</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {drillDownOrders.map((ord) => {
+                    const side = (ord.side || ord.order_side || '').toUpperCase();
+                    const isBuy = side === 'BUY';
+                    const statusStr = (ord.status || '').toUpperCase();
+                    const isFilled = statusStr === 'FILLED';
+                    return (
+                      <TableRow key={ord.id || ord.client_order_id || ord.order_id} hover>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                          {ord.timestamp || ord.created_at || '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={side || 'N/A'}
+                            color={isBuy ? 'success' : 'error'}
+                            sx={{ fontWeight: 700, fontSize: '0.7rem', height: 20 }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={statusStr || 'UNKNOWN'}
+                            variant={isFilled ? 'filled' : 'outlined'}
+                            color={isFilled ? 'primary' : 'default'}
+                            sx={{ fontWeight: 600, fontSize: '0.7rem', height: 20 }}
+                          />
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          {ord.quantity}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
+                          ${Number(ord.price !== undefined ? ord.price : ord.entry_price).toFixed(2)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          ${Number(ord.executed_price !== undefined ? ord.executed_price : ord.entry_price).toFixed(2)}
+                        </TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'text.secondary' }}>
+                          {ord.cycle_id || '-'}
+                        </TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'text.secondary' }}>
+                          {ord.client_order_id || ord.order_id || '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button onClick={handleCloseDrillDown} variant="contained" size="small" sx={{ textTransform: 'none', fontWeight: 600 }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
