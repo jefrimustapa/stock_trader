@@ -1492,26 +1492,47 @@ function calculateMoomooRoundtripFees(boughtPrice, currentPrice, qty, usdMyrRate
 }
 
         let totalCostBasis = 0;
-        let totalMarketValue = 0;
         let totalPlVal = 0;
         let totalEstimatedFees = 0;
+        let longMarketValue = 0;
+        let shortLiability = 0;
 
-        const positions = validPositionsList.map(p => {
-            const qty = Number(p.qty) || 0;
+        // Filter out closed positions (qty = 0)
+        const activePositionsList = validPositionsList.filter(p => (Number(p.qty) || 0) !== 0);
+
+        const positions = activePositionsList.map(p => {
+            const rawQty = Number(p.qty) || 0;
+            const side = rawQty < 0 ? 'SHORT' : 'LONG';
+            const absQty = Math.abs(rawQty);
             const costPrice = Number(p.cost_price) || 0;
             const currentPrice = Number(p.nominal_price) || 0;
-            const totalCost = Number((qty * costPrice).toFixed(2));
-            const marketValue = Number((qty * currentPrice).toFixed(2));
-            const plVal = Number((p.pl_val !== undefined ? p.pl_val : (marketValue - totalCost)).toFixed(2));
+            const totalCost = Number((absQty * costPrice).toFixed(2));
+            const marketValue = Number((absQty * currentPrice).toFixed(2));
+
+            let plVal = 0;
+            if (p.pl_val !== undefined && p.pl_val !== null) {
+                plVal = Number(Number(p.pl_val).toFixed(2));
+            } else {
+                if (side === 'SHORT') {
+                    plVal = Number(((costPrice - currentPrice) * absQty).toFixed(2));
+                } else {
+                    plVal = Number(((currentPrice - costPrice) * absQty).toFixed(2));
+                }
+            }
             const plPct = totalCost > 0 ? Number(((plVal / totalCost) * 100).toFixed(2)) : 0;
 
-            const feeDetails = calculateMoomooRoundtripFees(costPrice, currentPrice, qty);
+            const feeDetails = calculateMoomooRoundtripFees(costPrice, currentPrice, absQty);
             const estimatedFees = feeDetails.roundTripFee;
             const netPlVal = Number((plVal - estimatedFees).toFixed(2));
             const netPlPct = totalCost > 0 ? Number(((netPlVal / totalCost) * 100).toFixed(2)) : 0;
 
+            if (side === 'SHORT') {
+                shortLiability += marketValue;
+            } else {
+                longMarketValue += marketValue;
+            }
+
             totalCostBasis += totalCost;
-            totalMarketValue += marketValue;
             totalPlVal += plVal;
             totalEstimatedFees += estimatedFees;
 
@@ -1520,8 +1541,10 @@ function calculateMoomooRoundtripFees(boughtPrice, currentPrice, qty, usdMyrRate
                 symbol: p.code,
                 clean_symbol: p.code ? (p.code.includes('.') ? p.code.split('.')[1] : p.code) : '',
                 stock_name: p.stock_name || p.code,
-                qty,
-                can_sell_qty: p.can_sell_qty !== undefined ? p.can_sell_qty : qty,
+                qty: rawQty,
+                abs_qty: absQty,
+                side: side,
+                can_sell_qty: p.can_sell_qty !== undefined ? p.can_sell_qty : rawQty,
                 bought_price: costPrice,
                 current_price: currentPrice,
                 total_cost: totalCost,
@@ -1540,8 +1563,10 @@ function calculateMoomooRoundtripFees(boughtPrice, currentPrice, qty, usdMyrRate
             };
         });
 
+        longMarketValue = Number(longMarketValue.toFixed(2));
+        shortLiability = Number(shortLiability.toFixed(2));
+        const netAssetValue = Number((longMarketValue - shortLiability).toFixed(2));
         totalCostBasis = Number(totalCostBasis.toFixed(2));
-        totalMarketValue = Number(totalMarketValue.toFixed(2));
         totalPlVal = Number(totalPlVal.toFixed(2));
         const totalEstimatedFeesVal = Number(totalEstimatedFees.toFixed(2));
         const totalNetPl = Number((totalPlVal - totalEstimatedFeesVal).toFixed(2));
@@ -1554,7 +1579,10 @@ function calculateMoomooRoundtripFees(boughtPrice, currentPrice, qty, usdMyrRate
             env: accRes.data?.env || (lastKnownPortfolio ? lastKnownPortfolio.env : 'SIMULATE'),
             summary: {
                 total_cost_basis: totalCostBasis,
-                total_market_value: totalMarketValue,
+                total_market_value: longMarketValue,
+                long_market_value: longMarketValue,
+                short_liability: shortLiability,
+                net_asset_value: netAssetValue,
                 total_unrealized_pl: totalPlVal,
                 total_gross_pl: totalPlVal,
                 total_estimated_fees: totalEstimatedFeesVal,

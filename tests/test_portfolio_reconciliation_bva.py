@@ -144,11 +144,10 @@ class TestPortfolioReconciliationBVA(unittest.TestCase):
 
     @patch("bridge.src.agent_pipeline.get_moomoo_client")
     def test_bva5_closed_or_zero_qty_position(self, mock_get_client):
-        """BVA 5: Position with qty = 0 or negative is ignored during reconciliation."""
+        """BVA 5: Closed position with qty = 0 is ignored during reconciliation."""
         mock_get_client.return_value = self.mock_client
         self.mock_client.query_positions.return_value = [
-            {"position_id": "POS-ZERO", "code": "US.TSLA", "qty": 0, "cost_price": 200.0},
-            {"position_id": "POS-NEG", "code": "US.AMZN", "qty": -5, "cost_price": 130.0}
+            {"position_id": "POS-ZERO", "code": "US.TSLA", "qty": 0, "cost_price": 200.0}
         ]
 
         res = self.pipeline.reconcile_positions_with_orders()
@@ -157,6 +156,26 @@ class TestPortfolioReconciliationBVA(unittest.TestCase):
 
         orders = self.pipeline.get_paper_orders()
         self.assertEqual(len(orders), 0)
+
+    @patch("bridge.src.agent_pipeline.get_moomoo_client")
+    def test_bva6_negative_qty_short_position_reconciled(self, mock_get_client):
+        """BVA 6: Negative qty indicates active SHORT position and is reconciled with order_side=SELL."""
+        mock_get_client.return_value = self.mock_client
+        self.mock_client.query_positions.return_value = [
+            {"position_id": "POS-NEG", "code": "US.AMZN", "qty": -5, "cost_price": 130.0}
+        ]
+
+        res = self.pipeline.reconcile_positions_with_orders()
+        self.assertTrue(res["synced"])
+        self.assertEqual(res["reconciled_count"], 1)
+
+        orders = self.pipeline.get_paper_orders()
+        self.assertEqual(len(orders), 1)
+        self.assertEqual(orders[0]["symbol"], "US.AMZN")
+        self.assertEqual(orders[0]["order_side"], "SELL")
+        self.assertEqual(orders[0]["quantity"], 5)
+        self.assertEqual(orders[0]["entry_price"], 130.0)
+        self.assertEqual(orders[0]["source"], "POSITION_RECONCILED")
 
     @patch("bridge.src.agent_pipeline.get_moomoo_client")
     def test_bva6_idempotency_no_duplicate_reconciliation(self, mock_get_client):
