@@ -18,6 +18,10 @@ class BridgeConfig:
     PAPERCLIP_BRIDGE_SECRET: str = os.getenv("PAPERCLIP_BRIDGE_SECRET", "")
     BRIDGE_SERVICE_TOKEN: str = os.getenv("BRIDGE_SERVICE_TOKEN", "")
 
+    # Paperclip Agent Integration (HOM-386 / HOM-384 / Issue #30)
+    PAPERCLIP_API_URL: str = os.getenv("PAPERCLIP_API_URL", "https://crew.julietmike.net").rstrip("/")
+    PAPERCLIP_API_KEY: str = os.getenv("PAPERCLIP_API_KEY", "")
+
     # Cloudflare Access Origin JWT settings
     CF_ACCESS_AUD: str = os.getenv("CF_ACCESS_AUD", "")
     CF_ACCESS_CERTS_URL: str = os.getenv(
