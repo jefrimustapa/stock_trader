@@ -6,7 +6,7 @@ and executing paper trading simulation cycles.
 
 import logging
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from ..security import authenticate_request
@@ -81,12 +81,13 @@ def trigger_simulate_run(
 @router.get("/orders")
 def get_agent_paper_orders(
     limit: int = 50,
+    symbol: Optional[str] = Query(None, description="Filter orders by symbol (e.g. AAPL or US.AAPL)"),
     caller: str = Depends(authenticate_request)
 ):
     """Returns list of paper trading orders created by agent pipeline."""
     try:
         pipeline = get_agent_pipeline()
-        orders = pipeline.get_paper_orders(limit=limit)
+        orders = pipeline.get_paper_orders(limit=limit, symbol=symbol)
         return {
             "status": "OK",
             "count": len(orders),

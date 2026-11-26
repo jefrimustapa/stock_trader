@@ -1679,22 +1679,45 @@ class AgentPipeline:
                 }
             }
 
-    def get_paper_orders(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_paper_orders(self, limit: int = 50, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
         try:
             self.sync_broker_orders()
             self.reconcile_positions_with_orders()
         except Exception as sync_err:
             logger.warning("Broker order/position sync error in get_paper_orders: %s", sync_err)
 
+        query = """
+            SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
+                   quantity, entry_price, stop_loss_price, take_profit_price,
+                   status, opend_status, message, time_in_force, trading_mode, source, created_at
+            FROM paper_orders
+        """
+        params: List[Any] = []
+        if symbol and symbol.strip():
+            clean_sym = symbol.strip().upper()
+            bare_sym = clean_sym.split('.')[-1]
+            prefixed_sym = f"US.{bare_sym}"
+            query += " WHERE (UPPER(symbol) = ? OR UPPER(symbol) = ? OR UPPER(symbol) = ?)"
+            params.extend([clean_sym, bare_sym, prefixed_sym])
+
+        query += " ORDER BY id DESC LIMIT ?"
+        safe_limit = max(0, int(limit))
+        params.append(safe_limit)
+
         with self._get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
-                       quantity, entry_price, stop_loss_price, take_profit_price,
-                       status, opend_status, message, time_in_force, trading_mode, source, created_at
-                FROM paper_orders
-                ORDER BY id DESC LIMIT ?
-            """, (limit,))
-            return [dict(r) for r in cursor.fetchall()]
+            cursor = conn.execute(query, tuple(params))
+            rows = [dict(r) for r in cursor.fetchall()]
+
+        mapped_rows = []
+        for r in rows:
+            entry = dict(r)
+            entry["side"] = entry.get("order_side")
+            entry["price"] = entry.get("entry_price")
+            entry["executed_price"] = entry.get("entry_price")
+            entry["timestamp"] = entry.get("created_at")
+            mapped_rows.append(entry)
+
+        return mapped_rows
 
     def cancel_paper_order(self, order_id_or_client_id: str) -> Dict[str, Any]:
         """

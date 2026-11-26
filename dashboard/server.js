@@ -1268,8 +1268,12 @@ app.get(['/api/agents/orders', '/api/v1/agents/orders'], authenticateDashboard, 
         }
         const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
         const limit = req.query.limit || 50;
+        const params = { limit };
+        if (req.query.symbol) {
+            params.symbol = req.query.symbol;
+        }
         const bridgeRes = await axios.get(`${targetUrl}/api/v1/agents/orders`, {
-            params: { limit },
+            params,
             headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
             timeout: 5000
         });
