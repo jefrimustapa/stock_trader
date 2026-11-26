@@ -651,20 +651,35 @@ Per requester (Jefri) directive, the system uses 100% Google Gemini models confi
 | **Trade: Haziq** | L2 Portfolio Lead / Trader | `612c7171-d5f1-405b-9be3-aca66e24b7db` | Antigravity | `gemini-4-hydrogen-medium` | Synthesizes $S_{total} = 0.65 S_{tech} + 0.35 S_{sent\_norm}$, top ranking selection, 1.5% capital position sizing, SL & TP targets |
 | **Trade: Danial** | L3 Risk & Execution Officer | `bcbd0bd4-b10b-4000-b0a7-c21fc6147336` | Antigravity | `gemini-3.8-flash-medium` | Strict audit of 10 Hard Rules (including Pause Buying), order dispatch to Bridge Port 8000 |
 
-### 6.2 Wake Chain Mechanism
+### 6.2 Wake Chain Mechanism & On-Demand Execution Mandate (HOM-384 / HOM-392)
+
+#### A. Core Mandate: On-Demand Only (Zero Automatic Paperclip Heartbeat Schedule)
+Per explicit requester (Jefri) directive, the AI trader agents **MUST NOT** run on an automatic cron or background timer inside Paperclip:
+1. **`heartbeat.enabled: false` on Paperclip**: All four trade agents (Tariq, Nawwar, Haziq, Danial) must have heartbeat disabled in Paperclip. They never execute on standalone recurring timer schedules within Paperclip.
+2. **On-Demand LLM Wakes**: Real AI agent execution (Google Gemini models) is triggered **purely on-demand** via Bridge Dispatcher:
+   - When the operator clicks "Run Simulation / Deliberate" on the dashboard (`POST /api/v1/agents/simulate-run` with `wake_agents=True`).
+   - When qualifying candidate stocks pass L0 screening and require deep AI technical/sentiment analysis.
+3. **Deterministic Background Loop Isolation**:
+   - The periodic 60-second background loop in `bridge/src/main.py` runs with `wake_agents=False`.
+   - It performs deterministic position reconciliation and Exit Sentinel checks (Stop Loss, TP1 50%, Chandelier Trailing Stop) in local Python without waking Paperclip LLMs every minute.
+   - This ensures continuous 24/7 capital protection and stop loss enforcement without draining token quotas or triggering agent lifecycle throttling.
+4. **Candidate Batching**: L1 candidate evaluations are aggregated so that L2 Haziq is woken once in batch, never once per candidate.
+5. **In-Flight Concurrency Lock**: `PaperclipDispatcher` enforces an in-flight lock to safely reject overlapping or duplicate wake requests while an agent is already deliberating.
+
+#### B. End-to-End On-Demand Deliberation Flow
 ```text
 +------------------------------------------------------------------------+
-| L0 Screener (Python Daemon)                                            |
-| Generates top 3-5 candidates (Momentum & Setup lanes)                  |
+| On-Demand Trigger (Dashboard / API simulate-run / Qualified Candidate)  |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (Woken by Screener Event)
+                                    v (POST /api/v1/agents/simulate-run)
 +------------------------------------------------------------------------+
 | Bridge Dispatcher Service (bridge/src/paperclip_dispatcher.py)         |
+| Authenticates via Board API Key (pcp_board_...)                        |
 | Triggers parallel Paperclip wake for Tariq & Nawwar                    |
 +-------------------+--------------------------------+-------------------+
                     |                                |
-                    v (Wake L1A)                     v (Wake L1B)
+                    v (Wake L1A: POST /heartbeat/invoke) v (Wake L1B: POST /heartbeat/invoke)
 +--------------------------------------+ +-------------------------------+
 | L1 Tariq (Technical Analyst)         | | L1 Nawwar (Sentiment Scout)   |
 | - Model: gemini-4-hydrogen-medium    | | - Model: gemini-3.8-flash-med |
@@ -673,15 +688,15 @@ Per requester (Jefri) directive, the system uses 100% Google Gemini models confi
 +-------------------+------------------+ +---------------+---------------+
                     |                                |
                     +----------------+---------------+
-                                     | (Both L1 complete)
-                                     v (WAKE HAZIQ by Bridge Dispatcher)
+                                     | (Both L1 complete - Batch Aggregation)
+                                     v (WAKE HAZIQ in batch via Board API Key)
 +------------------------------------------------------------------------+
 | L2 Haziq (Portfolio Lead / Trader)                                     |
 | - Model: gemini-4-hydrogen-medium                                      |
 | - Synthesizes S_total, selects top ranking, position sizing, SL & TP   |
 +-----------------------------------+------------------------------------+
                                     |
-                                    v (WAKE DANIAL by Haziq)
+                                    v (WAKE DANIAL via Board API Key)
 +------------------------------------------------------------------------+
 | L3 Danial (Risk & Compliance Officer)                                  |
 | - Model: gemini-3.8-flash-medium                                       |
@@ -696,7 +711,23 @@ Per requester (Jefri) directive, the system uses 100% Google Gemini models confi
 +------------------------------------------------------------------------+
 ```
 
-### 6.3 Danial's 10 Safety Hard Rules (L3 Gatekeeper)
+### 6.3 Authentication & Board API Key Architecture (Resolution 403 Forbidden)
+1. **Mandatory Company Board API Key (`PAPERCLIP_BOARD_KEY_CREW`)**:
+   - The Bridge Dispatcher **must** authenticate to Paperclip API (`https://crew.julietmike.net/api/agents/:id/heartbeat/invoke`) using a Company Board API Key (`pcp_board_...`).
+   - **Paperclip RBAC Restriction**: Agent JWT tokens (such as runner tokens with `sub: <agent_id>`) are restricted by Paperclip RBAC to self-invocation only (`HTTP 403 Forbidden: {"error": "Agent can only invoke itself"}`).
+   - Only a Company Board API Key has cross-agent authorization to wake Tariq, Nawwar, Haziq, and Danial.
+2. **Environment & Container Configuration**:
+   - `PAPERCLIP_API_KEY` in `.env` must be explicitly set to the Board Key (`pcp_board_...`).
+   - Docker Compose container `stock_mcp_bridge` must pass `PAPERCLIP_API_KEY` directly from `.env`, and runner scripts must never override it with an agent session JWT.
+
+### 6.4 Real AI Analysis vs Deterministic Heuristics
+1. **Real Qualitative AI Reasoning**:
+   - Qualitative analysis (Wyckoff chart nuance, sentiment tone, investment thesis synthesis, compliance judgment) is owned by the real Paperclip AI agents (Tariq, Nawwar, Haziq, Danial) powered by Google Gemini models.
+   - The agents are NOT replaced by heuristic scripts; they deliberate on-demand with structured output stored in `agent_activity.sqlite`.
+2. **Deterministic Safety & Execution Backbone**:
+   - Python code in `bridge/` handles deterministic quantitative filtering, Moomoo OpenD socket protocol communication, 10 Hard Rules mathematical validation, and sub-second Exit Sentinel stop loss execution.
+
+### 6.5 Danial's 10 Safety Hard Rules (L3 Gatekeeper)
 1. Capital risk limit per transaction: Maximum 2% of account equity.
 2. Daily drawdown limit: Maximum 5% capital loss in a day.
 3. Penny stock filter: Stock price must be $\ge \$5.00$.
@@ -708,10 +739,11 @@ Per requester (Jefri) directive, the system uses 100% Google Gemini models confi
 9. Trading environment mode: Must be simulation mode (`TrdEnv.SIMULATE`).
 10. Pause Buying control: When `pause_buying = True`, Danial immediately rejects all new BUY orders, while Tariq skips OpenAPI K-line calls to save 30-day quota.
 
-### 6.4 Dashboard & UI (React MUI SPA)
+### 6.6 Dashboard & UI (React MUI SPA)
 1. **Portfolio Page (`#/portfolio`)**: Displays capital summary, cash, net PnL, and active holdings with bought price and current price.
 2. **Pause Buying Toggle**: Allows operator to pause new purchases directly from dashboard.
-3. **Notifications & Countdown**: Automated countdown timer showing scheduled time for next L0 scan.
+3. **On-Demand Simulation Trigger**: Allows operator to trigger instant end-to-end AI agent deliberation (`/api/v1/agents/simulate-run`).
+4. **Notifications & Countdown**: Automated countdown timer showing scheduled time for next L0 scan.
 
 ---
 
