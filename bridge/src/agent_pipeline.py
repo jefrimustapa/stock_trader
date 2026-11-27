@@ -141,10 +141,16 @@ class AgentPipeline:
             sim_cols = [r["name"] for r in conn.execute("PRAGMA table_info(simulation_cycles)").fetchall()]
             if "trading_mode" not in sim_cols:
                 conn.execute("ALTER TABLE simulation_cycles ADD COLUMN trading_mode TEXT DEFAULT 'DAY'")
+            if "watchlist_candidates" not in sim_cols:
+                conn.execute("ALTER TABLE simulation_cycles ADD COLUMN watchlist_candidates INTEGER DEFAULT 0")
+            if "monitored_positions" not in sim_cols:
+                conn.execute("ALTER TABLE simulation_cycles ADD COLUMN monitored_positions INTEGER DEFAULT 0")
+            if "is_buying_paused" not in sim_cols:
+                conn.execute("ALTER TABLE simulation_cycles ADD COLUMN is_buying_paused INTEGER DEFAULT 0")
 
             conn.commit()
 
-    def load_watchlist_candidates(self, max_candidates: int = 10) -> List[Dict[str, Any]]:
+    def load_watchlist_candidates(self, max_candidates: Optional[int] = None) -> List[Dict[str, Any]]:
         """Loads candidates from shared watchlist.json, falling back to clean defaults if empty."""
         if BridgeConfig.WATCHLIST_PATH.exists():
             try:
@@ -152,7 +158,9 @@ class AgentPipeline:
                     data = json.load(f)
                     watchlist = data.get("watchlist", [])
                     if watchlist:
-                        return watchlist[:max_candidates]
+                        if max_candidates is not None and max_candidates > 0:
+                            return watchlist[:max_candidates]
+                        return watchlist
             except Exception as e:
                 logger.warning("Could not read watchlist.json: %s", e)
         return []
