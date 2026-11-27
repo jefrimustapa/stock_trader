@@ -166,12 +166,14 @@ export function LogsPage() {
   };
 
   const highlightMatch = (text, query) => {
-    if (!query || !query.trim()) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    if (!query || !query.trim() || !text) return text;
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase() ? (
         <span
           key={i}
+          className="search-highlight"
           style={{
             backgroundColor: '#FFAB00',
             color: '#000000',
@@ -186,6 +188,42 @@ export function LogsPage() {
         part
       )
     );
+  };
+
+  const renderMessageContent = (message, query, level) => {
+    if (!message) return null;
+    const parts = message.split(/(\[[^\]]+\])/g);
+    return parts.map((chunk, idx) => {
+      if (!chunk) return null;
+      const isBracketTag = chunk.startsWith('[') && chunk.endsWith(']');
+      if (isBracketTag) {
+        return (
+          <span
+            key={idx}
+            className="log-bracket-tag"
+            style={{
+              color: '#79c0ff',
+              fontWeight: 700,
+              backgroundColor: 'rgba(56, 139, 253, 0.15)',
+              border: '1px solid rgba(56, 139, 253, 0.35)',
+              borderRadius: '4px',
+              padding: '1px 6px',
+              marginRight: '6px',
+              display: 'inline-block',
+              fontSize: '0.75rem',
+              letterSpacing: '0.02em',
+            }}
+          >
+            {highlightMatch(chunk, query)}
+          </span>
+        );
+      }
+      return (
+        <span key={idx}>
+          {highlightMatch(chunk, query)}
+        </span>
+      );
+    });
   };
 
   return (
@@ -487,27 +525,36 @@ export function LogsPage() {
               return (
                 <Box
                   key={index}
+                  data-testid="log-row"
+                  className="log-row"
                   sx={{
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: 1.5,
-                    py: 0.25,
-                    px: 0.5,
-                    borderRadius: 0.5,
+                    py: 1,
+                    px: 1.5,
+                    my: 0.5,
+                    borderRadius: '4px',
+                    borderBottom: '1px solid #21262d',
+                    borderLeft: '3px solid #388bfd',
+                    backgroundColor: 'rgba(22, 27, 34, 0.6)',
+                    transition: 'all 0.15s ease',
                     '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      backgroundColor: 'rgba(56, 139, 253, 0.08)',
                     },
                   }}
                 >
                   {/* Line Number */}
                   <Typography
                     component="span"
+                    className="log-line-num"
                     sx={{
                       color: '#484F58',
                       fontSize: '0.75rem',
                       minWidth: 36,
                       textAlign: 'right',
                       userSelect: 'none',
+                      pt: 0.1,
                     }}
                   >
                     {index + 1}
@@ -517,11 +564,14 @@ export function LogsPage() {
                   {item.timestamp && (
                     <Typography
                       component="span"
+                      className="log-timestamp"
                       sx={{
-                        color: '#6E7681',
+                        color: '#79c0ff',
                         fontSize: '0.75rem',
                         minWidth: 165,
+                        fontFamily: 'monospace',
                         userSelect: 'none',
+                        pt: 0.1,
                       }}
                     >
                       {item.timestamp.replace('T', ' ').substring(0, 19)}
@@ -531,12 +581,14 @@ export function LogsPage() {
                   {/* Level Tag */}
                   <Typography
                     component="span"
+                    className="log-level-tag"
                     sx={{
                       color: levelColor,
                       fontWeight: 700,
                       fontSize: '0.75rem',
                       minWidth: 55,
                       userSelect: 'none',
+                      pt: 0.1,
                     }}
                   >
                     [{item.level}]
@@ -546,6 +598,7 @@ export function LogsPage() {
                   {item.stream === 'stderr' && (
                     <Typography
                       component="span"
+                      className="log-stream-indicator"
                       sx={{
                         color: sneatTokens.warning.main,
                         fontSize: '0.7rem',
@@ -553,21 +606,24 @@ export function LogsPage() {
                         px: 0.5,
                         borderRadius: 0.5,
                         userSelect: 'none',
+                        pt: 0.1,
                       }}
                     >
                       stderr
                     </Typography>
                   )}
 
-                  {/* Log Message */}
+                  {/* Log Message with bracket color coding & search highlight */}
                   <Typography
                     component="span"
+                    className="log-message-content"
                     sx={{
                       flex: 1,
                       color: item.level === 'ERROR' ? '#FFA198' : '#C9D1D9',
+                      wordBreak: 'break-word',
                     }}
                   >
-                    {highlightMatch(item.message, searchTerm)}
+                    {renderMessageContent(item.message, searchTerm, item.level)}
                   </Typography>
                 </Box>
               );
