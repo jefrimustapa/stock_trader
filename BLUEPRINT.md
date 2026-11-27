@@ -412,10 +412,25 @@ Execution order runs from cheapest/fastest to highest cognitive analysis:
 }
 ```
 
-#### D. Dual-Focus Monitoring (Active Portfolio Watch)
+#### D. Dual-Focus Monitoring (Active Portfolio Watch & Pause Buying Protocol)
 Tariq and Nawwar continuously monitor active portfolio positions:
 - **Day Trading Mode:** Periodic review every 15 minutes to detect intraday momentum shifts or micro-trend exhaustion.
 - **Swing Trading Mode (Adaptive Top-Down Monitoring):** Structured reviews on 4H / Daily timeframes (3 times daily or on bar close), dynamically switching to 1-hour (1H) intervals when price approaches institutional interest zones, TP targets, or SL levels.
+
+#### E. Operational Separation of Buy Candidates vs Active Portfolio Watch (HOM-406 / HOM-407)
+1. **L0 Screener Watchlist (Buy Candidates):**
+   - Vetted stocks in `watchlist.json` represent **New Buy Candidates** (`calon pembelian baharu`).
+   - The candidate volume is governed by `MAX_CANDIDATES_PER_LANE` (default 5, valid 1–20 per lane; dual-lane = $2 \times \text{limit}$).
+2. **Behavior Under `pause_buying = True` (Current Operating State):**
+   - **Buy Deliberation Suspended:** When `pause_buying` is active, the L1 pipeline **STRICTLY SKIPS** buy deliberation for `watchlist.json` candidates. No Tariq/Nawwar buy evaluations are conducted, preserving Moomoo OpenAPI K-line quotas and avoiding misleading "0 / N passed" rejections.
+   - **Mandatory Active Portfolio Monitoring:** The pipeline **MUST MAINTAIN** active analysis for all existing open portfolio positions (`is_held: True`). Tariq & Nawwar evaluate threat signals, Haziq assesses position defense, and L4 Exit Sentinel enforces SL / TP1 (50%) / Chandelier Trailing liquidation.
+3. **Behavior Under `pause_buying = False` (Active Purchasing):**
+   - New buy candidates are deliberated normally.
+   - **Scale-In / Re-Purchase Eligibility:** If an existing holding is surfaced by the L0 Screener with an attractive technical/sentiment setup, it is eligible for scale-in / position addition, provided total allocated risk remains within Danial's 2% capital boundary.
+4. **UI Metrics Segregation (`AgentsPage.jsx`):**
+   - Distinct metric cards:
+     * `L0 SCREENER: Buy Candidates: X Stocks` (annotated with `[PEMBELIAN DIJEDA]` when paused).
+     * `Active Portfolio Monitoring: Y Held Stocks (ACTIVE)`.
 
 ---
 
@@ -733,17 +748,18 @@ Per explicit requester (Jefri) directive, the AI trader agents **MUST NOT** run 
 3. Penny stock filter: Stock price must be $\ge \$5.00$.
 4. Market liquidity limit: Purchase quantity $\le 1\%$ of average daily volume ($ADV_{20}$).
 5. Market trading hours: Operates only during regular US market trading hours (09:45 - 15:45 New York time).
-6. Duplicate position prevention: Rejects purchase if stock already has an open position.
+6. Duplicate position control: Rejects unintentional duplicate buy orders, but allows scale-in / position addition on existing holdings when buying is active if an attractive setup is validated and aggregate risk remains $\le 2\%$.
 7. Earnings gate restriction: Rejects candidate if earnings announcement date is within 5 days.
 8. Broker connection health: Verifies Moomoo OpenD session is connected and healthy.
 9. Trading environment mode: Must be simulation mode (`TrdEnv.SIMULATE`).
-10. Pause Buying control: When `pause_buying = True`, Danial immediately rejects all new BUY orders, while Tariq skips OpenAPI K-line calls to save 30-day quota.
+10. Pause Buying control: When `pause_buying = True`, new buy candidate deliberations are suspended completely at pipeline entry (no buy analysis executed), while active portfolio positions continue to be monitored exclusively.
 
 ### 6.6 Dashboard & UI (React MUI SPA)
 1. **Portfolio Page (`#/portfolio`)**: Displays capital summary, cash, net PnL, and active holdings with bought price and current price.
 2. **Pause Buying Toggle**: Allows operator to pause new purchases directly from dashboard.
-3. **On-Demand Simulation Trigger**: Allows operator to trigger instant end-to-end AI agent deliberation (`/api/v1/agents/simulate-run`).
-4. **Notifications & Countdown**: Automated countdown timer showing scheduled time for next L0 scan.
+3. **Segregated L1 Agent Display (`#/agents`)**: Explicitly separates `L0 SCREENER: Buy Candidates: X Stocks` (annotated `[PEMBELIAN DIJEDA]` when paused) from `Active Portfolio Monitoring: Y Held Positions (ACTIVE)`.
+4. **On-Demand Simulation Trigger**: Allows operator to trigger instant end-to-end AI agent deliberation (`/api/v1/agents/simulate-run`).
+5. **Notifications & Countdown**: Automated countdown timer showing scheduled time for next L0 scan.
 
 ---
 
