@@ -1616,6 +1616,48 @@ function calculateMoomooRoundtripFees(boughtPrice, currentPrice, qty, usdMyrRate
     }
 });
 
+// Container Logs API endpoints (HOM-408 / Issue #36)
+app.get('/api/system/logs', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const { container = 'bridge', tail = 100, level = 'ALL', search = '' } = req.query;
+
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/system/logs`, {
+            params: { container, tail, level, search },
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 10000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching container logs:', err.message);
+        const status = err.response?.status || 500;
+        const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
+        return res.status(status).json({ error: `Gagal mendapatkan log kontena: ${detail}` });
+    }
+});
+
+app.get('/api/system/containers', authenticateDashboard, async (req, res) => {
+    try {
+        if (!BRIDGE_SERVICE_TOKEN) {
+            return res.status(500).json({ error: 'Bridge service token is not configured' });
+        }
+        const targetUrl = BRIDGE_URL || 'http://mcp-bridge:8000';
+        const bridgeRes = await axios.get(`${targetUrl}/api/v1/system/containers`, {
+            headers: { 'X-Service-Token': BRIDGE_SERVICE_TOKEN },
+            timeout: 5000
+        });
+        return res.json(bridgeRes.data);
+    } catch (err) {
+        console.error('[Dashboard] Error fetching container status:', err.message);
+        const status = err.response?.status || 500;
+        const detail = err.response?.data?.detail || err.response?.data?.error || err.message;
+        return res.status(status).json({ error: `Gagal mendapatkan senarai kontena: ${detail}` });
+    }
+});
+
 const distDir = path.join(__dirname, "dist");
 // Robust asset handler for both absolute /assets/ and relative sub-route /portfolio/assets/
 app.use((req, res, next) => {

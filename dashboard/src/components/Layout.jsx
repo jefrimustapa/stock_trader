@@ -31,6 +31,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import TerminalIcon from '@mui/icons-material/Terminal';
 import { sneatTokens } from '../theme';
 
 const SIDEBAR_WIDTH = 260;
@@ -42,6 +43,7 @@ export const navItems = [
   { id: 'agents', label: 'L1 -> L4: Agent Team Activity', shortLabel: 'L1-L4 Agents', subtitle: 'Pipeline & Paper Trading', icon: <PsychologyIcon sx={{ fontSize: 20 }} /> },
   { id: 'quota', label: 'K-Line Quota', shortLabel: 'Quota', subtitle: '30-Day History & Expiry', icon: <QueryStatsIcon sx={{ fontSize: 20 }} /> },
   { id: 'settings', label: 'Settings & Gateway', shortLabel: 'Settings', subtitle: 'L0, Capital & OpenD', icon: <SettingsIcon sx={{ fontSize: 20 }} /> },
+  { id: 'logs', label: 'Container Logs', shortLabel: 'Logs', subtitle: 'Multi-Service Log Viewer', icon: <TerminalIcon sx={{ fontSize: 20 }} /> },
 ];
 
 export function Layout({

@@ -12,8 +12,9 @@ import { SettingsPage } from './pages/SettingsPage';
 import { QuotaPage } from './pages/QuotaPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { PortfolioPage } from './pages/PortfolioPage';
+import { LogsPage } from './pages/LogsPage';
 
-const VALID_PAGES = ['overview', 'portfolio', 'l0', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota'];
+const VALID_PAGES = ['overview', 'portfolio', 'l0', 'agents', 'opend', 'funnel', 'watchlist', 'settings', 'quota', 'logs'];
 
 export function App() {
   const [mode, setMode] = useState(() => {
@@ -193,6 +194,8 @@ export function App() {
         );
       case 'quota':
         return <QuotaPage />;
+      case 'logs':
+        return <LogsPage />;
       case 'overview':
       default:
         return (
