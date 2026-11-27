@@ -87,7 +87,11 @@ class AgentPipeline:
                     passed_l1 INTEGER NOT NULL DEFAULT 0,
                     passed_l2 INTEGER NOT NULL DEFAULT 0,
                     passed_l3 INTEGER NOT NULL DEFAULT 0,
-                    orders_placed INTEGER NOT NULL DEFAULT 0
+                    orders_placed INTEGER NOT NULL DEFAULT 0,
+                    trading_mode TEXT DEFAULT 'DAY',
+                    watchlist_candidates INTEGER DEFAULT 0,
+                    monitored_positions INTEGER DEFAULT 0,
+                    is_buying_paused INTEGER DEFAULT 0
                 )
             """)
             conn.execute("""
@@ -621,6 +625,7 @@ class AgentPipeline:
 
         # Active Position Watch for held positions (Anti-Stop-Hunt & Early Threat Exit)
         is_held = bool(candidate.get("is_held"))
+        allow_scale_in = bool(candidate.get("allow_scale_in"))
         held_action = "ENTER"
         if is_held:
             if tariq_res.get("wyckoff_spring_detected"):
@@ -634,6 +639,13 @@ class AgentPipeline:
                 thesis = (
                     f"[{mode}] Active Position Watch {symbol}: Penembusan struktur sah dikesan pada volum tinggi "
                     f"(atau ancaman sentimen melampau). Mencetuskan permintaan keluar awal (Early Threat Exit)."
+                )
+            elif allow_scale_in and passed_entry_gate:
+                held_action = "SCALE_IN"
+                thesis = (
+                    f"[{mode}] Active Holding Scale-In Setup {symbol}: S_total={s_total} (Tech={s_tech}, SentNorm={s_sent_norm}). "
+                    f"Entri Tambahan: ${price:.2f}, SL: ${stop_loss_price:.2f} (-{sl_distance:.2f}), TP1: ${tp1_price:.2f}. "
+                    f"Saiz: {allocated_shares} unit (${position_value:.2f}, Risiko: ${actual_risk_amount:.2f})."
                 )
             else:
                 held_action = "HOLD"
@@ -656,7 +668,7 @@ class AgentPipeline:
             "symbol": symbol,
             "trading_mode": mode,
             "s_total": s_total,
-            "passed": passed_entry_gate if not is_held else (held_action == "EXIT_REQUEST"),
+            "passed": passed_entry_gate if (not is_held or (allow_scale_in and held_action == "SCALE_IN")) else (held_action == "EXIT_REQUEST"),
             "is_held": is_held,
             "held_action": held_action,
             "entry_price": price,
@@ -855,11 +867,19 @@ class AgentPipeline:
         except Exception as e:
             logger.warning("Error checking active orders for %s: %s", symbol, e)
 
-        r_dedup_pass = (active_order_count == 0)
+        allow_scale_in = bool(candidate.get("allow_scale_in"))
+        r_dedup_pass = (active_order_count == 0) or allow_scale_in
+        if allow_scale_in and active_order_count > 0:
+            dedup_detail = f"Penambahan posisi (scale-in) dibenarkan untuk kaunter pegangan sedia ada ({active_order_status})"
+        elif r_dedup_pass:
+            dedup_detail = "Tiada pesanan aktif / posisi terbuka bagi simbol ini"
+        else:
+            dedup_detail = f"Pesanan/posisi sedia ada aktif ({active_order_status}). Pembelian berulang disekat."
+
         rule_checks.append({
             "rule": "Kawalan Kedudukan Aktif (Elak Pembelian Berulang)",
             "passed": r_dedup_pass,
-            "detail": "Tiada pesanan aktif / posisi terbuka bagi simbol ini" if r_dedup_pass else f"Pesanan/posisi sedia ada aktif ({active_order_status}). Pembelian berulang disekat."
+            "detail": dedup_detail
         })
         if not r_dedup_pass and all_passed:
             all_passed = False
@@ -949,8 +969,7 @@ class AgentPipeline:
         now_ny = datetime.now(NY_TZ)
         cycle_id = f"CYC-{now_utc.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
-        if not candidates:
-            candidates = self.load_watchlist_candidates(max_candidates=10)
+        is_buying_paused = self.get_pause_buying_status()
 
         # Baseline equity from OpenD or DB
         client = self.moomoo_client or get_moomoo_client()
@@ -966,22 +985,82 @@ class AgentPipeline:
         effective_equity = min(raw_equity, max_buying_power) if max_buying_power and max_buying_power > 0 else raw_equity
         account_equity = effective_equity
 
-        # Include open broker positions for Active Position Watch if requested
-        if include_active_positions:
-            active_broker_positions = client.query_positions() if client.is_connected() else []
-            for b_pos in active_broker_positions:
-                b_code = str(b_pos.get("code", "")).strip()
-                b_qty = int(b_pos.get("qty", 0))
-                b_cost = float(b_pos.get("cost_price", 0.0))
-                if b_qty > 0 and b_code:
-                    candidates.append({
+        # Query active broker positions if requested
+        active_broker_positions = client.query_positions() if (include_active_positions and client.is_connected()) else []
+        held_positions_dict: Dict[str, Dict[str, Any]] = {}
+        for b_pos in active_broker_positions:
+            b_code = str(b_pos.get("code", "")).strip()
+            b_qty = int(b_pos.get("qty", 0))
+            if b_qty > 0 and b_code:
+                held_positions_dict[b_code] = b_pos
+
+        monitored_positions_count = len(held_positions_dict)
+
+        if candidates is None:
+            raw_watchlist = self.load_watchlist_candidates(max_candidates=None)
+            watchlist_candidates_count = len(raw_watchlist)
+            cycle_candidates: List[Dict[str, Any]] = []
+
+            if is_buying_paused:
+                # Operational Separation (HOM-406 / HOM-407):
+                # When pause_buying is active, buy deliberation for watchlist candidates is SKIPPED.
+                # Only held portfolio positions are evaluated for Exit Sentinel / threat monitoring.
+                for b_code, b_pos in held_positions_dict.items():
+                    b_qty = int(b_pos.get("qty", 0))
+                    b_cost = float(b_pos.get("cost_price", 0.0))
+                    cycle_candidates.append({
                         "symbol": b_code,
                         "price": b_cost,
                         "cost_price": b_cost,
                         "is_held": True,
                         "held_qty": b_qty,
-                        "trading_mode": mode
+                        "trading_mode": mode,
+                        "is_monitoring_only": True
                     })
+            else:
+                # When buying is active: Deliberate on vetted watchlist candidates.
+                # If a held counter has an attractive setup in watchlist, allow scale-in without duplicate entries.
+                seen_symbols = set()
+                for cand in raw_watchlist:
+                    sym = cand.get("symbol", "").strip()
+                    if not sym:
+                        continue
+                    seen_symbols.add(sym)
+                    cand_copy = dict(cand)
+                    cand_copy["trading_mode"] = mode
+                    if sym in held_positions_dict:
+                        b_pos = held_positions_dict[sym]
+                        cand_copy["is_held"] = True
+                        cand_copy["held_qty"] = int(b_pos.get("qty", 0))
+                        cand_copy["cost_price"] = float(b_pos.get("cost_price", 0.0))
+                        cand_copy["allow_scale_in"] = True
+                    else:
+                        cand_copy["is_held"] = False
+                    cycle_candidates.append(cand_copy)
+
+                # Add held positions that are NOT in watchlist as monitoring-only
+                if include_active_positions:
+                    for b_code, b_pos in held_positions_dict.items():
+                        if b_code not in seen_symbols:
+                            b_qty = int(b_pos.get("qty", 0))
+                            b_cost = float(b_pos.get("cost_price", 0.0))
+                            cycle_candidates.append({
+                                "symbol": b_code,
+                                "price": b_cost,
+                                "cost_price": b_cost,
+                                "is_held": True,
+                                "held_qty": b_qty,
+                                "trading_mode": mode,
+                                "is_monitoring_only": True
+                            })
+
+            candidates = cycle_candidates
+        else:
+            raw_watchlist = self.load_watchlist_candidates(max_candidates=None)
+            watchlist_candidates_count = len([c for c in candidates if not c.get("is_held")]) or len(raw_watchlist)
+            monitored_positions_count = len([c for c in candidates if c.get("is_held")]) or len(held_positions_dict)
+            if is_buying_paused and not force_simulation:
+                candidates = [c for c in candidates if c.get("is_held")]
 
         total_candidates = len(candidates)
         passed_l1_count = 0
@@ -1038,8 +1117,8 @@ class AgentPipeline:
             order_id = None
             client_order_id = f"ORDER-{uuid.uuid4().hex[:8]}"
 
-            if is_held:
-                # Active Position Watch branch
+            if is_held and not candidate.get("allow_scale_in"):
+                # Active Position Watch branch (Monitoring Only)
                 if haziq_res.get("held_action") == "EXIT_REQUEST":
                     stage_reached = "L2_EARLY_EXIT"
                     final_decision = "AGENT_EARLY_EXIT_DISPATCHED"
@@ -1107,7 +1186,10 @@ class AgentPipeline:
                     final_decision = f"REJECTED_DANIAL_HARD_RULES ({danial_res['rejection_reason']})"
                 else:
                     stage_reached = "L4_DISPATCH"
-                    final_decision = "APPROVED_FOR_EXECUTION"
+                    if candidate.get("allow_scale_in"):
+                        final_decision = "APPROVED_FOR_EXECUTION (SCALE_IN)"
+                    else:
+                        final_decision = "APPROVED_FOR_EXECUTION"
 
                 client_order_id = danial_res["client_order_id"]
 
@@ -1182,6 +1264,9 @@ class AgentPipeline:
                 "symbol": symbol,
                 "stage_reached": stage_reached,
                 "final_decision": final_decision,
+                "is_held": is_held,
+                "is_monitoring_only": bool(candidate.get("is_monitoring_only")),
+                "allow_scale_in": bool(candidate.get("allow_scale_in")),
                 "tariq": tariq_res,
                 "nawwar": nawwar_res,
                 "haziq": haziq_res,
@@ -1227,8 +1312,9 @@ class AgentPipeline:
             conn.execute("""
                 INSERT INTO simulation_cycles (
                     cycle_id, created_at, status, total_candidates,
-                    passed_l1, passed_l2, passed_l3, orders_placed, trading_mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    passed_l1, passed_l2, passed_l3, orders_placed, trading_mode,
+                    watchlist_candidates, monitored_positions, is_buying_paused
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 cycle_id,
                 now_utc.isoformat(),
@@ -1238,7 +1324,10 @@ class AgentPipeline:
                 passed_l2_count,
                 passed_l3_count,
                 orders_placed_count,
-                mode
+                mode,
+                watchlist_candidates_count,
+                monitored_positions_count,
+                1 if is_buying_paused else 0
             ))
             conn.commit()
 
@@ -1247,8 +1336,13 @@ class AgentPipeline:
             "created_at": now_utc.isoformat(),
             "status": cycle_status,
             "account_equity": account_equity,
+            "is_buying_paused": is_buying_paused,
+            "watchlist_candidates_count": watchlist_candidates_count,
+            "monitored_positions_count": monitored_positions_count,
             "summary": {
                 "total_candidates": total_candidates,
+                "watchlist_candidates": watchlist_candidates_count,
+                "monitored_positions": monitored_positions_count,
                 "passed_l1": passed_l1_count,
                 "passed_l2": passed_l2_count,
                 "passed_l3": passed_l3_count,
@@ -1726,10 +1820,18 @@ class AgentPipeline:
         except Exception as sync_err:
             logger.warning("Broker order/position sync error in get_recent_activity: %s", sync_err)
 
+        pause_buying = self.get_pause_buying_status()
+        raw_watchlist = self.load_watchlist_candidates(max_candidates=None)
+        watchlist_count = len(raw_watchlist)
+        client = self.moomoo_client or get_moomoo_client()
+        active_positions = client.query_positions() if (hasattr(client, "is_connected") and client.is_connected()) else []
+        held_count = len([p for p in active_positions if int(p.get("qty", 0)) > 0])
+
         with self._get_connection() as conn:
             cycles_cursor = conn.execute("""
                 SELECT cycle_id, created_at, status, total_candidates,
-                       passed_l1, passed_l2, passed_l3, orders_placed
+                       passed_l1, passed_l2, passed_l3, orders_placed,
+                       trading_mode, watchlist_candidates, monitored_positions, is_buying_paused
                 FROM simulation_cycles
                 ORDER BY id DESC LIMIT ?
             """, (limit,))
@@ -1771,16 +1873,25 @@ class AgentPipeline:
             """)
             st = dict(stats_cursor.fetchone() or {})
 
+            latest_cycle_watchlist = cycles[0].get("watchlist_candidates") if (cycles and "watchlist_candidates" in cycles[0]) else watchlist_count
+            latest_cycle_monitored = cycles[0].get("monitored_positions") if (cycles and "monitored_positions" in cycles[0]) else held_count
+
             return {
                 "status": "OK",
                 "cycles": cycles,
                 "latest_cycle_id": latest_cycle_id,
                 "deliberations": deliberations,
                 "orders": orders,
+                "pause_buying": pause_buying,
+                "watchlist_candidates_count": watchlist_count,
+                "monitored_positions_count": held_count,
                 "stats": {
                     "total_cycles": st.get("total_cycles") or 0,
                     "total_orders": st.get("total_orders") or 0,
-                    "latest_candidates": len(deliberations)
+                    "latest_candidates": len(deliberations),
+                    "watchlist_candidates": latest_cycle_watchlist,
+                    "monitored_positions": latest_cycle_monitored,
+                    "pause_buying": pause_buying
                 }
             }
 

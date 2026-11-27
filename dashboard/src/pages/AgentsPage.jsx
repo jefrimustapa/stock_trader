@@ -303,15 +303,36 @@ export function AgentsPage({ screenerConfig }) {
               </Box>
               <Box>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 0.5 }}>
-                  LATEST CYCLE CANDIDATES
+                  LATEST CYCLE STATUS
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                  <Typography variant="h4" sx={{ fontWeight: 800, color: sneatTokens.info.main }}>
-                    {latestCycle?.total_candidates || deliberations.length || 0}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    stocks detected
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
+                      L0 Screener Buy Candidates
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                      <Typography variant="h5" sx={{ fontWeight: 800, color: pauseBuying ? sneatTokens.warning.main : sneatTokens.info.main }}>
+                        {activityData?.watchlist_candidates_count ?? latestCycle?.watchlist_candidates ?? 0}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                        {pauseBuying ? '(Paused)' : 'vetted'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
+                      Active Portfolio Monitoring
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                      <Typography variant="h5" sx={{ fontWeight: 800, color: sneatTokens.success.main }}>
+                        {activityData?.monitored_positions_count ?? latestCycle?.monitored_positions ?? 0}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                        held active
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -362,10 +383,24 @@ export function AgentsPage({ screenerConfig }) {
       {/* Visual Pipeline Stepper with Directional Connectors (HOM-302) */}
       <Card sx={{ mb: 3, borderRadius: 2.5, border: '1px solid', borderColor: 'divider' }}>
         <CardContent sx={{ p: 2.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Agent Team Decision Pipeline Flow
             </Typography>
+            <Chip
+              id="chip-active-portfolio-watch"
+              icon={<SecurityIcon sx={{ fontSize: 16 }} />}
+              label={`Active Portfolio Monitoring: ${activityData?.monitored_positions_count ?? latestCycle?.monitored_positions ?? 0} Held Positions (ACTIVE)`}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                bgcolor: sneatTokens.success.soft,
+                color: sneatTokens.success.main,
+                border: '1px solid',
+                borderColor: sneatTokens.success.main,
+                '& .MuiChip-icon': { color: sneatTokens.success.main },
+              }}
+            />
           </Box>
 
           <Box
@@ -387,7 +422,7 @@ export function AgentsPage({ screenerConfig }) {
                 borderRadius: 2,
                 bgcolor: 'action.hover',
                 border: '1px solid',
-                borderColor: 'divider',
+                borderColor: pauseBuying ? sneatTokens.warning.main : 'divider',
                 textAlign: 'center',
               }}
             >
@@ -395,12 +430,23 @@ export function AgentsPage({ screenerConfig }) {
                 L0 SCREENER
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>
-                Dual-Lane Watchlist
+                Buy Candidates
               </Typography>
               <Chip
-                label={`${latestCycle?.total_candidates || deliberations.length || 0} Candidates`}
+                id="chip-l0-buy-candidates"
+                label={
+                  pauseBuying
+                    ? `Buy Candidates: ${activityData?.watchlist_candidates_count ?? latestCycle?.watchlist_candidates ?? 0} (PAUSED)`
+                    : `Buy Candidates: ${activityData?.watchlist_candidates_count ?? latestCycle?.watchlist_candidates ?? 0} (ACTIVE)`
+                }
                 size="small"
-                sx={{ mt: 1, fontWeight: 700 }}
+                sx={{
+                  mt: 1,
+                  fontWeight: 700,
+                  bgcolor: pauseBuying ? sneatTokens.warning.soft : 'action.selected',
+                  color: pauseBuying ? sneatTokens.warning.main : 'text.primary',
+                  border: pauseBuying ? `1px solid ${sneatTokens.warning.main}` : undefined,
+                }}
               />
             </Paper>
 
@@ -565,13 +611,32 @@ export function AgentsPage({ screenerConfig }) {
             {deliberations.map((d, idx) => {
               const isSelected = idx === selectedSymbolIndex;
               const isApproved = d.final_decision?.includes('APPROVED');
+              const isHeld = Boolean(d.is_held || d.tariq?.is_held || d.haziq?.is_held || d.final_decision?.includes('HOLD_POSITION') || d.stage_reached === 'ACTIVE_WATCH');
+
+              let chipIcon = <CancelIcon sx={{ fontSize: 16 }} />;
+              let chipColor = 'text.secondary';
+              let chipBorder = 'divider';
+              let chipBg = isSelected ? 'action.selected' : 'action.hover';
+
+              if (isApproved) {
+                chipIcon = <CheckCircleIcon sx={{ fontSize: 16 }} />;
+                chipColor = isSelected ? '#ffffff' : sneatTokens.success.main;
+                chipBorder = sneatTokens.success.main;
+                chipBg = isSelected ? sneatTokens.success.main : sneatTokens.success.soft;
+              } else if (isHeld) {
+                chipIcon = <SecurityIcon sx={{ fontSize: 16 }} />;
+                chipColor = isSelected ? '#ffffff' : sneatTokens.info.main;
+                chipBorder = sneatTokens.info.main;
+                chipBg = isSelected ? sneatTokens.info.main : sneatTokens.info.soft;
+              }
+
               return (
                 <Chip
                   key={d.symbol || idx}
                   id={`chip-deliberation-${d.symbol}`}
-                  label={d.symbol}
+                  label={isHeld ? `${d.symbol} (HELD)` : d.symbol}
                   onClick={() => setSelectedSymbolIndex(idx)}
-                  icon={isApproved ? <CheckCircleIcon sx={{ fontSize: 16 }} /> : <CancelIcon sx={{ fontSize: 16 }} />}
+                  icon={chipIcon}
                   sx={{
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -579,26 +644,14 @@ export function AgentsPage({ screenerConfig }) {
                     py: 0.5,
                     px: 0.5,
                     borderRadius: 2,
-                    ...(isApproved
-                      ? {
-                          bgcolor: isSelected ? sneatTokens.success.main : sneatTokens.success.soft,
-                          color: isSelected ? '#ffffff' : sneatTokens.success.main,
-                          borderColor: sneatTokens.success.main,
-                          border: '1px solid',
-                          boxShadow: isSelected ? '0 2px 8px rgba(113, 221, 55, 0.4)' : 'none',
-                          '& .MuiChip-icon': {
-                            color: isSelected ? '#ffffff' : sneatTokens.success.main,
-                          },
-                        }
-                      : {
-                          bgcolor: isSelected ? 'action.selected' : 'action.hover',
-                          color: 'text.secondary',
-                          borderColor: isSelected ? 'primary.main' : 'divider',
-                          border: '1px solid',
-                          '& .MuiChip-icon': {
-                            color: 'text.disabled',
-                          },
-                        }),
+                    bgcolor: chipBg,
+                    color: chipColor,
+                    borderColor: chipBorder,
+                    border: '1px solid',
+                    boxShadow: isSelected ? '0 2px 8px rgba(0, 0, 0, 0.15)' : 'none',
+                    '& .MuiChip-icon': {
+                      color: chipColor,
+                    },
                   }}
                 />
               );

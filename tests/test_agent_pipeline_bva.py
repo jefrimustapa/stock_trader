@@ -15,6 +15,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -34,8 +35,11 @@ class TestAgentPipelineBVA(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmp_dir.name) / "test_agent_activity.sqlite"
-        self.pipeline = AgentPipeline(db_path=self.db_path)
-        self.pipeline.moomoo_client = None
+        mock_moomoo = MagicMock()
+        mock_moomoo.is_connected.return_value = False
+        mock_moomoo.query_positions.return_value = []
+        self.pipeline = AgentPipeline(db_path=self.db_path, moomoo_client=mock_moomoo)
+        self.pipeline.get_pause_buying_status = MagicMock(return_value=False)
 
     def tearDown(self):
         if hasattr(self, "pipeline") and self.pipeline is not None:
