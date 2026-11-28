@@ -45,6 +45,81 @@ const REFRESH_INTERVALS = [
   { label: '10s', value: 10000 },
 ];
 
+export const AGENT_COMPONENT_TIERS = {
+  EXIT_SENTINEL: {
+    id: 'exit_sentinel',
+    tier: 'L4-Exit',
+    label: 'Exit Sentinel',
+    regex: /(?:\[EXIT SENTINEL\]|EXIT SENTINEL)/i,
+    text: '#f0883e', // Coral
+    bg: 'rgba(240, 136, 62, 0.15)',
+    border: 'rgba(240, 136, 62, 0.35)',
+  },
+  L4: {
+    id: 'l4',
+    tier: 'L4',
+    label: 'Bridge & Order Execution',
+    regex: /(?:\[(?:BridgeL4|L4)\]|Order placed)/i,
+    text: '#58a6ff', // Sky Blue
+    bg: 'rgba(88, 166, 255, 0.15)',
+    border: 'rgba(88, 166, 255, 0.35)',
+  },
+  L3: {
+    id: 'l3',
+    tier: 'L3',
+    label: 'Danial (Risk Auditor)',
+    regex: /(?:\[(?:L3|Danial)\]|Audit Danial)/i,
+    text: '#3fb950', // Emerald / Green
+    bg: 'rgba(63, 185, 80, 0.15)',
+    border: 'rgba(63, 185, 80, 0.35)',
+  },
+  L2: {
+    id: 'l2',
+    tier: 'L2',
+    label: 'Haziq (Strategy Evaluator)',
+    regex: /(?:\[(?:L2|Haziq)\])/i,
+    text: '#d29922', // Amber / Gold
+    bg: 'rgba(210, 153, 34, 0.15)',
+    border: 'rgba(210, 153, 34, 0.35)',
+  },
+  L1: {
+    id: 'l1',
+    tier: 'L1',
+    label: 'Dispatcher & Analysis (Tariq/Nawwar)',
+    regex: /(?:\[(?:Dispatcher|L1|Tariq|Nawwar)\])/i,
+    text: '#bc8cff', // Violet / Purple
+    bg: 'rgba(188, 140, 255, 0.15)',
+    border: 'rgba(188, 140, 255, 0.35)',
+  },
+  L0: {
+    id: 'l0',
+    tier: 'L0',
+    label: 'Screener Daemon',
+    regex: /(?:\[(?:ScreenerDaemon|L0)\])/i,
+    text: '#39c5bb', // Teal / Cyan
+    bg: 'rgba(57, 197, 187, 0.15)',
+    border: 'rgba(57, 197, 187, 0.35)',
+  },
+};
+
+export function detectAgentTier(message) {
+  if (!message) return null;
+  const tiers = [
+    AGENT_COMPONENT_TIERS.EXIT_SENTINEL,
+    AGENT_COMPONENT_TIERS.L4,
+    AGENT_COMPONENT_TIERS.L3,
+    AGENT_COMPONENT_TIERS.L2,
+    AGENT_COMPONENT_TIERS.L1,
+    AGENT_COMPONENT_TIERS.L0,
+  ];
+  for (const t of tiers) {
+    if (t.regex.test(message)) {
+      return t;
+    }
+  }
+  return null;
+}
+
 export function LogsPage() {
   const [selectedContainer, setSelectedContainer] = useState('bridge');
   const [tailLimit, setTailLimit] = useState(100);
@@ -192,20 +267,27 @@ export function LogsPage() {
 
   const renderMessageContent = (message, query, level) => {
     if (!message) return null;
-    const parts = message.split(/(\[[^\]]+\])/g);
+    const parts = message.split(/(\[[^\]]+\]|\bAudit Danial\b|\bOrder placed\b|\bEXIT SENTINEL\b)/gi);
     return parts.map((chunk, idx) => {
       if (!chunk) return null;
       const isBracketTag = chunk.startsWith('[') && chunk.endsWith(']');
-      if (isBracketTag) {
+      const isSpecialPhrase = /^(Audit Danial|Order placed|EXIT SENTINEL)$/i.test(chunk);
+      if (isBracketTag || isSpecialPhrase) {
+        const tier = detectAgentTier(chunk);
+        const tagColor = tier ? tier.text : '#79c0ff';
+        const tagBg = tier ? tier.bg : 'rgba(56, 139, 253, 0.15)';
+        const tagBorder = tier ? tier.border : 'rgba(56, 139, 253, 0.35)';
+
         return (
           <span
             key={idx}
-            className="log-bracket-tag"
+            className={`log-bracket-tag${tier ? ` log-tag-${tier.id}` : ''}`}
+            data-tier={tier ? tier.id : 'default'}
             style={{
-              color: '#79c0ff',
+              color: tagColor,
               fontWeight: 700,
-              backgroundColor: 'rgba(56, 139, 253, 0.15)',
-              border: '1px solid rgba(56, 139, 253, 0.35)',
+              backgroundColor: tagBg,
+              border: `1px solid ${tagBorder}`,
               borderRadius: '4px',
               padding: '1px 6px',
               marginRight: '6px',
@@ -438,6 +520,85 @@ export function LogsPage() {
         </Alert>
       )}
 
+      {/* Agent Tier Legend */}
+      <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', mr: 0.5 }}>
+          AGENT TIERS:
+        </Typography>
+        <Chip
+          size="small"
+          label="L0: ScreenerDaemon"
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: AGENT_COMPONENT_TIERS.L0.text,
+            backgroundColor: AGENT_COMPONENT_TIERS.L0.bg,
+            border: `1px solid ${AGENT_COMPONENT_TIERS.L0.border}`,
+            height: 22,
+          }}
+        />
+        <Chip
+          size="small"
+          label="L1: Dispatcher / Tariq / Nawwar"
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: AGENT_COMPONENT_TIERS.L1.text,
+            backgroundColor: AGENT_COMPONENT_TIERS.L1.bg,
+            border: `1px solid ${AGENT_COMPONENT_TIERS.L1.border}`,
+            height: 22,
+          }}
+        />
+        <Chip
+          size="small"
+          label="L2: Haziq"
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: AGENT_COMPONENT_TIERS.L2.text,
+            backgroundColor: AGENT_COMPONENT_TIERS.L2.bg,
+            border: `1px solid ${AGENT_COMPONENT_TIERS.L2.border}`,
+            height: 22,
+          }}
+        />
+        <Chip
+          size="small"
+          label="L3: Danial"
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: AGENT_COMPONENT_TIERS.L3.text,
+            backgroundColor: AGENT_COMPONENT_TIERS.L3.bg,
+            border: `1px solid ${AGENT_COMPONENT_TIERS.L3.border}`,
+            height: 22,
+          }}
+        />
+        <Chip
+          size="small"
+          label="L4: Bridge / Order"
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: AGENT_COMPONENT_TIERS.L4.text,
+            backgroundColor: AGENT_COMPONENT_TIERS.L4.bg,
+            border: `1px solid ${AGENT_COMPONENT_TIERS.L4.border}`,
+            height: 22,
+          }}
+        />
+        <Chip
+          size="small"
+          label="Exit Sentinel"
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: AGENT_COMPONENT_TIERS.EXIT_SENTINEL.text,
+            backgroundColor: AGENT_COMPONENT_TIERS.EXIT_SENTINEL.bg,
+            border: `1px solid ${AGENT_COMPONENT_TIERS.EXIT_SENTINEL.border}`,
+            height: 22,
+          }}
+        />
+      </Box>
+
       {/* Terminal Console View */}
       <Card sx={{ borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
         {/* Terminal Header Bar */}
@@ -491,8 +652,10 @@ export function LogsPage() {
         {/* Terminal Content Body */}
         <Box
           ref={consoleContainerRef}
+          data-testid="terminal-console-body"
+          className="terminal-console-body"
           sx={{
-            p: 2,
+            p: { xs: 1.5, sm: 2 },
             backgroundColor: '#0D1117',
             color: '#E6EDF3',
             fontFamily: '"Fira Code", "Roboto Mono", Consolas, monospace',
@@ -500,6 +663,7 @@ export function LogsPage() {
             lineHeight: 1.6,
             minHeight: 480,
             maxHeight: 700,
+            overflowX: 'auto',
             overflowY: 'auto',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
@@ -521,26 +685,33 @@ export function LogsPage() {
           ) : (
             logs.map((item, index) => {
               const levelColor = getLevelColor(item.level);
+              const rowTier = detectAgentTier(item.message);
+              const borderLeftColor = rowTier ? rowTier.text : '#388bfd';
+              const rowBg = rowTier ? rowTier.bg : 'rgba(22, 27, 34, 0.6)';
 
               return (
                 <Box
                   key={index}
                   data-testid="log-row"
                   className="log-row"
+                  data-tier={rowTier ? rowTier.id : 'default'}
                   sx={{
                     display: 'flex',
                     alignItems: 'flex-start',
+                    flexWrap: 'nowrap',
+                    minWidth: 'max-content',
                     gap: 1.5,
                     py: 1,
                     px: 1.5,
                     my: 0.5,
                     borderRadius: '4px',
                     borderBottom: '1px solid #21262d',
-                    borderLeft: '3px solid #388bfd',
-                    backgroundColor: 'rgba(22, 27, 34, 0.6)',
+                    borderLeft: `3px solid ${borderLeftColor}`,
+                    backgroundColor: rowBg,
                     transition: 'all 0.15s ease',
                     '&:hover': {
-                      backgroundColor: 'rgba(56, 139, 253, 0.08)',
+                      backgroundColor: rowTier ? rowTier.bg : 'rgba(56, 139, 253, 0.08)',
+                      filter: 'brightness(1.15)',
                     },
                   }}
                 >
@@ -552,6 +723,7 @@ export function LogsPage() {
                       color: '#484F58',
                       fontSize: '0.75rem',
                       minWidth: 36,
+                      flexShrink: 0,
                       textAlign: 'right',
                       userSelect: 'none',
                       pt: 0.1,
@@ -569,6 +741,7 @@ export function LogsPage() {
                         color: '#79c0ff',
                         fontSize: '0.75rem',
                         minWidth: 165,
+                        flexShrink: 0,
                         fontFamily: 'monospace',
                         userSelect: 'none',
                         pt: 0.1,
@@ -587,6 +760,7 @@ export function LogsPage() {
                       fontWeight: 700,
                       fontSize: '0.75rem',
                       minWidth: 55,
+                      flexShrink: 0,
                       userSelect: 'none',
                       pt: 0.1,
                     }}
@@ -605,6 +779,7 @@ export function LogsPage() {
                         backgroundColor: 'rgba(255, 171, 0, 0.1)',
                         px: 0.5,
                         borderRadius: 0.5,
+                        flexShrink: 0,
                         userSelect: 'none',
                         pt: 0.1,
                       }}
@@ -619,6 +794,7 @@ export function LogsPage() {
                     className="log-message-content"
                     sx={{
                       flex: 1,
+                      minWidth: 260,
                       color: item.level === 'ERROR' ? '#FFA198' : '#C9D1D9',
                       wordBreak: 'break-word',
                     }}
