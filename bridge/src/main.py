@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import BridgeConfig
 from .reconciliation import PositionReconciler
 from .moomoo_client import get_moomoo_client
-from .routes import health, trade, telnet, kline, agents, market
+from .routes import health, trade, telnet, kline, agents, market, logs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -106,6 +106,7 @@ app.include_router(telnet.router)
 app.include_router(kline.router)
 app.include_router(agents.router)
 app.include_router(market.router)
+app.include_router(logs.router)
 
 
 if __name__ == "__main__":
