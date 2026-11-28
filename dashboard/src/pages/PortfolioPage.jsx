@@ -28,6 +28,7 @@ import {
   DialogContent,
   DialogActions,
   Divider,
+  TablePagination,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
@@ -39,6 +40,8 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import CloseIcon from '@mui/icons-material/Close';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import HistoryIcon from '@mui/icons-material/History';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { sneatTokens } from '../theme';
 
 const formatCurrency = (val, showSign = false) => {
@@ -53,7 +56,7 @@ const formatCurrency = (val, showSign = false) => {
   return `$${absFormatted}`;
 };
 
-export function PortfolioPage({ onNavigate }) {
+export function PortfolioPage({ onNavigate, screenerConfig }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
@@ -63,6 +66,45 @@ export function PortfolioPage({ onNavigate }) {
   const [orderBy, setOrderBy] = useState('market_value');
   const [orderDir, setOrderDir] = useState('desc');
   const [lastRefreshed, setLastRefreshed] = useState(null);
+
+  // Closed Trades History state (HOM-417/418 Option D)
+  const [closedTrades, setClosedTrades] = useState([]);
+  const [closedTradesTotal, setClosedTradesTotal] = useState(0);
+  const [closedTradesPage, setClosedTradesPage] = useState(0);
+  const [closedTradesRowsPerPage, setClosedTradesRowsPerPage] = useState(() => Number(screenerConfig?.agent_orders_per_page || 10));
+  const [closedTradesSearch, setClosedTradesSearch] = useState('');
+  const [closedTradesResult, setClosedTradesResult] = useState('all');
+  const [closedTradesLoading, setClosedTradesLoading] = useState(false);
+  const [thesisModalTrade, setThesisModalTrade] = useState(null);
+
+  useEffect(() => {
+    if (screenerConfig?.agent_orders_per_page) {
+      setClosedTradesRowsPerPage(Number(screenerConfig.agent_orders_per_page));
+    }
+  }, [screenerConfig?.agent_orders_per_page]);
+
+  const fetchClosedTrades = useCallback(async (p = closedTradesPage, limit = closedTradesRowsPerPage, search = closedTradesSearch, resFilter = closedTradesResult) => {
+    try {
+      setClosedTradesLoading(true);
+      let url = `/api/agents/closed-trades?page=${p + 1}&limit=${limit}`;
+      if (search && search.trim()) url += `&symbol=${encodeURIComponent(search.trim())}`;
+      if (resFilter && resFilter !== 'all') url += `&result=${encodeURIComponent(resFilter)}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        setClosedTrades(json.trades || []);
+        setClosedTradesTotal(json.total !== undefined ? json.total : (json.trades?.length || 0));
+      }
+    } catch (err) {
+      console.warn('[PortfolioPage] Fetch closed trades error:', err);
+    } finally {
+      setClosedTradesLoading(false);
+    }
+  }, [closedTradesPage, closedTradesRowsPerPage, closedTradesSearch, closedTradesResult]);
+
+  useEffect(() => {
+    fetchClosedTrades(closedTradesPage, closedTradesRowsPerPage, closedTradesSearch, closedTradesResult);
+  }, [fetchClosedTrades, closedTradesPage, closedTradesRowsPerPage, closedTradesSearch, closedTradesResult]);
 
   // Drill-down dialog state (HOM-396)
   const [selectedPosition, setSelectedPosition] = useState(null);
@@ -858,6 +900,337 @@ export function PortfolioPage({ onNavigate }) {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Closed Trades History Section (Option D) */}
+      <Paper
+        elevation={0}
+        sx={{
+          mt: 4,
+          borderRadius: 3,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
+        }}
+      >
+        <Box sx={{ p: 2.5, pb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                bgcolor: sneatTokens.primary.soft,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: sneatTokens.primary.main,
+              }}
+            >
+              <HistoryIcon />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.05rem', lineHeight: 1.2 }}>
+                Closed Trades History (Round-Trip Completed)
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Historical audit log of completed round-trip trades with FIFO realized P&L
+              </Typography>
+            </Box>
+            <Chip
+              label={`${closedTradesTotal} Trades`}
+              size="small"
+              sx={{ fontWeight: 700, bgcolor: sneatTokens.primary.soft, color: sneatTokens.primary.main }}
+            />
+          </Box>
+
+          {/* Filter and Search Controls */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <TextField
+              size="small"
+              placeholder="Filter by Symbol..."
+              value={closedTradesSearch}
+              onChange={(e) => {
+                setClosedTradesSearch(e.target.value);
+                setClosedTradesPage(0);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ width: 180, '& .MuiOutlinedInput-root': { borderRadius: 2, height: 38 } }}
+            />
+            <ButtonGroup size="small" variant="outlined" sx={{ borderRadius: 2 }}>
+              <Button
+                variant={closedTradesResult === 'all' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setClosedTradesResult('all');
+                  setClosedTradesPage(0);
+                }}
+                sx={{ textTransform: 'none', fontWeight: 600, height: 38 }}
+              >
+                All
+              </Button>
+              <Button
+                variant={closedTradesResult === 'win' ? 'contained' : 'outlined'}
+                color="success"
+                onClick={() => {
+                  setClosedTradesResult('win');
+                  setClosedTradesPage(0);
+                }}
+                sx={{ textTransform: 'none', fontWeight: 600, height: 38 }}
+              >
+                Wins
+              </Button>
+              <Button
+                variant={closedTradesResult === 'loss' ? 'contained' : 'outlined'}
+                color="error"
+                onClick={() => {
+                  setClosedTradesResult('loss');
+                  setClosedTradesPage(0);
+                }}
+                sx={{ textTransform: 'none', fontWeight: 600, height: 38 }}
+              >
+                Losses
+              </Button>
+            </ButtonGroup>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => fetchClosedTrades(closedTradesPage, closedTradesRowsPerPage, closedTradesSearch, closedTradesResult)}
+              sx={{ borderRadius: 2, textTransform: 'none', height: 38 }}
+            >
+              Refresh
+            </Button>
+          </Box>
+        </Box>
+
+        {closedTradesLoading && closedTrades.length === 0 ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={32} />
+          </Box>
+        ) : closedTrades.length > 0 ? (
+          <>
+            <TableContainer sx={{ maxHeight: 440 }}>
+              <Table size="small" stickyHeader>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>SYMBOL</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>QTY</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>BUY PRICE</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>SELL PRICE</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>REALIZED P&L ($)</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>RETURN (%)</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>HOLD DURATION</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>EXIT DATE</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>ACTION THESIS</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {closedTrades.map((trade, tIdx) => {
+                    const isGain = trade.realized_pnl_usd >= 0;
+                    return (
+                      <TableRow key={trade.id || tIdx} hover>
+                        <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                          {trade.symbol}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                          {trade.quantity}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
+                          ${trade.buy_price ? Number(trade.buy_price).toFixed(2) : '-'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          ${Number(trade.sell_price || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Chip
+                            label={`${isGain ? '+' : ''}$${Number(trade.realized_pnl_usd || 0).toFixed(2)}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              bgcolor: isGain ? sneatTokens.success.soft : sneatTokens.error.soft,
+                              color: isGain ? sneatTokens.success.main : sneatTokens.error.main,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.75rem',
+                              color: isGain ? sneatTokens.success.main : sneatTokens.error.main,
+                            }}
+                          >
+                            {isGain ? '+' : ''}{Number(trade.realized_pnl_pct || 0).toFixed(2)}%
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          {trade.hold_duration || '-'}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          {trade.exit_date ? new Date(trade.exit_date).toLocaleString() : '-'}
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 220 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Tooltip title={trade.thesis || 'Closed Trade'}>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  maxWidth: 180,
+                                  color: 'text.primary',
+                                }}
+                              >
+                                {trade.thesis || 'Closed Trade'}
+                              </Typography>
+                            </Tooltip>
+                            <Tooltip title="View full deliberation details">
+                              <IconButton
+                                size="small"
+                                onClick={() => setThesisModalTrade(trade)}
+                                sx={{ p: 0.25, color: sneatTokens.primary.main }}
+                              >
+                                <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              component="div"
+              count={closedTradesTotal}
+              rowsPerPage={closedTradesRowsPerPage}
+              page={closedTradesPage}
+              onPageChange={(event, newPage) => {
+                setClosedTradesPage(newPage);
+                fetchClosedTrades(newPage, closedTradesRowsPerPage, closedTradesSearch, closedTradesResult);
+              }}
+              onRowsPerPageChange={(event) => {
+                const newLimit = parseInt(event.target.value, 10);
+                setClosedTradesRowsPerPage(newLimit);
+                setClosedTradesPage(0);
+                fetchClosedTrades(0, newLimit, closedTradesSearch, closedTradesResult);
+              }}
+              labelRowsPerPage="Rows per page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
+              sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+            />
+          </>
+        ) : (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              No closed round-trip trades found matching current criteria.
+            </Typography>
+          </Box>
+        )}
+      </Paper>
+
+      {/* Closed Trade Thesis Modal Dialog */}
+      <Dialog
+        open={Boolean(thesisModalTrade)}
+        onClose={() => setThesisModalTrade(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <HistoryIcon sx={{ color: sneatTokens.primary.main }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Trade Audit & Rationale: {thesisModalTrade?.symbol}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setThesisModalTrade(null)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ py: 2 }}>
+          {thesisModalTrade && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block' }}>
+                  EXIT RATIONALE / THESIS
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700, color: 'text.primary', mt: 0.25 }}>
+                  {thesisModalTrade.thesis || 'Position Closed'}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5, bgcolor: 'action.hover', p: 1.5, borderRadius: 2 }}>
+                <div>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>Buy Price</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    ${thesisModalTrade.buy_price ? Number(thesisModalTrade.buy_price).toFixed(2) : 'N/A'}
+                  </Typography>
+                </div>
+                <div>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>Sell Price</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    ${Number(thesisModalTrade.sell_price || 0).toFixed(2)}
+                  </Typography>
+                </div>
+                <div>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>Quantity</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {thesisModalTrade.quantity} shares
+                  </Typography>
+                </div>
+                <div>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>Realized P&L</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: thesisModalTrade.realized_pnl_usd >= 0 ? sneatTokens.success.main : sneatTokens.error.main }}>
+                    {thesisModalTrade.realized_pnl_usd >= 0 ? '+' : ''}${Number(thesisModalTrade.realized_pnl_usd || 0).toFixed(2)} ({thesisModalTrade.realized_pnl_pct >= 0 ? '+' : ''}${Number(thesisModalTrade.realized_pnl_pct || 0).toFixed(2)}%)
+                  </Typography>
+                </div>
+              </Box>
+
+              {thesisModalTrade.thesis_detail?.haziq && Object.keys(thesisModalTrade.thesis_detail.haziq).length > 0 && (
+                <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.primary.main, mb: 0.5 }}>
+                    L2 Haziq Strategy Synthesis
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.82rem', mb: 0.5 }}>
+                    Composite Score: <strong>{thesisModalTrade.thesis_detail.haziq.composite_score?.toFixed(1) || 'N/A'}</strong> | Mode: <strong>{thesisModalTrade.thesis_detail.haziq.trading_mode || 'DAY'}</strong>
+                  </Typography>
+                  {thesisModalTrade.thesis_detail.haziq.rationale && (
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', fontStyle: 'italic' }}>
+                      "{thesisModalTrade.thesis_detail.haziq.rationale}"
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
+                <div>Entry Order: <code style={{ fontFamily: 'monospace' }}>{thesisModalTrade.entry_order_id}</code></div>
+                <div>Exit Order: <code style={{ fontFamily: 'monospace' }}>{thesisModalTrade.exit_order_id}</code></div>
+                <div>Holding Duration: <strong>{thesisModalTrade.hold_duration || '-'}</strong></div>
+                <div>Entry Date: {thesisModalTrade.entry_date ? new Date(thesisModalTrade.entry_date).toLocaleString() : '-'}</div>
+                <div>Exit Date: {thesisModalTrade.exit_date ? new Date(thesisModalTrade.exit_date).toLocaleString() : '-'}</div>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setThesisModalTrade(null)} variant="contained" size="small" sx={{ textTransform: 'none', fontWeight: 600 }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Drill-down Dialog for Linked Agent Orders (HOM-396) */}
       <Dialog

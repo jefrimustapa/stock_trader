@@ -85,24 +85,74 @@ def trigger_simulate_run(
 
 @router.get("/orders")
 def get_agent_paper_orders(
-    limit: int = 50,
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(50, ge=0, description="Max orders per page"),
     symbol: Optional[str] = Query(None, description="Filter orders by symbol (e.g. AAPL or US.AAPL)"),
+    status: Optional[str] = Query(None, description="Filter by order status (e.g. FILLED, SUBMITTED)"),
+    side: Optional[str] = Query(None, description="Filter by order side (BUY, SELL)"),
+    filter: Optional[str] = Query(None, description="Filter preset: all, active, open, closed"),
     caller: str = Depends(authenticate_request)
 ):
-    """Returns list of paper trading orders created by agent pipeline."""
+    """Returns list of paper trading orders created by agent pipeline with server-side pagination and audit details."""
     try:
         pipeline = get_agent_pipeline()
-        orders = pipeline.get_paper_orders(limit=limit, symbol=symbol)
+        res = pipeline.get_paper_orders(
+            limit=limit,
+            symbol=symbol,
+            page=page,
+            status=status,
+            side=side,
+            filter=filter,
+            return_meta=True
+        )
         return {
             "status": "OK",
-            "count": len(orders),
-            "orders": orders
+            "count": len(res["orders"]),
+            "orders": res["orders"],
+            "total": res["total"],
+            "page": res["page"],
+            "limit": res["limit"],
+            "total_pages": res["total_pages"]
         }
     except Exception as e:
         logger.error("Error retrieving agent orders: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal mendapatkan senarai pesanan simulasi: {str(e)}"
+        )
+
+
+@router.get("/closed-trades")
+def get_agent_closed_trades(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(10, ge=1, description="Max trades per page"),
+    symbol: Optional[str] = Query(None, description="Filter by symbol"),
+    result: Optional[str] = Query(None, description="Filter by result (win, loss, even)"),
+    caller: str = Depends(authenticate_request)
+):
+    """Returns list of completed round-trip paper trades with FIFO P&L and duration."""
+    try:
+        pipeline = get_agent_pipeline()
+        res = pipeline.get_closed_trades(
+            page=page,
+            limit=limit,
+            symbol=symbol,
+            result=result
+        )
+        return {
+            "status": "OK",
+            "count": len(res["trades"]),
+            "trades": res["trades"],
+            "total": res["total"],
+            "page": res["page"],
+            "limit": res["limit"],
+            "total_pages": res["total_pages"]
+        }
+    except Exception as e:
+        logger.error("Error retrieving closed trades: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mendapatkan senarai dagangan selesai: {str(e)}"
         )
 
 

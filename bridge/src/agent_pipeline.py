@@ -1856,14 +1856,10 @@ class AgentPipeline:
                     item["danial"] = json.loads(item.pop("danial_audit"))
                     deliberations.append(item)
 
-            orders_cursor = conn.execute("""
-                SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
-                       quantity, entry_price, stop_loss_price, take_profit_price,
-                       status, opend_status, message, time_in_force, trading_mode, source, created_at
-                FROM paper_orders
-                ORDER BY id DESC LIMIT 50
-            """)
-            orders = [dict(r) for r in orders_cursor.fetchall()]
+            # Retrieve recent orders enriched with thesis & FIFO P&L
+            enriched_orders, _ = self._match_trades_and_enrich_orders(conn)
+            all_ordered = sorted(enriched_orders.values(), key=lambda o: int(o["id"]), reverse=True)
+            orders = all_ordered[:50]
 
             # Aggregate stats
             stats_cursor = conn.execute("""
@@ -1895,45 +1891,403 @@ class AgentPipeline:
                 }
             }
 
-    def get_paper_orders(self, limit: int = 50, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
-        try:
-            self.sync_broker_orders()
-            self.reconcile_positions_with_orders()
-        except Exception as sync_err:
-            logger.warning("Broker order/position sync error in get_paper_orders: %s", sync_err)
-
-        query = """
+    def _match_trades_and_enrich_orders(self, conn: sqlite3.Connection) -> Tuple[Dict[int, Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Executes FIFO matching across all historical paper orders.
+        Returns:
+            - enriched_orders_by_id: dict of order_id -> enriched order dict
+            - closed_trades: list of round-trip closed trade dicts (most recent exit first)
+        """
+        # 1. Retrieve all orders ordered chronologically
+        all_cur = conn.execute("""
             SELECT id, client_order_id, order_id, cycle_id, symbol, order_side,
                    quantity, entry_price, stop_loss_price, take_profit_price,
                    status, opend_status, message, time_in_force, trading_mode, source, created_at
             FROM paper_orders
-        """
-        params: List[Any] = []
-        if symbol and symbol.strip():
-            clean_sym = symbol.strip().upper()
-            bare_sym = clean_sym.split('.')[-1]
-            prefixed_sym = f"US.{bare_sym}"
-            query += " WHERE (UPPER(symbol) = ? OR UPPER(symbol) = ? OR UPPER(symbol) = ?)"
-            params.extend([clean_sym, bare_sym, prefixed_sym])
+            ORDER BY created_at ASC, id ASC
+        """)
+        all_orders = [dict(r) for r in all_cur.fetchall()]
 
-        query += " ORDER BY id DESC LIMIT ?"
-        safe_limit = max(0, int(limit))
-        params.append(safe_limit)
+        # 2. Targeted fetch of deliberations matching order cycles/IDs (avoids scanning 160k+ historical rows)
+        relevant_cycles = list({str(o["cycle_id"]) for o in all_orders if o.get("cycle_id")})
+        relevant_order_ids = list({str(o["order_id"]) for o in all_orders if o.get("order_id")})
+        relevant_client_ids = list({str(o["client_order_id"]) for o in all_orders if o.get("client_order_id")})
+
+        deliberations_by_order_id = {}
+        deliberations_by_client_id = {}
+        deliberations_by_cycle_sym = {}
+
+        if relevant_cycles or relevant_order_ids or relevant_client_ids:
+            clauses = []
+            params = []
+            if relevant_cycles:
+                clauses.append(f"cycle_id IN ({','.join('?' for _ in relevant_cycles)})")
+                params.extend(relevant_cycles)
+            if relevant_order_ids:
+                clauses.append(f"order_id IN ({','.join('?' for _ in relevant_order_ids)})")
+                params.extend(relevant_order_ids)
+            if relevant_client_ids:
+                clauses.append(f"client_order_id IN ({','.join('?' for _ in relevant_client_ids)})")
+                params.extend(relevant_client_ids)
+
+            delib_query = f"""
+                SELECT id, cycle_id, symbol, timestamp, stage_reached, final_decision,
+                       tariq_analysis, nawwar_analysis, haziq_synthesis, danial_audit,
+                       order_id, client_order_id
+                FROM agent_deliberations
+                WHERE {' OR '.join(clauses)}
+            """
+            delib_cursor = conn.execute(delib_query, tuple(params))
+            for d in delib_cursor.fetchall():
+                d_dict = dict(d)
+                for k in ("haziq_synthesis", "danial_audit", "tariq_analysis", "nawwar_analysis"):
+                    val = d_dict.get(k)
+                    clean_k = k.replace("_analysis", "").replace("_synthesis", "").replace("_audit", "")
+                    if isinstance(val, str):
+                        try:
+                            d_dict[clean_k] = json.loads(val)
+                        except Exception:
+                            d_dict[clean_k] = {}
+                    else:
+                        d_dict[clean_k] = val or {}
+
+                if d_dict.get("order_id"):
+                    deliberations_by_order_id[str(d_dict["order_id"])] = d_dict
+                if d_dict.get("client_order_id"):
+                    deliberations_by_client_id[str(d_dict["client_order_id"])] = d_dict
+                cycle_id = str(d_dict.get("cycle_id") or "")
+                sym = str(d_dict.get("symbol", "")).upper()
+                clean_sym = sym.split(".")[-1]
+                deliberations_by_cycle_sym[(cycle_id, sym)] = d_dict
+                deliberations_by_cycle_sym[(cycle_id, clean_sym)] = d_dict
+                deliberations_by_cycle_sym[(cycle_id, f"US.{clean_sym}")] = d_dict
+
+        # 3. Helper to determine order reason/thesis
+        def extract_thesis(order_row: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+            ord_id = str(order_row.get("order_id") or "")
+            client_id = str(order_row.get("client_order_id") or "")
+            cycle_id = str(order_row.get("cycle_id") or "")
+            sym = str(order_row.get("symbol") or "").upper()
+            clean_sym = sym.split(".")[-1]
+
+            delib = (
+                deliberations_by_order_id.get(ord_id)
+                or deliberations_by_client_id.get(client_id)
+                or deliberations_by_cycle_sym.get((cycle_id, sym))
+                or deliberations_by_cycle_sym.get((cycle_id, clean_sym))
+                or deliberations_by_cycle_sym.get((cycle_id, f"US.{clean_sym}"))
+            )
+
+            source = str(order_row.get("source") or "")
+            msg = str(order_row.get("message") or "")
+            side = str(order_row.get("order_side") or "").upper()
+            haziq = delib.get("haziq", {}) if delib else {}
+
+            if source == "AGENT_EARLY_EXIT" or "AGENT_EARLY_EXIT" in msg or "Early Threat Exit" in msg:
+                summary = "Early Threat Exit by Haziq: Risk mitigated"
+            elif source == "STOP_LOSS" or "Stop Loss" in msg or "SL" in msg:
+                summary = "Stop Loss Hit: Position Protected"
+            elif source == "TAKE_PROFIT" or "Take Profit" in msg or "TP1" in msg or "TP" in msg:
+                summary = "Take Profit Partial Exit: Target Achieved"
+            elif source == "MANUAL_LIQUIDATION" or "MANUAL_LIQUIDATION" in msg:
+                summary = "Manual Liquidation / Portfolio Exit"
+            elif side == "BUY":
+                if haziq and haziq.get("composite_score"):
+                    score = haziq.get("composite_score")
+                    mode = haziq.get("trading_mode", "DAY")
+                    summary = f"Haziq Synthesis (Score: {score:.1f}, {mode}): Approved by Danial Hard Rules"
+                elif msg and msg != "OK":
+                    summary = msg
+                else:
+                    summary = "L4 Agent Pipeline Entry Approval"
+            elif side == "SELL":
+                if msg and msg != "OK":
+                    summary = msg
+                else:
+                    summary = "Position Exit"
+            else:
+                summary = msg if (msg and msg != "OK") else "Paper Trading Order"
+
+            detail = {
+                "summary": summary,
+                "source": source or "AGENT_PIPELINE",
+                "message": msg,
+                "cycle_id": cycle_id,
+                "symbol": sym,
+                "stage_reached": delib.get("stage_reached") if delib else None,
+                "final_decision": delib.get("final_decision") if delib else None,
+                "haziq": haziq,
+                "danial": delib.get("danial") if delib else {},
+                "tariq": delib.get("tariq") if delib else {},
+                "nawwar": delib.get("nawwar") if delib else {}
+            }
+            return summary, detail
+
+        buy_queues: Dict[str, List[Dict[str, Any]]] = {}
+        enriched_orders: Dict[int, Dict[str, Any]] = {}
+        closed_trades: List[Dict[str, Any]] = []
+
+        for ord_row in all_orders:
+            ord_id = ord_row["id"]
+            sym = str(ord_row.get("symbol") or "").upper()
+            clean_sym = sym.split(".")[-1]
+            side = str(ord_row.get("order_side") or "").upper()
+            qty = max(0, int(ord_row.get("quantity") or 0))
+            price = float(ord_row.get("entry_price") or 0.0)
+            status = str(ord_row.get("status") or "").upper()
+
+            summary, detail = extract_thesis(ord_row)
+            entry = dict(ord_row)
+            entry["side"] = side
+            entry["price"] = price
+            entry["executed_price"] = price
+            entry["timestamp"] = ord_row.get("created_at")
+            entry["thesis"] = summary
+            entry["thesis_detail"] = detail
+
+            if side == "BUY":
+                if status in ("FILLED", "SUBMITTED", "PENDING", "SUBMITTED_PAPER_SIM") and qty > 0:
+                    buy_queues.setdefault(clean_sym, []).append({
+                        "id": ord_id,
+                        "order_id": ord_row.get("order_id"),
+                        "client_order_id": ord_row.get("client_order_id"),
+                        "created_at": ord_row.get("created_at"),
+                        "price": price,
+                        "qty_remaining": qty,
+                        "thesis": summary,
+                        "thesis_detail": detail,
+                        "symbol": sym
+                    })
+                entry["cost_price"] = None
+                entry["realized_pnl_usd"] = None
+                entry["realized_pnl_pct"] = None
+                entry["buy_order_ref"] = None
+                enriched_orders[ord_id] = entry
+
+            elif side == "SELL":
+                queue = buy_queues.get(clean_sym, [])
+                needed_qty = qty
+                matched_cost_sum = 0.0
+                matched_qty_sum = 0
+                matched_buy_refs: List[str] = []
+                first_buy_time = None
+
+                while needed_qty > 0 and len(queue) > 0:
+                    head = queue[0]
+                    if head["qty_remaining"] <= 0:
+                        queue.pop(0)
+                        continue
+                    if first_buy_time is None:
+                        first_buy_time = head.get("created_at")
+                    take_qty = min(needed_qty, head["qty_remaining"])
+                    if take_qty <= 0:
+                        queue.pop(0)
+                        continue
+                    matched_cost_sum += take_qty * head["price"]
+                    matched_qty_sum += take_qty
+                    ref = head.get("order_id") or head.get("client_order_id") or f"ORD-{head['id']}"
+                    if ref and str(ref) not in matched_buy_refs:
+                        matched_buy_refs.append(str(ref))
+                    head["qty_remaining"] -= take_qty
+                    needed_qty -= take_qty
+                    if head["qty_remaining"] <= 0:
+                        queue.pop(0)
+
+                if matched_qty_sum > 0:
+                    avg_cost = matched_cost_sum / matched_qty_sum
+                    cost_price = round(avg_cost, 2)
+                    buy_ref = ", ".join(matched_buy_refs)
+                    pnl_usd = round((price - avg_cost) * qty, 2)
+                    pnl_pct = round(((price - avg_cost) / avg_cost) * 100, 2) if avg_cost > 0 else 0.0
+                else:
+                    cost_price = None
+                    buy_ref = "N/A (Initial Position)"
+                    pnl_usd = 0.0
+                    pnl_pct = 0.0
+
+                hold_duration = "N/A"
+                if first_buy_time and ord_row.get("created_at"):
+                    try:
+                        t_in = datetime.fromisoformat(str(first_buy_time).replace("Z", "+00:00"))
+                        t_out = datetime.fromisoformat(str(ord_row["created_at"]).replace("Z", "+00:00"))
+                        diff = t_out - t_in
+                        secs = max(0, int(diff.total_seconds()))
+                        days = secs // 86400
+                        hours = (secs % 86400) // 3600
+                        mins = (secs % 3600) // 60
+                        if days > 0:
+                            hold_duration = f"{days}d {hours}h"
+                        elif hours > 0:
+                            hold_duration = f"{hours}h {mins}m"
+                        else:
+                            hold_duration = f"{max(1, mins)}m"
+                    except Exception:
+                        hold_duration = "< 1h"
+
+                entry["cost_price"] = cost_price
+                entry["realized_pnl_usd"] = pnl_usd
+                entry["realized_pnl_pct"] = pnl_pct
+                entry["buy_order_ref"] = buy_ref
+                entry["hold_duration"] = hold_duration
+                enriched_orders[ord_id] = entry
+
+                if status == "FILLED":
+                    closed_trades.append({
+                        "id": f"TRD-{ord_id}",
+                        "symbol": sym,
+                        "entry_order_id": buy_ref,
+                        "exit_order_id": ord_row.get("order_id") or ord_row.get("client_order_id") or f"ORD-{ord_id}",
+                        "entry_date": first_buy_time or ord_row.get("created_at"),
+                        "exit_date": ord_row.get("created_at"),
+                        "hold_duration": hold_duration,
+                        "quantity": qty,
+                        "buy_price": cost_price,
+                        "sell_price": price,
+                        "total_cost": round(cost_price * qty, 2) if cost_price else None,
+                        "total_revenue": round(price * qty, 2),
+                        "realized_pnl_usd": pnl_usd,
+                        "realized_pnl_pct": pnl_pct,
+                        "result": "win" if pnl_usd > 0 else ("loss" if pnl_usd < 0 else "even"),
+                        "thesis": summary,
+                        "thesis_detail": detail,
+                        "status": "CLOSED"
+                    })
+
+        closed_trades.reverse()  # Latest exit date first
+        return enriched_orders, closed_trades
+
+    def get_paper_orders(
+        self,
+        limit: int = 50,
+        symbol: Optional[str] = None,
+        page: int = 1,
+        status: Optional[str] = None,
+        side: Optional[str] = None,
+        filter: Optional[str] = None,
+        return_meta: bool = False
+    ) -> Any:
+        try:
+            now_ts = datetime.now(timezone.utc).timestamp()
+            last_sync = getattr(self, "_last_broker_orders_sync_ts", 0.0)
+            if now_ts - last_sync > 15.0:
+                self._last_broker_orders_sync_ts = now_ts
+                self.sync_broker_orders()
+                self.reconcile_positions_with_orders()
+        except Exception as sync_err:
+            logger.warning("Broker order/position sync error in get_paper_orders: %s", sync_err)
 
         with self._get_connection() as conn:
-            cursor = conn.execute(query, tuple(params))
-            rows = [dict(r) for r in cursor.fetchall()]
+            enriched_orders, _ = self._match_trades_and_enrich_orders(conn)
 
-        mapped_rows = []
-        for r in rows:
-            entry = dict(r)
-            entry["side"] = entry.get("order_side")
-            entry["price"] = entry.get("entry_price")
-            entry["executed_price"] = entry.get("entry_price")
-            entry["timestamp"] = entry.get("created_at")
-            mapped_rows.append(entry)
+        # Sort by id DESC (most recent first)
+        all_ordered = sorted(enriched_orders.values(), key=lambda o: int(o["id"]), reverse=True)
 
-        return mapped_rows
+        filtered = []
+        for o in all_ordered:
+            sym = str(o.get("symbol") or "").upper()
+            bare_sym = sym.split(".")[-1]
+            prefixed_sym = f"US.{bare_sym}"
+
+            # 1. Symbol filter
+            if symbol and symbol.strip():
+                clean_target = symbol.strip().upper()
+                target_bare = clean_target.split(".")[-1]
+                target_prefixed = f"US.{target_bare}"
+                if sym not in (clean_target, target_bare, target_prefixed) and bare_sym not in (clean_target, target_bare, target_prefixed):
+                    continue
+
+            # 2. Status filter
+            if status and status.strip():
+                if str(o.get("status") or "").upper() != status.strip().upper():
+                    continue
+
+            # 3. Side filter
+            if side and side.strip():
+                if str(o.get("order_side") or o.get("side") or "").upper() != side.strip().upper():
+                    continue
+
+            # 4. Preset filter ('all', 'active', 'open', 'closed')
+            if filter and filter.strip():
+                f_lower = filter.strip().lower()
+                o_status = str(o.get("status") or "").upper()
+                o_side = str(o.get("order_side") or o.get("side") or "").upper()
+                if f_lower in ("active", "open"):
+                    if o_status not in ("SUBMITTED", "PENDING", "SUBMITTED_PAPER_SIM"):
+                        continue
+                elif f_lower == "closed":
+                    if not (o_side == "SELL" and o_status == "FILLED"):
+                        continue
+
+            filtered.append(o)
+
+        total = len(filtered)
+        safe_limit = max(0, int(limit))
+        safe_page = max(1, int(page))
+
+        if safe_limit > 0:
+            total_pages = max(1, math.ceil(total / safe_limit))
+            offset = (safe_page - 1) * safe_limit
+            page_rows = filtered[offset:offset + safe_limit]
+        else:
+            total_pages = 1
+            page_rows = []
+
+        if return_meta:
+            return {
+                "orders": page_rows,
+                "total": total,
+                "page": safe_page,
+                "limit": safe_limit,
+                "total_pages": total_pages
+            }
+        return page_rows
+
+    def get_closed_trades(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        symbol: Optional[str] = None,
+        result: Optional[str] = None
+    ) -> Dict[str, Any]:
+        with self._get_connection() as conn:
+            _, closed_trades = self._match_trades_and_enrich_orders(conn)
+
+        filtered = []
+        for t in closed_trades:
+            sym = str(t.get("symbol") or "").upper()
+            bare_sym = sym.split(".")[-1]
+            prefixed_sym = f"US.{bare_sym}"
+
+            # Symbol filter
+            if symbol and symbol.strip():
+                clean_target = symbol.strip().upper()
+                target_bare = clean_target.split(".")[-1]
+                target_prefixed = f"US.{target_bare}"
+                if sym not in (clean_target, target_bare, target_prefixed) and bare_sym not in (clean_target, target_bare, target_prefixed):
+                    continue
+
+            # Result filter ('win', 'loss', 'even')
+            if result and result.strip():
+                r_target = result.strip().lower()
+                if str(t.get("result") or "").lower() != r_target:
+                    continue
+
+            filtered.append(t)
+
+        total = len(filtered)
+        safe_limit = max(1, int(limit))
+        safe_page = max(1, int(page))
+        total_pages = max(1, math.ceil(total / safe_limit))
+        offset = (safe_page - 1) * safe_limit
+        page_trades = filtered[offset:offset + safe_limit]
+
+        return {
+            "trades": page_trades,
+            "total": total,
+            "page": safe_page,
+            "limit": safe_limit,
+            "total_pages": total_pages
+        }
 
     def cancel_paper_order(self, order_id_or_client_id: str) -> Dict[str, Any]:
         """

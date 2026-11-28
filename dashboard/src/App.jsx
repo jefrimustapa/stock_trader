@@ -165,7 +165,7 @@ export function App() {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'portfolio':
-        return <PortfolioPage onNavigate={navigateTo} />;
+        return <PortfolioPage onNavigate={navigateTo} screenerConfig={screenerConfig} />;
       case 'agents':
         return <AgentsPage screenerConfig={screenerConfig} />;
       case 'opend':

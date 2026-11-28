@@ -22,6 +22,15 @@ import {
   Tabs,
   Tab,
   TablePagination,
+  FormControl,
+  Select,
+  MenuItem,
+  InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -39,6 +48,8 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 import { sneatTokens } from '../theme';
 
 export function AgentsPage({ screenerConfig }) {
@@ -61,6 +72,14 @@ export function AgentsPage({ screenerConfig }) {
   const [pauseBuying, setPauseBuying] = useState(() => Boolean(screenerConfig?.pause_buying));
   const [togglingPause, setTogglingPause] = useState(false);
 
+  // Server-side orders state (HOM-417/418 Option B)
+  const [ordersPage, setOrdersPage] = useState(0);
+  const [ordersFilter, setOrdersFilter] = useState('all');
+  const [paginatedOrders, setPaginatedOrders] = useState([]);
+  const [ordersTotal, setOrdersTotal] = useState(0);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [thesisModalOrder, setThesisModalOrder] = useState(null);
+
   useEffect(() => {
     if (screenerConfig?.agent_orders_per_page) {
       setRowsPerPage(Number(screenerConfig.agent_orders_per_page));
@@ -69,6 +88,26 @@ export function AgentsPage({ screenerConfig }) {
       setPauseBuying(Boolean(screenerConfig.pause_buying));
     }
   }, [screenerConfig?.agent_orders_per_page, screenerConfig?.pause_buying]);
+
+  const fetchOrders = useCallback(async (p = ordersPage, limit = rowsPerPage, filt = ordersFilter) => {
+    try {
+      setOrdersLoading(true);
+      const res = await fetch(`/api/agents/orders?page=${p + 1}&limit=${limit}&filter=${encodeURIComponent(filt)}`);
+      if (res.ok) {
+        const json = await res.json();
+        setPaginatedOrders(json.orders || []);
+        setOrdersTotal(json.total !== undefined ? json.total : (json.orders?.length || 0));
+      }
+    } catch (err) {
+      console.warn('[AgentsPage] Fetch orders error:', err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [ordersPage, rowsPerPage, ordersFilter]);
+
+  useEffect(() => {
+    fetchOrders(ordersPage, rowsPerPage, ordersFilter);
+  }, [fetchOrders, ordersPage, rowsPerPage, ordersFilter]);
 
   const fetchPauseBuying = useCallback(async () => {
     try {
@@ -103,6 +142,7 @@ export function AgentsPage({ screenerConfig }) {
         window.dispatchEvent(new CustomEvent('screener-config-updated'));
       }
       await fetchActivity();
+      await fetchOrders();
     } catch (err) {
       setErrorMsg('Error updating pause-buying status: ' + err.message);
     } finally {
@@ -154,6 +194,7 @@ export function AgentsPage({ screenerConfig }) {
       }
       setSuccessMsg(data.message || `Order ${orderId} successfully cancelled.`);
       await fetchActivity();
+      await fetchOrders();
     } catch (err) {
       setErrorMsg('Error cancelling order: ' + err.message);
     } finally {
@@ -998,17 +1039,57 @@ export function AgentsPage({ screenerConfig }) {
         </Card>
       )}
 
-      {/* Paper Trading Orders Table */}
+      {/* Paper Trading Orders Table (Option B) */}
       <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
         <CardContent sx={{ p: 2.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <ShoppingCartIcon sx={{ color: sneatTokens.success.main }} />
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Moomoo OpenD Paper Trading Orders Table
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ShoppingCartIcon sx={{ color: sneatTokens.success.main }} />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Moomoo OpenD Paper Trading Orders Table
+              </Typography>
+              <Chip
+                label={`${ordersTotal} Total`}
+                size="small"
+                sx={{ fontWeight: 700, bgcolor: sneatTokens.primary.soft, color: sneatTokens.primary.main }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel id="order-filter-label" sx={{ fontSize: '0.82rem' }}>Filter Orders</InputLabel>
+                <Select
+                  labelId="order-filter-label"
+                  id="order-filter-select"
+                  value={ordersFilter}
+                  label="Filter Orders"
+                  onChange={(e) => {
+                    setOrdersFilter(e.target.value);
+                    setOrdersPage(0);
+                  }}
+                  sx={{ borderRadius: 2, fontSize: '0.82rem', height: 38 }}
+                >
+                  <MenuItem value="all">All Orders</MenuItem>
+                  <MenuItem value="active">Active / Open</MenuItem>
+                  <MenuItem value="closed">Closed (Round-Trip)</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => fetchOrders(ordersPage, rowsPerPage, ordersFilter)}
+                sx={{ borderRadius: 2, textTransform: 'none', height: 38 }}
+              >
+                Refresh
+              </Button>
+            </Box>
           </Box>
 
-          {orders.length > 0 ? (
+          {ordersLoading && paginatedOrders.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : paginatedOrders.length > 0 ? (
             <>
               <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, maxWidth: '100%', overflowX: 'auto' }}>
                 <Table size="small">
@@ -1018,7 +1099,8 @@ export function AgentsPage({ screenerConfig }) {
                       <TableCell sx={{ fontWeight: 700 }}>SYMBOL</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>SIDE</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>QUANTITY</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>ENTRY PRICE</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>ORDER PRICE</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>REASON / THESIS</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>STOP LOSS</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>TAKE PROFIT</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>OPEND STATUS</TableCell>
@@ -1027,31 +1109,106 @@ export function AgentsPage({ screenerConfig }) {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {orders.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((ord, oIdx) => {
+                    {paginatedOrders.map((ord, oIdx) => {
                       const orderKey = ord.order_id || ord.client_order_id;
                       const isCancellable =
                         ord.status === 'SUBMITTED' ||
                         ord.status === 'PENDING' ||
                         ord.status === 'SUBMITTED_PAPER_SIM';
+                      const isSell = (ord.order_side || ord.side) === 'SELL';
+                      const hasPnl = ord.realized_pnl_usd !== null && ord.realized_pnl_usd !== undefined;
+                      const isGain = hasPnl && Number(ord.realized_pnl_usd) >= 0;
+
                       return (
-                        <TableRow key={ord.client_order_id || oIdx} hover>
+                        <TableRow key={ord.client_order_id || ord.id || oIdx} hover>
                           <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
                             {ord.order_id || ord.client_order_id?.substring(0, 8)}
                           </TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>{ord.symbol}</TableCell>
                           <TableCell>
                             <Chip
-                              label={ord.order_side || 'BUY'}
+                              label={ord.order_side || ord.side || 'BUY'}
                               size="small"
                               sx={{
                                 fontWeight: 700,
-                                bgcolor: ord.order_side === 'SELL' ? sneatTokens.error.soft : sneatTokens.success.soft,
-                                color: ord.order_side === 'SELL' ? sneatTokens.error.main : sneatTokens.success.main,
+                                bgcolor: isSell ? sneatTokens.error.soft : sneatTokens.success.soft,
+                                color: isSell ? sneatTokens.error.main : sneatTokens.success.main,
                               }}
                             />
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>{ord.quantity} shares</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>${Number(ord.entry_price || 0).toFixed(2)}</TableCell>
+                          {/* ORDER PRICE (with Cost Price & P&L matching for SELL orders) */}
+                          <TableCell sx={{ minWidth: 160 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Chip
+                                  label={`${isSell ? 'SELL LIMIT' : 'BUY LIMIT'}: $${Number(ord.entry_price || ord.price || 0).toFixed(2)}`}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: '0.72rem',
+                                    borderColor: isSell ? sneatTokens.error.main : sneatTokens.success.main,
+                                    color: isSell ? sneatTokens.error.main : sneatTokens.success.main,
+                                  }}
+                                />
+                              </Box>
+                              {isSell && (
+                                <Box sx={{ fontSize: '0.72rem', color: 'text.secondary', display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                                  <span>Cost: {ord.cost_price ? `$${Number(ord.cost_price).toFixed(2)}` : 'N/A'}</span>
+                                  {hasPnl && (
+                                    <Chip
+                                      label={`${isGain ? '+' : ''}$${Number(ord.realized_pnl_usd).toFixed(2)} (${isGain ? '+' : ''}${Number(ord.realized_pnl_pct || 0).toFixed(2)}%)`}
+                                      size="small"
+                                      sx={{
+                                        fontWeight: 700,
+                                        fontSize: '0.68rem',
+                                        height: 18,
+                                        bgcolor: isGain ? sneatTokens.success.soft : sneatTokens.error.soft,
+                                        color: isGain ? sneatTokens.success.main : sneatTokens.error.main,
+                                        alignSelf: 'flex-start',
+                                      }}
+                                    />
+                                  )}
+                                  {ord.buy_order_ref && (
+                                    <span style={{ fontSize: '0.68rem', opacity: 0.8 }}>
+                                      Ref: {ord.buy_order_ref}
+                                    </span>
+                                  )}
+                                </Box>
+                              )}
+                            </Box>
+                          </TableCell>
+                          {/* REASON / THESIS */}
+                          <TableCell sx={{ maxWidth: 220 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Tooltip title={ord.thesis || ord.message || 'Audit record'}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: 500,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: 180,
+                                    color: 'text.primary',
+                                  }}
+                                >
+                                  {ord.thesis || ord.message || 'Paper Order'}
+                                </Typography>
+                              </Tooltip>
+                              <Tooltip title="View full deliberation & thesis breakdown">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setThesisModalOrder(ord)}
+                                  sx={{ p: 0.25, color: sneatTokens.primary.main }}
+                                >
+                                  <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
                           <TableCell sx={{ color: 'error.main', fontWeight: 600 }}>
                             ${Number(ord.stop_loss_price || 0).toFixed(2)}
                           </TableCell>
@@ -1117,13 +1274,18 @@ export function AgentsPage({ screenerConfig }) {
               <TablePagination
                 rowsPerPageOptions={[5, 10, 25, 50]}
                 component="div"
-                count={orders.length}
+                count={ordersTotal}
                 rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={(event, newPage) => setPage(newPage)}
+                page={ordersPage}
+                onPageChange={(event, newPage) => {
+                  setOrdersPage(newPage);
+                  fetchOrders(newPage, rowsPerPage, ordersFilter);
+                }}
                 onRowsPerPageChange={(event) => {
-                  setRowsPerPage(parseInt(event.target.value, 10));
-                  setPage(0);
+                  const newLimit = parseInt(event.target.value, 10);
+                  setRowsPerPage(newLimit);
+                  setOrdersPage(0);
+                  fetchOrders(0, newLimit, ordersFilter);
                 }}
                 labelRowsPerPage="Rows per page:"
                 labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`}
@@ -1132,11 +1294,115 @@ export function AgentsPage({ screenerConfig }) {
             </>
           ) : (
             <Alert severity="info" sx={{ borderRadius: 2 }}>
-              No simulated order transactions recorded in this session yet.
+              No orders found matching the filter "{ordersFilter}".
             </Alert>
           )}
         </CardContent>
       </Card>
+
+      {/* Thesis & Deliberation Modal Dialog */}
+      <Dialog
+        open={Boolean(thesisModalOrder)}
+        onClose={() => setThesisModalOrder(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PsychologyIcon sx={{ color: sneatTokens.primary.main }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              Action Rationale & Thesis: {thesisModalOrder?.symbol}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setThesisModalOrder(null)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ py: 2 }}>
+          {thesisModalOrder && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block' }}>
+                  ACTION SUMMARY
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700, color: 'text.primary', mt: 0.25 }}>
+                  {thesisModalOrder.thesis || thesisModalOrder.message || 'Paper Order Executed'}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                  <Chip
+                    label={`Side: ${thesisModalOrder.order_side || thesisModalOrder.side || 'BUY'}`}
+                    size="small"
+                    sx={{ fontWeight: 600 }}
+                  />
+                  <Chip
+                    label={`Source: ${thesisModalOrder.source || 'AGENT_PIPELINE'}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontWeight: 600 }}
+                  />
+                  {thesisModalOrder.cycle_id && (
+                    <Chip
+                      label={`Cycle: ${thesisModalOrder.cycle_id}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }}
+                    />
+                  )}
+                </Box>
+              </Box>
+
+              {thesisModalOrder.thesis_detail?.haziq && Object.keys(thesisModalOrder.thesis_detail.haziq).length > 0 && (
+                <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.primary.main, mb: 0.5 }}>
+                    L2 Haziq Strategy Synthesis
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.82rem', mb: 0.5 }}>
+                    Composite Score: <strong>{thesisModalOrder.thesis_detail.haziq.composite_score?.toFixed(1) || 'N/A'}</strong> | Mode: <strong>{thesisModalOrder.thesis_detail.haziq.trading_mode || 'DAY'}</strong>
+                  </Typography>
+                  {thesisModalOrder.thesis_detail.haziq.rationale && (
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', fontStyle: 'italic' }}>
+                      "{thesisModalOrder.thesis_detail.haziq.rationale}"
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {thesisModalOrder.thesis_detail?.danial && Object.keys(thesisModalOrder.thesis_detail.danial).length > 0 && (
+                <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: sneatTokens.success.main, mb: 0.5 }}>
+                    L3 Danial Risk & Compliance (8 Hard Rules)
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.82rem' }}>
+                    Status: <strong>{thesisModalOrder.thesis_detail.danial.passed ? 'PASSED ALL HARD RULES' : 'FAILED'}</strong>
+                  </Typography>
+                  {thesisModalOrder.thesis_detail.danial.notes && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                      {thesisModalOrder.thesis_detail.danial.notes}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
+                <div>Order Ref: <code style={{ fontFamily: 'monospace' }}>{thesisModalOrder.order_id || thesisModalOrder.client_order_id}</code></div>
+                {thesisModalOrder.buy_order_ref && (
+                  <div>Linked Buy Reference: <code style={{ fontFamily: 'monospace' }}>{thesisModalOrder.buy_order_ref}</code></div>
+                )}
+                {thesisModalOrder.hold_duration && thesisModalOrder.hold_duration !== 'N/A' && (
+                  <div>Holding Duration: <strong>{thesisModalOrder.hold_duration}</strong></div>
+                )}
+                <div>Executed At: {thesisModalOrder.created_at ? new Date(thesisModalOrder.created_at).toLocaleString() : '-'}</div>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setThesisModalOrder(null)} variant="contained" size="small" sx={{ textTransform: 'none', fontWeight: 600 }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
