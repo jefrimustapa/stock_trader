@@ -1261,7 +1261,7 @@ export function AgentsPage({ screenerConfig }) {
                               </Button>
                             ) : (
                               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {ord.status === 'CANCELLED' ? 'Cancelled' : (ord.status === 'FILLED' ? 'Filled' : '-')}
+                                -
                               </Typography>
                             )}
                           </TableCell>
@@ -1360,6 +1360,11 @@ export function AgentsPage({ screenerConfig }) {
                   <Typography variant="body2" sx={{ fontSize: '0.82rem', mb: 0.5 }}>
                     Composite Score: <strong>{thesisModalOrder.thesis_detail.haziq.composite_score?.toFixed(1) || 'N/A'}</strong> | Mode: <strong>{thesisModalOrder.thesis_detail.haziq.trading_mode || 'DAY'}</strong>
                   </Typography>
+                  {thesisModalOrder.thesis_detail.haziq.entry_price && (
+                    <Typography variant="body2" sx={{ fontSize: '0.82rem', mb: 0.5 }}>
+                      Price at Analysis: <strong>${Number(thesisModalOrder.thesis_detail.haziq.entry_price).toFixed(2)}</strong>
+                    </Typography>
+                  )}
                   {thesisModalOrder.thesis_detail.haziq.rationale && (
                     <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', fontStyle: 'italic' }}>
                       "{thesisModalOrder.thesis_detail.haziq.rationale}"
