@@ -116,6 +116,46 @@ class TestOrdersAuditTrailBVA(unittest.TestCase):
         self.assertEqual(sell_order["realized_pnl_usd"], 0.0)
         self.assertEqual(sell_order["buy_order_ref"], "N/A (Initial Position)")
 
+    def test_cancelled_sell_orders_do_not_deplete_buy_queue_defect_sdlc8(self):
+        """
+        SDLC Step 8 Regression Test:
+        Verify that CANCELLED or REJECTED sell orders do NOT deplete the buy FIFO queue.
+        When multiple sell attempts are cancelled before a final FILLED sell order,
+        both the cancelled attempts and the final FILLED order must correctly match the original buy order
+        rather than showing Cost: N/A and Ref: N/A.
+        """
+        with self.pipeline._get_connection() as conn:
+            conn.execute("""
+                INSERT INTO paper_orders (
+                    client_order_id, order_id, cycle_id, symbol, order_side,
+                    quantity, entry_price, stop_loss_price, take_profit_price,
+                    status, opend_status, message, time_in_force, trading_mode, source, created_at
+                ) VALUES 
+                ('CLI_DSGR_B1', 'ORD_DSGR_B1', 'CYC_B', 'US.DSGR', 'BUY', 2, 35.01, 33.0, 40.0, 'FILLED', 'SUBMITTED', 'OK', 'DAY', 'DAY', 'AGENT_PIPELINE', '2026-11-20 10:00:00'),
+                ('CLI_DSGR_S1', 'ORD_DSGR_S1', 'CYC_S1', 'US.DSGR', 'SELL', 2, 35.00, 33.0, 40.0, 'CANCELLED', 'SUBMITTED', 'Cancelled', 'DAY', 'DAY', 'AGENT_EARLY_EXIT', '2026-11-27 10:00:00'),
+                ('CLI_DSGR_S2', 'ORD_DSGR_S2', 'CYC_S2', 'US.DSGR', 'SELL', 2, 35.00, 33.0, 40.0, 'CANCELLED', 'SUBMITTED', 'Cancelled', 'DAY', 'DAY', 'AGENT_EARLY_EXIT', '2026-11-27 10:01:00'),
+                ('CLI_DSGR_S3', 'ORD_DSGR_S3', 'CYC_S3', 'US.DSGR', 'SELL', 2, 35.00, 33.0, 40.0, 'FILLED', 'SUBMITTED', 'Sold', 'DAY', 'DAY', 'AGENT_EARLY_EXIT', '2026-11-27 10:02:00')
+            """)
+            conn.commit()
+
+        orders = self.pipeline.get_paper_orders(limit=10, symbol="DSGR")
+        s1 = next(o for o in orders if o["order_id"] == "ORD_DSGR_S1")
+        s2 = next(o for o in orders if o["order_id"] == "ORD_DSGR_S2")
+        s3 = next(o for o in orders if o["order_id"] == "ORD_DSGR_S3")
+
+        # Prior cancelled sells must reflect the buy order cost basis without depleting it
+        self.assertEqual(s1["cost_price"], 35.01)
+        self.assertIn("ORD_DSGR_B1", s1["buy_order_ref"])
+        self.assertEqual(s2["cost_price"], 35.01)
+        self.assertIn("ORD_DSGR_B1", s2["buy_order_ref"])
+
+        # Final FILLED sell must NOT be N/A! It must successfully match the 2 shares @ 35.01
+        self.assertIsNotNone(s3["cost_price"], "Filled sell order cost_price must not be None/N/A!")
+        self.assertEqual(s3["cost_price"], 35.01)
+        self.assertEqual(s3["realized_pnl_usd"], -0.02)
+        self.assertEqual(s3["realized_pnl_pct"], -0.03)
+        self.assertIn("ORD_DSGR_B1", s3["buy_order_ref"])
+
     # =========================================================================
     # 2. AC 2: Action Reason & Thesis Linking Tests
     # =========================================================================

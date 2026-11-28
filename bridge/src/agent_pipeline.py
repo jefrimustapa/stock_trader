@@ -2024,6 +2024,7 @@ class AgentPipeline:
             return summary, detail
 
         buy_queues: Dict[str, List[Dict[str, Any]]] = {}
+        last_known_buy_by_sym: Dict[str, Dict[str, Any]] = {}
         enriched_orders: Dict[int, Dict[str, Any]] = {}
         closed_trades: List[Dict[str, Any]] = []
 
@@ -2047,7 +2048,7 @@ class AgentPipeline:
 
             if side == "BUY":
                 if status in ("FILLED", "SUBMITTED", "PENDING", "SUBMITTED_PAPER_SIM") and qty > 0:
-                    buy_queues.setdefault(clean_sym, []).append({
+                    buy_lot = {
                         "id": ord_id,
                         "order_id": ord_row.get("order_id"),
                         "client_order_id": ord_row.get("client_order_id"),
@@ -2057,7 +2058,9 @@ class AgentPipeline:
                         "thesis": summary,
                         "thesis_detail": detail,
                         "symbol": sym
-                    })
+                    }
+                    buy_queues.setdefault(clean_sym, []).append(buy_lot)
+                    last_known_buy_by_sym[clean_sym] = buy_lot
                 entry["cost_price"] = None
                 entry["realized_pnl_usd"] = None
                 entry["realized_pnl_pct"] = None
@@ -2071,32 +2074,62 @@ class AgentPipeline:
                 matched_qty_sum = 0
                 matched_buy_refs: List[str] = []
                 first_buy_time = None
+                is_filled = (status == "FILLED")
 
-                while needed_qty > 0 and len(queue) > 0:
-                    head = queue[0]
-                    if head["qty_remaining"] <= 0:
-                        queue.pop(0)
-                        continue
-                    if first_buy_time is None:
-                        first_buy_time = head.get("created_at")
-                    take_qty = min(needed_qty, head["qty_remaining"])
-                    if take_qty <= 0:
-                        queue.pop(0)
-                        continue
-                    matched_cost_sum += take_qty * head["price"]
-                    matched_qty_sum += take_qty
-                    ref = head.get("order_id") or head.get("client_order_id") or f"ORD-{head['id']}"
-                    if ref and str(ref) not in matched_buy_refs:
-                        matched_buy_refs.append(str(ref))
-                    head["qty_remaining"] -= take_qty
-                    needed_qty -= take_qty
-                    if head["qty_remaining"] <= 0:
-                        queue.pop(0)
+                if is_filled:
+                    # FILLED sell order executes and consumes shares from buy lots in FIFO queue
+                    while needed_qty > 0 and len(queue) > 0:
+                        head = queue[0]
+                        if head["qty_remaining"] <= 0:
+                            queue.pop(0)
+                            continue
+                        if first_buy_time is None:
+                            first_buy_time = head.get("created_at")
+                        take_qty = min(needed_qty, head["qty_remaining"])
+                        if take_qty <= 0:
+                            queue.pop(0)
+                            continue
+                        matched_cost_sum += take_qty * head["price"]
+                        matched_qty_sum += take_qty
+                        ref = head.get("order_id") or head.get("client_order_id") or f"ORD-{head['id']}"
+                        if ref and str(ref) not in matched_buy_refs:
+                            matched_buy_refs.append(str(ref))
+                        head["qty_remaining"] -= take_qty
+                        needed_qty -= take_qty
+                        if head["qty_remaining"] <= 0:
+                            queue.pop(0)
+                else:
+                    # Non-filled sell attempts (CANCELLED, REJECTED, PENDING) only peek without mutating/depleting queue
+                    for lot in queue:
+                        if needed_qty <= 0:
+                            break
+                        rem = lot.get("qty_remaining", 0)
+                        if rem <= 0:
+                            continue
+                        if first_buy_time is None:
+                            first_buy_time = lot.get("created_at")
+                        take_qty = min(needed_qty, rem)
+                        matched_cost_sum += take_qty * lot["price"]
+                        matched_qty_sum += take_qty
+                        ref = lot.get("order_id") or lot.get("client_order_id") or f"ORD-{lot['id']}"
+                        if ref and str(ref) not in matched_buy_refs:
+                            matched_buy_refs.append(str(ref))
+                        needed_qty -= take_qty
 
                 if matched_qty_sum > 0:
                     avg_cost = matched_cost_sum / matched_qty_sum
                     cost_price = round(avg_cost, 2)
                     buy_ref = ", ".join(matched_buy_refs)
+                    pnl_usd = round((price - avg_cost) * qty, 2)
+                    pnl_pct = round(((price - avg_cost) / avg_cost) * 100, 2) if avg_cost > 0 else 0.0
+                elif clean_sym in last_known_buy_by_sym:
+                    # Fallback to last known buy lot if active queue was depleted
+                    last_buy = last_known_buy_by_sym[clean_sym]
+                    avg_cost = last_buy["price"]
+                    cost_price = round(avg_cost, 2)
+                    ref = last_buy.get("order_id") or last_buy.get("client_order_id") or f"ORD-{last_buy['id']}"
+                    buy_ref = str(ref)
+                    first_buy_time = last_buy.get("created_at")
                     pnl_usd = round((price - avg_cost) * qty, 2)
                     pnl_pct = round(((price - avg_cost) / avg_cost) * 100, 2) if avg_cost > 0 else 0.0
                 else:

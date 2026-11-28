@@ -1116,7 +1116,7 @@ export function AgentsPage({ screenerConfig }) {
                         ord.status === 'PENDING' ||
                         ord.status === 'SUBMITTED_PAPER_SIM';
                       const isSell = (ord.order_side || ord.side) === 'SELL';
-                      const hasPnl = ord.realized_pnl_usd !== null && ord.realized_pnl_usd !== undefined;
+                      const hasPnl = Boolean(ord.cost_price) && ord.realized_pnl_usd !== null && ord.realized_pnl_usd !== undefined;
                       const isGain = hasPnl && Number(ord.realized_pnl_usd) >= 0;
 
                       return (

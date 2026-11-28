@@ -1176,7 +1176,7 @@ export function PortfolioPage({ onNavigate, screenerConfig }) {
                 <div>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>Buy Price</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    ${thesisModalTrade.buy_price ? Number(thesisModalTrade.buy_price).toFixed(2) : 'N/A'}
+                    {thesisModalTrade.buy_price ? `$${Number(thesisModalTrade.buy_price).toFixed(2)}` : 'N/A'}
                   </Typography>
                 </div>
                 <div>
